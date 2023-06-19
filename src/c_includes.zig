@@ -2,6 +2,7 @@ const builtin = @import("builtin");
 pub const imported = @cImport({
     @cInclude("lo/lo.h");
     // @cInclude("dns_sd.h");
+    @cInclude("ncurses.h");
     @cInclude("SDL2/SDL.h");
     @cInclude("SDL2/SDL_ttf.h");
     @cInclude("SDL2/SDL_error.h");

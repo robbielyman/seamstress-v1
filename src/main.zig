@@ -7,19 +7,33 @@ const metros = @import("metros.zig");
 const clocks = @import("clock.zig");
 const osc = @import("serialosc.zig");
 const input = @import("input.zig");
+const curses = @import("curses.zig");
 const screen = @import("screen.zig");
 const midi = @import("midi.zig");
 const c = @import("c_includes.zig").imported;
 
 const VERSION = .{ .major = 0, .minor = 9, .patch = 1 };
 
+pub const std_options = struct {
+    pub const log_level = .info;
+    pub const logFn = log;
+};
+
+var logfile: std.fs.File = undefined;
+var allocator: std.mem.Allocator = undefined;
+
 pub fn main() !void {
-    defer std.debug.print("seamstress shutdown complete\n", .{});
     try args.parse();
+    if (!args.curses) {
+        logfile = try std.fs.createFileAbsolute("/tmp/seamstress.log", .{});
+    }
+    defer if (!args.curses) logfile.close();
     try print_version();
 
+    defer std.log.info("seamstress shutdown complete", .{});
+
     var general_allocator = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = general_allocator.allocator();
+    allocator = general_allocator.allocator();
     defer _ = general_allocator.deinit();
 
     var allocated = true;
@@ -33,47 +47,47 @@ pub fn main() !void {
     };
     defer if (allocated) allocator.free(config);
 
-    std.debug.print("init events\n", .{});
+    std.log.info("init events", .{});
     try events.init(allocator);
     defer events.deinit();
 
-    std.debug.print("init metros\n", .{});
+    std.log.info("init metros", .{});
     try metros.init(allocator);
     defer metros.deinit();
 
-    std.debug.print("init clocks\n", .{});
+    std.log.info("init clocks", .{});
     try clocks.init(allocator);
     defer clocks.deinit();
 
-    std.debug.print("init spindle\n", .{});
+    std.log.info("init spindle", .{});
     try spindle.init(config, allocator);
     defer spindle.deinit();
 
-    std.debug.print("init MIDI\n", .{});
+    std.log.info("init MIDI", .{});
     try midi.init(allocator);
     defer midi.deinit();
 
-    std.debug.print("init osc\n", .{});
+    std.log.info("init osc", .{});
     try osc.init(args.local_port, allocator);
     defer osc.deinit();
 
-    std.debug.print("init input\n", .{});
-    try input.init(allocator);
-    defer input.deinit();
+    std.log.info("init input", .{});
+    try if (args.curses) curses.init(allocator) else input.init(allocator);
+    defer if (args.curses) curses.deinit() else input.deinit();
 
-    std.debug.print("init screen\n", .{});
+    std.log.info("init screen", .{});
     const width = try std.fmt.parseUnsigned(u16, args.width, 10);
     const height = try std.fmt.parseUnsigned(u16, args.height, 10);
     try screen.init(width, height);
     defer screen.deinit();
 
-    std.debug.print("handle events\n", .{});
+    std.log.info("handle events", .{});
     try events.handle_pending();
 
-    std.debug.print("spinning spindle\n", .{});
+    std.log.info("spinning spindle", .{});
     try spindle.startup(args.script_file);
 
-    std.debug.print("entering main loop\n", .{});
+    std.log.info("entering main loop", .{});
     try events.loop();
 }
 
@@ -84,4 +98,25 @@ fn print_version() !void {
     try stdout.print("SEAMSTRESS\n", .{});
     try stdout.print("seamstress version: {d}.{d}.{d}\n", VERSION);
     try bw.flush();
+}
+
+fn log(
+    comptime level: std.log.Level,
+    comptime scope: @TypeOf(.EnumLiteral),
+    comptime format: []const u8,
+    log_args: anytype,
+) void {
+    const scope_prefix = "(" ++ @tagName(scope) ++ "): ";
+    const prefix = "[" ++ comptime level.asText() ++ "] " ++ scope_prefix;
+    if (args.curses) {
+        const writer = logfile.writer();
+        var line = std.fmt.allocPrint(allocator, prefix ++ format ++ "\n", log_args) catch return;
+        defer allocator.free(line);
+        _ = writer.write(line) catch return;
+    } else {
+        std.debug.getStderrMutex().lock();
+        defer std.debug.getStderrMutex().unlock();
+        const stderr = std.io.getStdErr().writer();
+        stderr.print(format ++ "\n\r", log_args) catch return;
+    }
 }
