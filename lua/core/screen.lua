@@ -3,8 +3,6 @@
 local Screen = {}
 Screen.__index = Screen
 
-local keycodes = require("keycodes")
-
 --- clears the screen.
 -- @function screen.clear
 function Screen.clear()
@@ -113,65 +111,32 @@ function Screen.get_size()
   return _seamstress.screen_get_size()
 end
 
-_seamstress.screen = {
-  key = function (symbol, modifiers, is_repeat, state, window)
-    local char = keycodes[symbol]
-    local mods = keycodes.modifier(modifiers)
-    if #mods == 1 and mods[1] == "ctrl" and char == "p" and state == 1 and window == 1 then
-      _seamstress.screen_show()
-    elseif #mods == 1 and mods[1] == "ctrl" and char == "c" and state == 1 then
-      _seamstress.quit_lvm()
-    elseif Screen.key ~= nil then
-      Screen.key(keycodes[symbol], keycodes.modifier(modifiers), is_repeat, state, window)
-    end
-  end,
-  mouse = function(x, y, window)
-    if Screen.mouse ~= nil then
-      Screen.mouse(x, y, window)
-    end
-  end,
-  click = function(x, y, state, button, window)
-    if Screen.click ~= nil then
-      Screen.click(x, y, state, button, window)
-    end
-  end,
-  resized = function(x, y, window)
-    if Screen.resized ~= nil then
-      Screen.resized(x, y, window)
-    end
-  end,
-}
-
 --- callback executed when the user types a key into the gui window.
 -- @tparam string|table char either the character or a table of the form {name = "name"}
 -- @tparam table modifiers a table with the names of modifier keys pressed down
 -- @tparam bool is_repeat true if the key is a repeat event
 -- @tparam integer state 1 for a press, 0 for release
--- @tparam integer window 1 for the main window, 2 for the params window
 -- @function screen.key
-function Screen.key(char, modifiers, is_repeat, state, window) end
+function Screen.key(char, modifiers, is_repeat, state) end
 
 --- callback executed when the user moves the mouse with the gui window focused.
 -- @tparam integer x x-coordinate
 -- @tparam integer y y-coordinate
--- @tparam integer window 1 for the main window, 2 for the params window
 -- @function screen.mouse
-function Screen.mouse(x, y, window) end
+function Screen.mouse(x, y) end
 
 --- callback executed when the user clicks the mouse on the gui window.
 -- @tparam integer x x-coordinate
 -- @tparam integer y y-coordinate
 -- @tparam integer state 1 for a press, 0 for release
 -- @tparam integer button bitmask for which button was pressed
--- @tparam integer window 1 for the main window, 2 for the params window
 -- @function screen.click
-function Screen.click(x, y, state, button, window) end
+function Screen.click(x, y, state, button) end
 
 --- callback executed when the user resizes a window
 -- @tparam integer x new x size
 -- @tparam integer y new y size
--- @tparam integer window 1 for the main window, 2 for the params window
 -- @function screen.resized
-function Screen.resized(x, y, window) end
+function Screen.resized(x, y) end
 
 return Screen
