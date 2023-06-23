@@ -1043,9 +1043,9 @@ fn docall(l: *Lua, nargs: i32, nres: i32) !void {
     l.pushFunction(ziglua.wrap(message_handler));
     l.insert(base);
     l.protectedCall(nargs, nres, base) catch {
-        const msg = try l.toString(-1);
-        std.debug.print("{s}\n", .{msg});
-        l.pop(1);
+        l.remove(base);
+        try lua_print(l);
+        return;
     };
     l.remove(base);
 }
