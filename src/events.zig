@@ -269,7 +269,6 @@ pub fn init(alloc_ptr: std.mem.Allocator) !void {
 }
 
 pub fn loop() !void {
-    std.debug.print("> ", .{});
     while (!quit) {
         queue.lock.lock();
         while (queue.read_size == 0) {

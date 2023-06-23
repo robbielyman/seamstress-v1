@@ -14,7 +14,6 @@ pub fn build(b: *std.Build) void {
     if (target.isDarwin()) {
         exe.addIncludePath("/opt/homebrew/include");
         exe.addIncludePath("/opt/homebrew/opt/readline/include");
-        exe.addIncludePath("/opt/homebrew/opt/readline/include/readline");
         exe.addLibraryPath("/opt/homebrew/lib");
         exe.addLibraryPath("/opt/homebrew/opt/readline/lib");
     }

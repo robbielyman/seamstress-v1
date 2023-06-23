@@ -11,6 +11,7 @@ const clock = @import("clock.zig");
 const screen = @import("screen.zig");
 const metro = @import("metros.zig");
 const ziglua = @import("ziglua");
+const c = @import("c_includes.zig");
 
 const Lua = ziglua.Lua;
 var lvm: Lua = undefined;
@@ -1056,24 +1057,24 @@ fn handle_line(l: *Lua, line: [:0]const u8) !void {
         _ = b;
         if (try statement(l)) {
             l.setTop(0);
-            std.debug.print(">... ", .{});
+            _ = c.rl_set_prompt(">... ");
             return;
         }
     } else {
         add_return(l) catch |err| {
             if (err == error.Syntax and try statement(l)) {
                 l.setTop(0);
-                std.debug.print(">... ", .{});
+                _ = c.rl_set_prompt(">... ");
                 return;
             }
         };
     }
     try docall(l, 0, ziglua.mult_return);
     if (l.getTop() == 0) {
-        std.debug.print("> ", .{});
+        _ = c.rl_set_prompt("> ");
     } else {
         try lua_print(l);
-        std.debug.print("> ", .{});
+        _ = c.rl_set_prompt("> ");
     }
     l.setTop(0);
 }

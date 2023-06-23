@@ -8,5 +8,6 @@ pub usingnamespace @cImport({
     @cInclude("SDL2/SDL_surface.h");
     @cInclude("SDL2/SDL_video.h");
     @cInclude("rtmidi/rtmidi_c.h");
-    @cInclude("readline.h");
+    @cInclude("readline/readline.h");
+    @cInclude("readline/history.h");
 });
