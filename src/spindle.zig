@@ -74,6 +74,8 @@ pub fn init(config: []const u8, alloc_pointer: std.mem.Allocator) !void {
     register_seamstress("reset_lvm", ziglua.wrap(reset_lvm));
     register_seamstress("quit_lvm", ziglua.wrap(quit_lvm));
 
+    register_seamstress("print", ziglua.wrap(lua_print));
+
     _ = lvm.pushString(args.local_port);
     lvm.setField(-2, "local_port");
     _ = lvm.pushString(args.remote_port);
@@ -928,9 +930,7 @@ fn do_resume(l: *Lua, idx: c_longlong) i32 {
     var top: i32 = 0;
     const status = l.resumeThread(null, l.getTop() - 1, &top) catch {
         _ = message_handler(l);
-        lua_print(l) catch {
-            logger.err("couldn't print error!", .{});
-        };
+        _ = lua_print(l);
         l.setTop(0);
         return 0;
     };
@@ -981,12 +981,17 @@ pub fn clock_transport(ev_type: clock.Transport) !void {
 // -------------------------------------------------------
 // lua interpreter
 
-fn lua_print(l: *Lua) !void {
+fn lua_print(l: *Lua) i32 {
+    _ = c.rl_set_prompt("");
+    _ = c.rl_redisplay();
     const n = l.getTop();
-    l.checkStackErr(1, "too many results to print");
-    _ = try l.getGlobal("print");
+    l.checkStackErr(2, "too many results to print");
+    _ = l.getGlobal("_old_print") catch unreachable;
     l.insert(1);
     l.call(n, 0);
+    _ = c.rl_set_prompt("> ");
+    _ = c.rl_redisplay();
+    return 0;
 }
 
 fn run_code(code: [:0]const u8) !void {
@@ -1069,12 +1074,14 @@ fn handle_line(l: *Lua, line: [:0]const u8) !void {
             }
         };
     }
+    _ = c.rl_set_prompt("");
+    _ = c.rl_redisplay();
     try docall(l, 0, ziglua.mult_return);
     if (l.getTop() == 0) {
         _ = c.rl_set_prompt("> ");
+        _ = c.rl_redisplay();
     } else {
-        try lua_print(l);
-        _ = c.rl_set_prompt("> ");
+        _ = lua_print(l);
     }
     l.setTop(0);
 }
@@ -1100,7 +1107,7 @@ fn statement(l: *Lua) !bool {
             clear_statement_buffer();
             l.remove(-2);
             _ = message_handler(l);
-            try lua_print(l);
+            _ = lua_print(l);
             return false;
         }
     };

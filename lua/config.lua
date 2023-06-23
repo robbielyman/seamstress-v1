@@ -1,7 +1,6 @@
 --- seamstress configuration
 -- add to package.path
 -- @script config.lua
-
 local home = os.getenv('HOME')
 local pwd = os.getenv('PWD')
 local seamstress_home = home .. '/seamstress'
@@ -24,3 +23,5 @@ path = {
   pwd = pwd, -- directory from which seamstress was run
   seamstress = seamstress_home -- defined to be `home .. '/seamstress'`
 }
+
+_old_print = print
