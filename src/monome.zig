@@ -1,10 +1,11 @@
 const std = @import("std");
 const osc = @import("serialosc.zig");
 const events = @import("events.zig");
-const c = @import("c_includes.zig").imported;
+const c = @import("c_includes.zig");
 
 var allocator: std.mem.Allocator = undefined;
 var devices: []Monome = undefined;
+const logger = std.log.scoped(.monome);
 
 pub const Monome_t = enum { Grid, Arc };
 pub const Monome = struct {
@@ -180,7 +181,7 @@ pub fn add(name: []const u8, dev_type: []const u8, port: i32) void {
         }
     } else {
         @setCold(true);
-        std.debug.print("too many devices! not adding {s}\n", .{name});
+        logger.err("too many devices! not adding {s}\n", .{name});
     }
 }
 
@@ -199,7 +200,7 @@ pub fn remove(name: []const u8) void {
         }
     }
     @setCold(true);
-    std.debug.print("trying to remove device {s} which was not added!\n", .{name});
+    logger.err("trying to remove device {s} which was not added!\n", .{name});
 }
 
 pub fn handle_add(

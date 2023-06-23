@@ -1,7 +1,7 @@
 const std = @import("std");
 const events = @import("events.zig");
 const monome = @import("monome.zig");
-const c = @import("c_includes.zig").imported;
+const c = @import("c_includes.zig");
 
 var server_thread: c.lo_server_thread = undefined;
 // TODO: is this needed?
@@ -10,6 +10,7 @@ var localport: u16 = undefined;
 var localhost = "localhost";
 pub var serialosc_addr: c.lo_address = undefined;
 var allocator: std.mem.Allocator = undefined;
+const logger = std.log.scoped(.serialosc);
 
 pub fn init(local_port: [:0]const u8, alloc: std.mem.Allocator) !void {
     allocator = alloc;
@@ -44,9 +45,9 @@ pub fn lo_error_handler(
     path: [*c]const u8,
 ) callconv(.C) void {
     if (path == null) {
-        std.debug.print("liblo error {d}: {s}\n", .{ num, std.mem.span(m) });
+        logger.err("liblo error {d}: {s}", .{ num, std.mem.span(m) });
     } else {
-        std.debug.print("liblo error {d} in path {s}: {s}\n", .{ num, std.mem.span(path), std.mem.span(m) });
+        logger.err("liblo error {d} in path {s}: {s}", .{ num, std.mem.span(path), std.mem.span(m) });
     }
 }
 
@@ -161,7 +162,7 @@ fn osc_receive(
                 message[i] = Lo_Arg{ .Lo_Infinitum = true };
             },
             else => {
-                std.debug.print("unknown osc typetag: {c}\n", .{types[i]});
+                logger.err("unknown osc typetag: {c}", .{types[i]});
                 message[i] = Lo_Arg{ .Lo_Nil = false };
             },
         }
@@ -195,7 +196,7 @@ pub fn send(
 ) void {
     const address: c.lo_address = c.lo_address_new(to_host, to_port);
     if (address == null) {
-        std.debug.print("failed to create lo_address\n", .{});
+        logger.err("failed to create lo_address", .{});
         return;
     }
     var message: c.lo_message = c.lo_message_new();

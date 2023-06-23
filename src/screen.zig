@@ -1,10 +1,11 @@
 const std = @import("std");
 const events = @import("events.zig");
-const c = @import("c_includes.zig").imported;
+const c = @import("c_includes.zig");
 
 var WIDTH: u16 = 256;
 var HEIGHT: u16 = 128;
 var ZOOM: u16 = 4;
+const logger = std.log.scoped(.screen);
 
 const Gui = struct {
     window: *c.SDL_Window = undefined,
@@ -123,18 +124,18 @@ pub fn init(width: u16, height: u16) !void {
     WIDTH = width;
 
     if (c.SDL_Init(c.SDL_INIT_VIDEO) < 0) {
-        std.debug.print("screen.init(): {s}\n", .{c.SDL_GetError()});
+        logger.err("screen.init(): {s}\n", .{c.SDL_GetError()});
         return error.Fail;
     }
 
     if (c.TTF_Init() < 0) {
-        std.debug.print("screen.init(): {s}\n", .{c.TTF_GetError()});
+        logger.err("screen.init(): {s}\n", .{c.TTF_GetError()});
         return error.Fail;
     }
 
     var f = c.TTF_OpenFont("/usr/local/share/seamstress/resources/04b03.ttf", 8);
     font = f orelse {
-        std.debug.print("screen.init(): {s}\n", .{c.TTF_GetError()});
+        logger.err("screen.init(): {s}\n", .{c.TTF_GetError()});
         return error.Fail;
     };
 
@@ -147,13 +148,13 @@ pub fn init(width: u16, height: u16) !void {
         c.SDL_WINDOW_SHOWN | c.SDL_WINDOW_RESIZABLE,
     );
     var window = w orelse {
-        std.debug.print("screen.init(): {s}\n", .{c.SDL_GetError()});
+        logger.err("screen.init(): {s}\n", .{c.SDL_GetError()});
         return error.Fail;
     };
 
     var r = c.SDL_CreateRenderer(window, 0, 0);
     var render = r orelse {
-        std.debug.print("screen.init(): {s}\n", .{c.SDL_GetError()});
+        logger.err("screen.init(): {s}\n", .{c.SDL_GetError()});
         return error.Fail;
     };
 
@@ -177,12 +178,12 @@ pub fn init(width: u16, height: u16) !void {
         c.SDL_WINDOW_SHOWN | c.SDL_WINDOW_RESIZABLE,
     );
     window = w orelse {
-        std.debug.print("screen.init(): {s}\n", .{c.SDL_GetError()});
+        logger.err("screen.init(): {s}\n", .{c.SDL_GetError()});
         return error.Fail;
     };
     r = c.SDL_CreateRenderer(window, 0, 0);
     render = r orelse {
-        std.debug.print("screen.init(): {s}\n", .{c.SDL_GetError()});
+        logger.err("screen.init(): {s}\n", .{c.SDL_GetError()});
         return error.Fail;
     };
     windows[1] = .{
@@ -322,6 +323,6 @@ fn loop() void {
 
 fn sdl_call(err: c_int, name: []const u8) void {
     if (err < -1) {
-        std.debug.print("{s}: error: {s}", .{ name, c.SDL_GetError() });
+        logger.err("{s}: error: {s}", .{ name, c.SDL_GetError() });
     }
 }

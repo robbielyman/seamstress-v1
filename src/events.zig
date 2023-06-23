@@ -6,6 +6,8 @@ const screen = @import("screen.zig");
 const clock = @import("clock.zig");
 const midi = @import("midi.zig");
 
+const logger = std.log.scoped(.events);
+
 pub const Event = enum {
     // list of event types
     Quit,
@@ -180,7 +182,7 @@ const Queue = struct {
         var node = self.write_head orelse {
             @setCold(true);
             std.debug.assert(self.write_size == 0);
-            std.debug.print("no nodes free!\n", .{});
+            logger.err("no nodes free!\n", .{});
             unreachable;
         };
         self.write_head = node.next;

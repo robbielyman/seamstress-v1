@@ -4,6 +4,7 @@ const events = @import("events.zig");
 var quit = false;
 var pid: std.Thread = undefined;
 var allocator: std.mem.Allocator = undefined;
+const logger = std.log.scoped(.input);
 
 pub fn init(allocator_pointer: std.mem.Allocator) !void {
     allocator = allocator_pointer;
@@ -48,7 +49,15 @@ fn input_run() !void {
 }
 
 fn set_signal() !void {
-    try std.os.sigaction(std.os.SIG.INT, &.{ .handler = .{ .handler = signal_handler }, .mask = std.os.SIG.INT, .flags = 0 }, null);
+    try std.os.sigaction(
+        std.os.SIG.INT,
+        &.{
+            .handler = .{ .handler = signal_handler },
+            .mask = std.os.SIG.INT,
+            .flags = 0,
+        },
+        null,
+    );
 }
 
 fn signal_handler(signal: c_int) callconv(.C) void {

@@ -1,5 +1,5 @@
 const std = @import("std");
-const c = @import("c_includes.zig").imported;
+const c = @import("c_includes.zig");
 const events = @import("events.zig");
 
 var allocator: std.mem.Allocator = undefined;
@@ -8,6 +8,7 @@ var quit = false;
 var devices: []Device = undefined;
 var midi_in: *c.RtMidiWrapper = undefined;
 var midi_out: *c.RtMidiWrapper = undefined;
+const logger = std.log.scoped(.midi);
 
 const RtMidiPrefix = "seamstress";
 
@@ -34,7 +35,7 @@ pub const Device = struct {
                     const timestamp = c.rtmidi_in_get_message(ptr, &self.guts.Input.buf, &len);
                     if (!ptr.*.ok) {
                         const err = std.mem.span(ptr.*.msg);
-                        std.debug.print("error in device {s}: {s}\n", .{ self.name.?, err });
+                        logger.err("error in device {s}: {s}", .{ self.name.?, err });
                         self.connected = false;
                         return;
                     }
@@ -63,7 +64,7 @@ pub const Device = struct {
                 _ = c.rtmidi_out_send_message(self.ptr.?, message.ptr, @intCast(c_int, message.len));
                 if (!self.ptr.?.*.ok) {
                     const err = std.mem.span(self.ptr.?.*.msg);
-                    std.debug.print("error in device {s}: {s}\n", .{ self.name.?, err });
+                    logger.err("error in device {s}: {s}", .{ self.name.?, err });
                     self.connected = false;
                 }
             }
@@ -250,7 +251,7 @@ fn add(dev_type: Dev_t, port_number: c_uint, name: [:0]const u8) !?u8 {
     }
     var device = free orelse {
         @setCold(true);
-        std.debug.print("too many devices! not adding {s}\n", .{name});
+        logger.err("too many devices! not adding {s}", .{name});
         return null;
     };
     switch (dev_type) {

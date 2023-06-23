@@ -11,6 +11,13 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
+    if (target.isDarwin()) {
+        exe.addIncludePath("/opt/homebrew/include");
+        exe.addIncludePath("/opt/homebrew/opt/readline/include");
+        exe.addIncludePath("/opt/homebrew/opt/readline/include/readline");
+        exe.addLibraryPath("/opt/homebrew/lib");
+        exe.addLibraryPath("/opt/homebrew/opt/readline/lib");
+    }
 
     b.installArtifact(exe);
     const install_lua_files = b.addInstallDirectory(.{
@@ -26,18 +33,14 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&install_font.step);
     b.getInstallStep().dependOn(&install_lua_files.step);
 
-    if (target.isDarwin()) {
-        exe.addIncludePath("/opt/homebrew/include");
-        exe.addLibraryPath("/opt/homebrew/lib");
-    }
     // if (target.isLinux()) {
     //     exe.linkSystemLibrary("dns_sd");
     // }
     exe.linkSystemLibrary("LIBLO");
-    exe.linkSystemLibrary("ncurses");
     exe.linkSystemLibrary("SDL2");
     exe.linkSystemLibrary("SDL2_ttf");
     exe.linkSystemLibrary("rtmidi");
+    exe.linkSystemLibrary("readline");
     exe.addModule("ziglua", ziglua.compileAndCreateModule(b, exe, .{}));
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());

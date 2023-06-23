@@ -7,10 +7,8 @@ const metros = @import("metros.zig");
 const clocks = @import("clock.zig");
 const osc = @import("serialosc.zig");
 const input = @import("input.zig");
-const curses = @import("curses.zig");
 const screen = @import("screen.zig");
 const midi = @import("midi.zig");
-const c = @import("c_includes.zig").imported;
 
 const VERSION = .{ .major = 0, .minor = 9, .patch = 1 };
 
@@ -19,23 +17,24 @@ pub const std_options = struct {
     pub const logFn = log;
 };
 
+var start_time: i64 = undefined;
+
 var logfile: std.fs.File = undefined;
 var allocator: std.mem.Allocator = undefined;
 
 pub fn main() !void {
+    start_time = std.time.milliTimestamp();
+    const logger = std.log.scoped(.main);
     try args.parse();
-    if (!args.curses) {
-        logfile = try std.fs.createFileAbsolute("/tmp/seamstress.log", .{});
-    }
-    defer if (!args.curses) logfile.close();
+    logfile = try std.fs.createFileAbsolute("/tmp/seamstress.log", .{});
+    defer logfile.close();
     try print_version();
-
-    defer std.log.info("seamstress shutdown complete", .{});
 
     var general_allocator = std.heap.GeneralPurposeAllocator(.{}){};
     allocator = general_allocator.allocator();
     defer _ = general_allocator.deinit();
 
+    defer logger.info("seamstress shutdown complete", .{});
     var allocated = true;
     const config = std.process.getEnvVarOwned(allocator, "SEAMSTRESS_CONFIG") catch |err| blk: {
         if (err == std.process.GetEnvVarOwnedError.EnvironmentVariableNotFound) {
@@ -47,47 +46,49 @@ pub fn main() !void {
     };
     defer if (allocated) allocator.free(config);
 
-    std.log.info("init events", .{});
+    logger.info("init events", .{});
     try events.init(allocator);
     defer events.deinit();
 
-    std.log.info("init metros", .{});
+    logger.info("init metros", .{});
     try metros.init(allocator);
     defer metros.deinit();
 
-    std.log.info("init clocks", .{});
+    logger.info("init clocks", .{});
     try clocks.init(allocator);
     defer clocks.deinit();
 
-    std.log.info("init spindle", .{});
+    logger.info("init spindle", .{});
     try spindle.init(config, allocator);
     defer spindle.deinit();
 
-    std.log.info("init MIDI", .{});
+    logger.info("init MIDI", .{});
     try midi.init(allocator);
     defer midi.deinit();
 
-    std.log.info("init osc", .{});
+    logger.info("init osc", .{});
     try osc.init(args.local_port, allocator);
     defer osc.deinit();
 
-    std.log.info("init input", .{});
-    try if (args.curses) curses.init(allocator) else input.init(allocator);
-    defer if (args.curses) curses.deinit() else input.deinit();
+    logger.info("init input", .{});
+    try input.init(allocator);
+    defer input.deinit();
+    // try if (args.curses) curses.init(allocator) else input.init(allocator);
+    // defer if (args.curses) curses.deinit() else input.deinit();
 
-    std.log.info("init screen", .{});
+    logger.info("init screen", .{});
     const width = try std.fmt.parseUnsigned(u16, args.width, 10);
     const height = try std.fmt.parseUnsigned(u16, args.height, 10);
     try screen.init(width, height);
     defer screen.deinit();
 
-    std.log.info("handle events", .{});
+    logger.info("handle events", .{});
     try events.handle_pending();
 
-    std.log.info("spinning spindle", .{});
+    logger.info("spinning spindle", .{});
     try spindle.startup(args.script_file);
 
-    std.log.info("entering main loop", .{});
+    logger.info("entering main loop", .{});
     try events.loop();
 }
 
@@ -106,17 +107,9 @@ fn log(
     comptime format: []const u8,
     log_args: anytype,
 ) void {
-    const scope_prefix = "(" ++ @tagName(scope) ++ "): ";
+    const scope_prefix = "(" ++ @tagName(scope) ++ ") ";
     const prefix = "[" ++ comptime level.asText() ++ "] " ++ scope_prefix;
-    if (args.curses) {
-        const writer = logfile.writer();
-        var line = std.fmt.allocPrint(allocator, prefix ++ format ++ "\n", log_args) catch return;
-        defer allocator.free(line);
-        _ = writer.write(line) catch return;
-    } else {
-        std.debug.getStderrMutex().lock();
-        defer std.debug.getStderrMutex().unlock();
-        const stderr = std.io.getStdErr().writer();
-        stderr.print(format ++ "\n\r", log_args) catch return;
-    }
+    const writer = logfile.writer();
+    const timestamp = std.time.milliTimestamp() - start_time;
+    writer.print(prefix ++ "+{d}: " ++ format ++ "\n", .{timestamp} ++ log_args) catch return;
 }

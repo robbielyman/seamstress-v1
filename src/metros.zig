@@ -2,6 +2,7 @@ const std = @import("std");
 const events = @import("events.zig");
 
 const Status = enum { Running, Stopped };
+const logger = std.log.scoped(.metros);
 
 const Metro_List = struct {
     const Node = struct { next: ?*Node, prev: ?*Node, metro: *Metro, id: u8 };
@@ -104,7 +105,7 @@ const Metro = struct {
 
 pub fn stop(idx: u8) !void {
     if (idx < 0 or idx >= max_num_metros) {
-        std.debug.print("metro.stop(): invalid index, max count of metros is {d}", .{max_num_metros});
+        logger.warn("invalid index, max count of metros is {d}", .{max_num_metros});
         return;
     }
     try metros.remove_and_free(idx);
@@ -112,7 +113,7 @@ pub fn stop(idx: u8) !void {
 
 pub fn start(idx: u8, seconds: f64, count: i64, stage: i64) !void {
     if (idx < 0 or idx >= max_num_metros) {
-        std.debug.print("metro.start(): invalid index; not added. max count of metros is {d}", .{max_num_metros});
+        logger.warn("invalid index; not added. max count of metros is {d}", .{max_num_metros});
         return;
     }
     var metro = try metros.add_or_find(idx);
