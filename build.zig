@@ -40,7 +40,6 @@ pub fn build(b: *std.Build) void {
     exe.linkSystemLibrary("SDL2_ttf");
     exe.linkSystemLibrary("rtmidi");
     exe.linkSystemLibrary("readline");
-    exe.linkSystemLibrary("curses");
     exe.addModule("ziglua", ziglua.compileAndCreateModule(b, exe, .{}));
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());

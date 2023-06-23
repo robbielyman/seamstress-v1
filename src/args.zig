@@ -5,18 +5,12 @@ pub var local_port: [:0]const u8 = "7777";
 pub var remote_port: [:0]const u8 = "6666";
 pub var width: [:0]const u8 = "256";
 pub var height: [:0]const u8 = "128";
-pub var tui = true;
 
 pub fn parse() !void {
     var args = std.process.args();
     var i: u8 = 0;
     while (args.next()) |*arg| : (i += 1) {
         if (i == 0) {
-            continue;
-        }
-        const notui = "--notui";
-        if (std.mem.eql(u8, arg.*, notui)) {
-            tui = false;
             continue;
         }
         if ((arg.len != 2) or (arg.*[0] != '-')) {
