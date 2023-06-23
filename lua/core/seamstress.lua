@@ -32,9 +32,11 @@ _seamstress.monome = {
 --- startup function; called by spindle to start the script.
 -- @tparam string script_file set by calling seamstress with `-s filename`
 _startup = function (script_file)
-  if not pcall(require, script_file) then
+  if not util.exists(script_file..'.lua') then
     print("seamstress was unable to find user-provided " .. script_file .. ".lua file!")
     print("create such a file and place it in either CWD or ~/seamstress")
+  else
+    require(script_file)
+    init()
   end
-  init()
 end
