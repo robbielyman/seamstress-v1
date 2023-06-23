@@ -1,6 +1,8 @@
 const std = @import("std");
 const events = @import("events.zig");
-const c = @import("c_includes.zig").imported;
+const c = @cImport({
+    @cInclude("curses.h");
+});
 
 var quit = false;
 var pid: std.Thread = undefined;

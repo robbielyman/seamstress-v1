@@ -1,6 +1,13 @@
 const std = @import("std");
 const events = @import("events.zig");
-const c = @import("c_includes.zig");
+const c = @cImport({
+    @cInclude("SDL2/SDL.h");
+    @cInclude("SDL2/SDL_ttf.h");
+    @cInclude("SDL2/SDL_error.h");
+    @cInclude("SDL2/SDL_render.h");
+    @cInclude("SDL2/SDL_surface.h");
+    @cInclude("SDL2/SDL_video.h");
+});
 
 var WIDTH: u16 = 256;
 var HEIGHT: u16 = 128;

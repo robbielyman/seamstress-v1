@@ -1,6 +1,10 @@
 const std = @import("std");
 const events = @import("events.zig");
-const c = @import("c_includes.zig");
+pub const c = @cImport({
+    @cInclude("stdio.h");
+    @cInclude("readline/readline.h");
+    @cInclude("readline/history.h");
+});
 
 var quit = false;
 var pid: std.Thread = undefined;
@@ -19,6 +23,26 @@ pub fn deinit() void {
 }
 
 fn input_run() !void {
+    c.using_history();
+    c.stifle_history(500);
+    var buf: [1024]u8 = undefined;
+    const slice = try std.fs.selfExeDirPath(&buf);
+    std.debug.print("{s}\n", .{slice});
+    const home = std.os.getenv("HOME");
+    var history_file: []u8 = undefined;
+    if (home) |h| {
+        history_file = try std.fmt.allocPrintZ(allocator, "{s}/.seamstress_history", .{h});
+        const file = try std.fs.createFileAbsolute(history_file, .{ .read = true, .truncate = false });
+        file.close();
+        _ = c.read_history(history_file.ptr);
+    } else {
+        logger.warn("unable to capture $HOME, history will not be saved!", .{});
+    }
+    defer if (home) |_| {
+        _ = c.write_history(history_file.ptr);
+        _ = c.history_truncate_file(history_file.ptr, 500);
+        allocator.free(history_file);
+    };
     // var stdout = std.io.getStdOut().writer();
     // _ = stdout;
     // var fds = [1]std.os.pollfd{

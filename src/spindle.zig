@@ -11,7 +11,7 @@ const clock = @import("clock.zig");
 const screen = @import("screen.zig");
 const metro = @import("metros.zig");
 const ziglua = @import("ziglua");
-const c = @import("c_includes.zig");
+const c = @import("input.zig").c;
 
 const Lua = ziglua.Lua;
 var lvm: Lua = undefined;

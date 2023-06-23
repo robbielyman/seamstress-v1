@@ -1,7 +1,7 @@
 const std = @import("std");
 const osc = @import("serialosc.zig");
+const c = osc.c;
 const events = @import("events.zig");
-const c = @import("c_includes.zig");
 
 var allocator: std.mem.Allocator = undefined;
 var devices: []Monome = undefined;

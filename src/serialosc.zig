@@ -1,7 +1,9 @@
 const std = @import("std");
 const events = @import("events.zig");
 const monome = @import("monome.zig");
-const c = @import("c_includes.zig");
+pub const c = @cImport({
+    @cInclude("lo/lo.h");
+});
 
 var server_thread: c.lo_server_thread = undefined;
 // TODO: is this needed?
