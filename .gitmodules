@@ -4,3 +4,18 @@
 [submodule "doc"]
 	path = doc
 	url = https://github.com/ryleelyman/seamstress-docs
+[submodule "lib/liblo"]
+	path = lib/liblo
+	url = https://github.com/radarsat1/liblo
+[submodule "lib/SDL"]
+	path = lib/SDL
+	url = https://github.com/libsdl-org/SDL
+[submodule "lib/SDL_ttf"]
+	path = lib/SDL_ttf
+	url = https://github.com/libsdl-org/SDL_ttf
+[submodule "lib/rtmidi"]
+	path = lib/rtmidi
+	url = https://github.com/thestk/rtmidi
+[submodule "lib/readline"]
+	path = lib/readline
+	url = https://git.savannah.gnu.org/git/readline.git

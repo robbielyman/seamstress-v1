@@ -6,10 +6,10 @@ currently beta software.
 
 ## installation
 
-requires `liblo`, `sdl2`, `sdl2_ttf`, `rtmidi`, `readline` and `lua`. on macOS do
+requires `liblo`, `sdl2`, `sdl2_ttf`, `rtmidi`, and `readline`. on macOS do
 
 ```bash
-brew install lua liblo readline rtmidi sdl2 sdl2_ttf
+brew install liblo readline rtmidi sdl2 sdl2_ttf
 ```
 
 building from source requires the master build of [zig](https://github.com/ziglang/zig).
