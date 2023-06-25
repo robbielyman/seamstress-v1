@@ -1,7 +1,5 @@
 const std = @import("std");
-const c = @cImport({
-    @cInclude("rtmidi/rtmidi_c.h");
-});
+const c = @import("c_imports.zig");
 const events = @import("events.zig");
 
 var allocator: std.mem.Allocator = undefined;
