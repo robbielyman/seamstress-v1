@@ -121,6 +121,8 @@ _seamstress.screen = {
       _seamstress.screen_show()
     elseif #mods == 1 and mods[1] == "ctrl" and char == "c" and state == 1 then
       _seamstress.quit_lvm()
+    elseif window == 2 then
+      paramsMenu.key(keycodes[symbol], keycodes.modifier(modifiers), is_repeat, state, window)
     elseif Screen.key ~= nil then
       Screen.key(keycodes[symbol], keycodes.modifier(modifiers), is_repeat, state, window)
     end

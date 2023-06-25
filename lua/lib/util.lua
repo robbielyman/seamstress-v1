@@ -40,7 +40,7 @@ function Util.linexp(slo, shi, dlo, dhi, f)
   elseif f >= shi then
     return dhi
   else
-    return math.pow( dhi/dlo, (f-slo) / (shi-slo) ) * dlo
+    return ((dhi/dlo) ^ ((f-slo) / (shi-slo) )) * dlo
   end
 end
 
@@ -91,7 +91,7 @@ function Util.expexp(slo, shi, dlo, dhi, f)
   elseif f >= shi then
     return dhi
   else
-    return math.pow(dhi/dlo, math.log(f/slo) / math.log(shi/slo)) * dlo
+    return ((dhi/dlo) ^ (math.log(f/slo) / math.log(shi/slo))) * dlo
   end
 end
 

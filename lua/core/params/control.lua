@@ -113,11 +113,12 @@ end
 
 --- string.
 -- @return formatted string
-function Control:string()
+function Control:string(quant)
   if self.formatter then
     return self.formatter(self)
   else
-  local a = util.round(self:get(), 0.01)
+    quant = quant or 0.01
+    local a = util.round(self:get(), quant)
     return a.." "..self.controlspec.units
   end
 end

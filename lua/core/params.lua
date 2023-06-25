@@ -54,11 +54,11 @@ function ParamSet:add(args)
     local name = args.name or id
 
     if args.type == "number"  then
-      param = number.new(id, name, args.min, args.max, args.default, args.formatter, args.wrap, args.allow_pmap)
+      param = self:add_number(id, name, args.min, args.max, args.default, args.units)
     elseif args.type == "option" then
-      param = option.new(id, name, args.options, args.default, args.allow_pmap)
+      param = self:add_option(id, name, args.options, args.default)
     elseif args.type == "control" then
-      param = control.new(id, name, args.controlspec, args.formatter, args.allow_pmap)
+      param = self:add_control(id, name, args.controlspec, args.formatter)
     elseif args.type == "separator" then
       param = separator.new(id, name)
     elseif args.type == "group" then
@@ -116,6 +116,7 @@ end
 function ParamSet:add_number(id, name, min, max, default, units)
   local cs = controlspec.new(min,max,'lin',1,default,units,1/math.abs(max-min))
   self:add { param=control.new(id, name, cs) }
+  params.params[params.lookup[id]].is_number = true
 end
 
 --- add option.
@@ -199,7 +200,13 @@ end
 --- name.
 -- @tparam number index
 function ParamSet:get_name(index)
+  if type(index)=="string" then index = self.lookup[index] end
   return self.params[index].name or ""
+end
+
+function ParamSet:is_number(index)
+  if type(index)=="string" then index = self.lookup[index] end
+  return self.params[index].is_number or false
 end
 
 --- id.
@@ -210,9 +217,9 @@ end
 
 --- string.
 -- @param index
-function ParamSet:string(index)
+function ParamSet:string(index, quant)
   local param = self:lookup_param(index)
-  return param:string()
+  return param:string(quant)
 end
 
 --- set.

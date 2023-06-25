@@ -26,7 +26,7 @@ local function ampdb(amp)
 end
 
 local function dbamp(db)
-  return math.pow(10.0, db*0.05)
+  return 10.0 ^ (db*0.05)
 end
 
 local DbFaderWarp = {}
