@@ -171,8 +171,8 @@ pub fn init(width: u16, height: u16) !void {
         .render = render,
         .zoom = ZOOM,
     };
-    window_rect(&windows[current]);
     set(0);
+    window_rect(&windows[current]);
     clear();
     refresh();
 
@@ -198,8 +198,8 @@ pub fn init(width: u16, height: u16) !void {
         .render = render,
         .zoom = ZOOM,
     };
-    window_rect(&windows[current]);
     set(1);
+    window_rect(&windows[current]);
     clear();
     refresh();
     set(0);
