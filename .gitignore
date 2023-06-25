@@ -9,3 +9,4 @@ __pycache__/
 config.log
 zig-cache/
 zig-out/
+lua/core/.DS_Store
