@@ -62,7 +62,7 @@ function ParamSet:add(args)
     elseif args.type == "control" then
       param = self:add_control(id, name, args.controlspec, args.formatter)
     elseif args.type == "binary" then
-      param = self:add_binary(id, name, args.default, args.behavior or 'toggle')
+      param = self:add_binary(id, name, args.behavior or 'toggle', args.default)
     elseif args.type == "trigger" then
       param = self:add_trigger(id, name)
     elseif args.type == "separator" then
@@ -240,7 +240,7 @@ end
 
 --- string.
 -- @param index
--- @param[opt] quant quantity to get string representation of
+-- @param[opt] quant rounding qunatification
 function ParamSet:string(index, quant)
   local param = self:lookup_param(index)
   return param:string(quant)
@@ -372,7 +372,7 @@ end
 --- bang all params.
 function ParamSet:bang()
   for _,v in pairs(self.params) do
-    if v.t ~= self.tTRIGGER and not (v.t == self.tBINARY and v.behavior == 'trigger') then
+    if not (v.t == self.tBINARY and v.behavior == 'trigger') then
       v:bang()
     end
   end

@@ -10,7 +10,7 @@ const input = @import("input.zig");
 const screen = @import("screen.zig");
 const midi = @import("midi.zig");
 
-const VERSION = .{ .major = 0, .minor = 11, .patch = 0 };
+const VERSION = .{ .major = 0, .minor = 12, .patch = 0 };
 
 pub const std_options = struct {
     pub const log_level = .info;
@@ -79,7 +79,7 @@ pub fn main() !void {
     logger.info("init screen", .{});
     const width = try std.fmt.parseUnsigned(u16, args.width, 10);
     const height = try std.fmt.parseUnsigned(u16, args.height, 10);
-    try screen.init(width, height);
+    try screen.init(allocator, width, height);
     defer screen.deinit();
 
     logger.info("handle events", .{});

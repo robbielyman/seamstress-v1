@@ -49,14 +49,22 @@ pub fn init(config: []const u8, alloc_pointer: std.mem.Allocator) !void {
 
     register_seamstress("screen_refresh", ziglua.wrap(screen_refresh));
     register_seamstress("screen_pixel", ziglua.wrap(screen_pixel));
+    register_seamstress("screen_pixel_rel", ziglua.wrap(screen_pixel_rel));
     register_seamstress("screen_line", ziglua.wrap(screen_line));
+    register_seamstress("screen_line_rel", ziglua.wrap(screen_line_rel));
     register_seamstress("screen_rect", ziglua.wrap(screen_rect));
     register_seamstress("screen_rect_fill", ziglua.wrap(screen_rect_fill));
     register_seamstress("screen_text", ziglua.wrap(screen_text));
+    register_seamstress("screen_text_center", ziglua.wrap(screen_text_center));
+    register_seamstress("screen_text_right", ziglua.wrap(screen_text_right));
     register_seamstress("screen_color", ziglua.wrap(screen_color));
     register_seamstress("screen_clear", ziglua.wrap(screen_clear));
     register_seamstress("screen_set", ziglua.wrap(screen_set));
     register_seamstress("screen_show", ziglua.wrap(screen_show));
+    register_seamstress("screen_arc", ziglua.wrap(screen_arc));
+    register_seamstress("screen_sector", ziglua.wrap(screen_sector));
+    register_seamstress("screen_move", ziglua.wrap(screen_move));
+    register_seamstress("screen_move_rel", ziglua.wrap(screen_move_rel));
     register_seamstress("screen_get_size", ziglua.wrap(screen_get_size));
     register_seamstress("screen_get_text_size", ziglua.wrap(screen_get_text_size));
 
@@ -171,7 +179,7 @@ fn osc_send(l: *Lua) i32 {
     defer allocator.free(msg);
     var i: usize = 1;
     while (i <= len) : (i += 1) {
-        l.pushInteger(@as(c_longlong, @intCast(i)));
+        l.pushInteger(@intCast(i));
         _ = l.getTable(3);
         msg[i - 1] = switch (l.typeOf(-1)) {
             .nil => osc.Lo_Arg{ .Lo_Nil = false },
@@ -212,9 +220,9 @@ fn grid_set_led(l: *Lua) i32 {
     check_num_args(l, 4);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const x = @as(u8, @intCast(l.checkInteger(2) - 1));
-    const y = @as(u8, @intCast(l.checkInteger(3) - 1));
-    const val = @as(u8, @intCast(l.checkInteger(4)));
+    const x: u8 = @intCast(l.checkInteger(2) - 1);
+    const y: u8 = @intCast(l.checkInteger(3) - 1);
+    const val: u8 = @intCast(l.checkInteger(4));
     md.grid_set_led(x, y, val);
     l.setTop(0);
     return 0;
@@ -230,7 +238,7 @@ fn grid_all_led(l: *Lua) i32 {
     check_num_args(l, 2);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const val = @as(u8, @intCast(l.checkInteger(2)));
+    const val: u8 = @intCast(l.checkInteger(2));
     md.grid_all_led(val);
     l.setTop(0);
     return 0;
@@ -272,7 +280,7 @@ fn grid_set_rotation(l: *Lua) i32 {
     check_num_args(l, 2);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const rotation = @as(u16, @intCast(l.checkInteger(2)));
+    const rotation: u16 = @intCast(l.checkInteger(2));
     md.set_rotation(rotation);
     l.setTop(0);
     return 0;
@@ -288,7 +296,7 @@ fn grid_tilt_enable(l: *Lua) i32 {
     check_num_args(l, 2);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const sensor = @as(u8, @intCast(l.checkInteger(2) - 1));
+    const sensor: u8 = @intCast(l.checkInteger(2) - 1);
     md.tilt_set(sensor, 1);
     return 0;
 }
@@ -303,7 +311,7 @@ fn grid_tilt_disable(l: *Lua) i32 {
     check_num_args(l, 2);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const sensor = @as(u8, @intCast(l.checkInteger(2) - 1));
+    const sensor: u8 = @intCast(l.checkInteger(2) - 1);
     md.tilt_set(sensor, 0);
     return 0;
 }
@@ -320,9 +328,9 @@ fn arc_set_led(l: *Lua) i32 {
     check_num_args(l, 4);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const ring = @as(u8, @intCast(l.checkInteger(2) - 1));
-    const led = @as(u8, @intCast(l.checkInteger(3) - 1));
-    const val = @as(u8, @intCast(l.checkInteger(4)));
+    const ring: u8 = @intCast(l.checkInteger(2) - 1);
+    const led: u8 = @intCast(l.checkInteger(3) - 1);
+    const val: u8 = @intCast(l.checkInteger(4));
     md.arc_set_led(ring, led, val);
     l.setTop(0);
     return 0;
@@ -338,7 +346,7 @@ fn arc_all_led(l: *Lua) i32 {
     check_num_args(l, 2);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const val = @as(u8, @intCast(l.checkInteger(2)));
+    const val: u8 = @intCast(l.checkInteger(2));
     md.grid_all_led(val);
     l.setTop(0);
     return 0;
@@ -370,7 +378,7 @@ fn monome_intensity(l: *Lua) i32 {
     check_num_args(l, 2);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const level = @as(u8, @intCast(l.checkInteger(2)));
+    const level: u8 = @intCast(l.checkInteger(2));
     md.intensity(level);
     l.setTop(0);
     return 0;
@@ -386,92 +394,181 @@ fn screen_refresh(l: *Lua) i32 {
     return 0;
 }
 
+/// moves the current location on the screen.
+// users should use `screen.move` instead
+// @param x x-coordinate (1-based)
+// @param y y-coordinate (1-based)
+// @see screen.move
+// @function screen_move
+fn screen_move(l: *Lua) i32 {
+    check_num_args(l, 2);
+    const x = l.checkInteger(1);
+    const y = l.checkInteger(2);
+    screen.move(@intCast(x - 1), @intCast(y - 1));
+    return 0;
+}
+
+/// moves the current location on the screen relative to the current location.
+// users should use `screen.move_rel` instead
+// @param x relative x-coordinate
+// @param y relative y-coordinate
+// @see screen.move_rel
+// @function screen_move_rel
+fn screen_move_rel(l: *Lua) i32 {
+    check_num_args(l, 2);
+    const x = l.checkInteger(1);
+    const y = l.checkInteger(2);
+    screen.move_rel(@intCast(x), @intCast(y));
+    return 0;
+}
+
 /// draws a single pixel.
 // users should use `screen.pixel` instead
 // @param x x-coordinate (1-based)
 // @param y y-coordinate (1-based)
-// @see screen:pixel
+// @see screen.pixel
 // @function screen_pixel
 fn screen_pixel(l: *Lua) i32 {
     check_num_args(l, 2);
-    const x = @as(i32, @intCast(l.checkInteger(1))) - 1;
-    const y = @as(i32, @intCast(l.checkInteger(2))) - 1;
-    screen.pixel(x, y);
-    l.setTop(0);
+    const x = l.checkInteger(1);
+    const y = l.checkInteger(2);
+    screen.pixel(@intCast(x - 1), @intCast(y - 1));
+    return 0;
+}
+
+/// draws a single pixel at the current location.
+// users should use `screen.pixel_rel` instead
+// @see screen.pixel_rel
+// @function screen_pixel_rel
+fn screen_pixel_rel(l: *Lua) i32 {
+    check_num_args(l, 0);
+    screen.pixel_rel();
     return 0;
 }
 
 /// draws a line.
 // users should use `screen.line` instead
-// @param ax initial x-coordinate (1-based)
-// @param ay initial y-coordinate (1-based)
 // @param bx terminal x-coordinate (1-based)
 // @param by terminal y-coordinate (1-based)
-// @see screen:line
+// @see screen.line
 // @function screen_line
 fn screen_line(l: *Lua) i32 {
-    check_num_args(l, 4);
-    const ax = @as(i32, @intCast(l.checkInteger(1))) - 1;
-    const ay = @as(i32, @intCast(l.checkInteger(2))) - 1;
-    const bx = @as(i32, @intCast(l.checkInteger(3))) - 1;
-    const by = @as(i32, @intCast(l.checkInteger(4))) - 1;
-    screen.line(ax, ay, bx, by);
-    l.setTop(0);
+    check_num_args(l, 2);
+    const bx = l.checkInteger(1);
+    const by = l.checkInteger(2);
+    screen.line(@intCast(bx - 1), @intCast(by - 1));
+    return 0;
+}
+
+/// draws a line relative to the current location.
+// users should use `screen.line_rel` instead
+// @param bx terminal relative x-coordinate
+// @param by terminal relative y-coordinate
+// @see screen.line_rel
+// @function screen_line_rel
+fn screen_line_rel(l: *Lua) i32 {
+    check_num_args(l, 2);
+    const bx = l.checkInteger(1);
+    const by = l.checkInteger(2);
+    screen.line_rel(@intCast(bx), @intCast(by));
     return 0;
 }
 
 /// draws a rectangle.
 // users should use `screen.rect` instead
-// @param x upper-left x-coordinate (1-based)
-// @param y upper-left x-coordinate (1-based)
 // @param w width in pixels
 // @param h height in pixels
 // @see screen:rect
 // @function screen_rect
 fn screen_rect(l: *Lua) i32 {
-    check_num_args(l, 4);
-    const x = @as(i32, @intCast(l.checkInteger(1))) - 1;
-    const y = @as(i32, @intCast(l.checkInteger(2))) - 1;
-    const w = @as(i32, @intCast(l.checkInteger(3)));
-    const h = @as(i32, @intCast(l.checkInteger(4)));
-    screen.rect(x, y, w, h);
+    check_num_args(l, 2);
+    const w = l.checkInteger(1);
+    const h = l.checkInteger(2);
+    screen.rect(@intCast(w), @intCast(h));
     l.setTop(0);
     return 0;
 }
 
 /// draws a filled rectangle.
 // users should use `screen.rect` instead
-// @param x upper-left x-coordinate (1-based)
-// @param y upper-left x-coordinate (1-based)
 // @param w width in pixels
 // @param h height in pixels
 // @see screen:rect
 // @function screen_rect_fill
 fn screen_rect_fill(l: *Lua) i32 {
-    check_num_args(l, 4);
-    const x = @as(i32, @intCast(l.checkInteger(1))) - 1;
-    const y = @as(i32, @intCast(l.checkInteger(2))) - 1;
-    const w = @as(i32, @intCast(l.checkInteger(3)));
-    const h = @as(i32, @intCast(l.checkInteger(4)));
-    screen.rect_fill(x, y, w, h);
+    check_num_args(l, 2);
+    const w = l.checkInteger(1);
+    const h = l.checkInteger(2);
+    screen.rect_fill(@intCast(w), @intCast(h));
     l.setTop(0);
     return 0;
 }
 
-/// draws text to the screen.
+/// draws text to the screen, left-aligned.
 // users should use `screen.text` instead
-// @param x upper-left x-coordinate (1-based)
-// @param y upper-left y-coordinate (1-based)
 // @param words text to draw to the screen
-// @see screen:text
+// @see screen.text
 // @function screen_text
 fn screen_text(l: *Lua) i32 {
+    check_num_args(l, 1);
+    const words = l.checkString(1);
+    screen.text(std.mem.span(words));
+    return 0;
+}
+
+/// draws text to the screen, center-aligned.
+// users should use `screen.text_center` instead
+// @param words text to draw to the screen
+// @see screen.text_center
+// @function screen_text_center
+fn screen_text_center(l: *Lua) i32 {
+    check_num_args(l, 1);
+    const words = l.checkString(1);
+    screen.text_center(std.mem.span(words));
+    return 0;
+}
+
+/// draws text to the screen, right-aligned.
+// users should use `screen.text_right` instead
+// @param words text to draw to the screen
+// @see screen.text
+// @function screen_text_right
+fn screen_text_right(l: *Lua) i32 {
+    check_num_args(l, 1);
+    const words = l.checkString(1);
+    screen.text_right(std.mem.span(words));
+    return 0;
+}
+
+/// draws a circle arc to the screen.
+// users should use `screen.arc` instead
+// @param radius radius of the circle in pixels
+// @param theta_1 angle to start at (0-2*pi)
+// @param theta_2 angle to finish at (0-2*pi)
+// @see screen.arc
+// @function screen_arc
+fn screen_arc(l: *Lua) i32 {
     check_num_args(l, 3);
-    const x = @as(i32, @intCast(l.checkInteger(1))) - 1;
-    const y = @as(i32, @intCast(l.checkInteger(2))) - 1;
-    const words = l.checkString(3);
-    screen.text(x, y, std.mem.span(words));
-    l.setTop(0);
+    const radius = l.checkInteger(1);
+    const theta_1 = l.checkNumber(2);
+    const theta_2 = l.checkNumber(3);
+    screen.arc(@intCast(radius), theta_1, theta_2);
+    return 0;
+}
+
+/// draws a filled-in circle arc to the screen.
+// users should use `screen.sector` instead
+// @param radius radius of the circle in pixels
+// @param theta_1 angle to start at (0-2*pi)
+// @param theta_2 angle to finish at (0-2*pi)
+// @see screen.sector
+// @function screen_sector
+fn screen_sector(l: *Lua) i32 {
+    check_num_args(l, 3);
+    const radius = l.checkInteger(1);
+    const theta_1 = l.checkNumber(2);
+    const theta_2 = l.checkNumber(3);
+    screen.sector(@intCast(radius), theta_1, theta_2);
     return 0;
 }
 
@@ -485,10 +582,10 @@ fn screen_text(l: *Lua) i32 {
 // @function screen_color
 fn screen_color(l: *Lua) i32 {
     check_num_args(l, 4);
-    const r = @as(u8, @intCast(l.checkInteger(1)));
-    const g = @as(u8, @intCast(l.checkInteger(2)));
-    const b = @as(u8, @intCast(l.checkInteger(3)));
-    const a = @as(u8, @intCast(l.checkInteger(4)));
+    const r: u8 = @intCast(l.checkInteger(1));
+    const g: u8 = @intCast(l.checkInteger(2));
+    const b: u8 = @intCast(l.checkInteger(3));
+    const a: u8 = @intCast(l.checkInteger(4));
     screen.color(r, g, b, a);
     l.setTop(0);
     return 0;
@@ -510,9 +607,9 @@ fn screen_clear(l: *Lua) i32 {
 // @function screen_set
 fn screen_set(l: *Lua) i32 {
     check_num_args(l, 1);
-    const value = @as(usize, @intCast(l.checkInteger(1))) - 1;
-    if (value > 1 or value < 0) return 0;
-    screen.set(value);
+    const value: usize = @intCast(l.checkInteger(1));
+    if (value - 1 > 1 or value - 1 < 0) return 0;
+    screen.set(value - 1);
     return 0;
 }
 
@@ -557,7 +654,7 @@ fn screen_get_text_size(l: *Lua) i32 {
 // @function metro_start
 fn metro_start(l: *Lua) i32 {
     check_num_args(l, 4);
-    const idx = @as(u8, @intCast(l.checkInteger(1) - 1));
+    const idx: u8 = @intCast(l.checkInteger(1) - 1);
     const seconds = l.checkNumber(2);
     const count = l.checkInteger(3);
     const stage = l.checkInteger(4);
@@ -573,7 +670,7 @@ fn metro_start(l: *Lua) i32 {
 // @function metro_stop
 fn metro_stop(l: *Lua) i32 {
     check_num_args(l, 1);
-    const idx = @as(u8, @intCast(l.checkInteger(1) - 1));
+    const idx: u8 = @intCast(l.checkInteger(1) - 1);
     metro.stop(idx) catch unreachable;
     l.setTop(0);
     return 0;
@@ -586,7 +683,7 @@ fn metro_stop(l: *Lua) i32 {
 // @function metro_set_time
 fn metro_set_time(l: *Lua) i32 {
     check_num_args(l, 2);
-    const idx = @as(u8, @intCast(l.checkInteger(1) - 1));
+    const idx: u8 = @intCast(l.checkInteger(1) - 1);
     const seconds = l.checkNumber(2);
     metro.set_period(idx, seconds) catch unreachable;
     l.setTop(0);
@@ -606,14 +703,14 @@ fn midi_write(l: *Lua) i32 {
     l.checkType(2, ziglua.LuaType.table);
     const len = l.rawLen(2);
     var i: c_longlong = 1;
-    var msg = allocator.allocSentinel(u8, @as(usize, @intCast(len)), 0) catch |err| {
+    var msg = allocator.allocSentinel(u8, @intCast(len), 0) catch |err| {
         if (err == error.OutOfMemory) logger.err("out of memory!", .{});
         return 0;
     };
     while (i <= len) : (i += 1) {
         l.pushInteger(i);
         _ = l.getTable(2);
-        msg[@as(usize, @intCast(i - 1))] = @as(u8, @intCast(l.toInteger(-1) catch unreachable));
+        msg[@intCast(i - 1)] = @intCast(l.toInteger(-1) catch unreachable);
     }
     midi.Device.Guts.output.write(dev, msg);
     allocator.free(msg);
@@ -683,7 +780,7 @@ fn clock_cancel(l: *Lua) i32 {
     const idx = l.checkInteger(1);
     l.setTop(0);
     if (idx < 0 or idx > 100) return 0;
-    clock.cancel(@as(u8, @intCast(idx)));
+    clock.cancel(@intCast(idx));
     return 0;
 }
 
@@ -752,7 +849,7 @@ pub fn osc_event(
     var path_copy = try allocator.allocSentinel(u8, path.len, 0);
     std.mem.copyForwards(u8, path_copy, path);
     _ = lvm.pushString(path_copy);
-    lvm.createTable(@as(i32, @intCast(msg.len)), 0);
+    lvm.createTable(@intCast(msg.len), 0);
     var i: usize = 0;
     while (i < msg.len) : (i += 1) {
         switch (msg[i]) {
@@ -787,7 +884,7 @@ pub fn osc_event(
                 lvm.pushNumber(std.math.inf(f64));
             },
         }
-        lvm.rawSetIndex(-2, @as(c_longlong, @intCast(i + 1)));
+        lvm.rawSetIndex(-2, @intCast(i + 1));
     }
 
     lvm.createTable(2, 0);
@@ -817,7 +914,7 @@ pub fn monome_add(dev: *monome.Monome) !void {
         .Arc => "monome arc",
     };
     try push_lua_func("monome", "add");
-    lvm.pushInteger(@as(i64, @intCast(id + 1)));
+    lvm.pushInteger(@intCast(id + 1));
     var port_copy = try allocator.allocSentinel(u8, port.len, 0);
     defer allocator.free(port_copy);
     std.mem.copyForwards(u8, port_copy, port);
@@ -829,13 +926,13 @@ pub fn monome_add(dev: *monome.Monome) !void {
 
 pub fn monome_remove(id: usize) !void {
     try push_lua_func("monome", "remove");
-    lvm.pushInteger(@as(i64, @intCast(id + 1)));
+    lvm.pushInteger(@intCast(id + 1));
     try docall(&lvm, 1, 0);
 }
 
 pub fn grid_key(id: usize, x: i32, y: i32, state: i32) !void {
     try push_lua_func("grid", "key");
-    lvm.pushInteger(@as(i64, @intCast(id + 1)));
+    lvm.pushInteger(@intCast(id + 1));
     lvm.pushInteger(x + 1);
     lvm.pushInteger(y + 1);
     lvm.pushInteger(state);
@@ -844,7 +941,7 @@ pub fn grid_key(id: usize, x: i32, y: i32, state: i32) !void {
 
 pub fn grid_tilt(id: usize, sensor: i32, x: i32, y: i32, z: i32) !void {
     try push_lua_func("grid", "tilt");
-    lvm.pushInteger(@as(i64, @intCast(id + 1)));
+    lvm.pushInteger(@intCast(id + 1));
     lvm.pushInteger(sensor + 1);
     lvm.pushInteger(x + 1);
     lvm.pushInteger(y + 1);
@@ -854,7 +951,7 @@ pub fn grid_tilt(id: usize, sensor: i32, x: i32, y: i32, z: i32) !void {
 
 pub fn arc_delta(id: usize, ring: i32, delta: i32) !void {
     try push_lua_func("arc", "delta");
-    lvm.pushInteger(@as(i64, @intCast(id + 1)));
+    lvm.pushInteger(@intCast(id + 1));
     lvm.pushInteger(ring + 1);
     lvm.pushInteger(delta);
     try docall(&lvm, 3, 0);
@@ -862,7 +959,7 @@ pub fn arc_delta(id: usize, ring: i32, delta: i32) !void {
 
 pub fn arc_key(id: usize, ring: i32, state: i32) !void {
     try push_lua_func("arc", "delta");
-    lvm.pushInteger(@as(i64, @intCast(id + 1)));
+    lvm.pushInteger(@intCast(id + 1));
     lvm.pushInteger(ring + 1);
     lvm.pushInteger(state);
     try docall(&lvm, 3, 0);
@@ -874,7 +971,7 @@ pub fn screen_key(sym: i32, mod: u16, repeat: bool, state: bool, window: usize) 
     lvm.pushInteger(mod);
     lvm.pushBoolean(repeat);
     lvm.pushInteger(if (state) 1 else 0);
-    lvm.pushInteger(@as(c_longlong, @intCast(window)));
+    lvm.pushInteger(@intCast(window));
     try docall(&lvm, 5, 0);
 }
 
@@ -882,7 +979,7 @@ pub fn screen_mouse(x: f64, y: f64, window: usize) !void {
     try push_lua_func("screen", "mouse");
     lvm.pushNumber(x + 1);
     lvm.pushNumber(y + 1);
-    lvm.pushInteger(@as(c_longlong, @intCast(window)));
+    lvm.pushInteger(@intCast(window));
     try docall(&lvm, 3, 0);
 }
 
@@ -892,7 +989,7 @@ pub fn screen_click(x: f64, y: f64, state: bool, button: u8, window: usize) !voi
     lvm.pushNumber(y + 1);
     lvm.pushInteger(if (state) 1 else 0);
     lvm.pushInteger(button);
-    lvm.pushInteger(@as(c_longlong, @intCast(window)));
+    lvm.pushInteger(@intCast(window));
     try docall(&lvm, 5, 0);
 }
 
@@ -900,7 +997,7 @@ pub fn screen_resized(w: i32, h: i32, window: usize) !void {
     try push_lua_func("screen", "resized");
     lvm.pushInteger(w);
     lvm.pushInteger(h);
-    lvm.pushInteger(@as(c_longlong, @intCast(window)));
+    lvm.pushInteger(@intCast(window));
     try docall(&lvm, 3, 0);
 }
 
@@ -937,11 +1034,11 @@ pub fn midi_event(id: u32, timestamp: f64, bytes: []const u8) !void {
     try push_lua_func("midi", "event");
     lvm.pushInteger(id + 1);
     lvm.pushNumber(timestamp);
-    lvm.createTable(@as(i32, @intCast(bytes.len)), 0);
+    lvm.createTable(@intCast(bytes.len), 0);
     var i: usize = 0;
     while (i < bytes.len) : (i += 1) {
         lvm.pushInteger(bytes[i]);
-        lvm.rawSetIndex(-2, @as(c_longlong, @intCast(i + 1)));
+        lvm.rawSetIndex(-2, @intCast(i + 1));
     }
     try docall(&lvm, 3, 0);
 }
@@ -968,7 +1065,7 @@ fn do_resume(l: *Lua, idx: c_longlong) i32 {
     };
     switch (status) {
         ziglua.ResumeStatus.ok => {
-            clock.cancel(@as(u8, @intCast(idx)));
+            clock.cancel(@intCast(idx));
             return top;
         },
         ziglua.ResumeStatus.yield => {
@@ -977,7 +1074,7 @@ fn do_resume(l: *Lua, idx: c_longlong) i32 {
             switch (sleep_type) {
                 0 => {
                     const seconds = l.checkNumber(2);
-                    clock.schedule_sleep(@as(u8, @intCast(idx - 1)), seconds);
+                    clock.schedule_sleep(@intCast(idx - 1), seconds);
                 },
                 1 => {
                     const beats = l.checkNumber(2);
@@ -986,7 +1083,7 @@ fn do_resume(l: *Lua, idx: c_longlong) i32 {
                         const val = l.checkNumber(3);
                         break :blk val;
                     } else 0;
-                    clock.schedule_sync(@as(u8, @intCast(idx - 1)), beats, offset);
+                    clock.schedule_sync(@intCast(idx - 1), beats, offset);
                 },
                 else => {
                     l.setTop(0);

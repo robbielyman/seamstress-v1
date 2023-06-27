@@ -4,6 +4,7 @@ local Util = {}
 
 --- check whether a file exists
 -- @tparam string name filename
+-- @treturn bool true if the file exists
 -- @function util.exists
 function Util.exists(name)
   local f = io.open(name, 'r')
@@ -131,12 +132,49 @@ end
 --- convert string to acronym
 -- @tparam string name
 -- @treturn string acronym
+-- @function util.acronym
 function Util.acronym(name)
   name = name:gsub("[%w']+", function(word)
     if not word:find("%U") then return word end
     return word:sub(1, 1)
   end)
   return (name:gsub("%s+", ""))
+end
+
+--- convert degrees to radians
+-- @tparam number degrees
+-- @treturn number radians
+-- @function util.degs_to_rads
+function Util.degs_to_rads(degrees)
+  return degrees * (math.pi / 180)
+end
+
+--- convert radians to degrees
+-- @tparam number radians
+-- @treturn number degrees
+-- @function util.rads_to_degs
+function Util.rads_to_degs(radians)
+  return radians * (180 / math.pi)
+end
+
+--- wrap a integer to a positive min/max range
+-- @tparam integer n
+-- @tparam integer min
+-- @tparam integer max
+-- @treturn integer cycled value
+-- @function util.wrap
+function Util.wrap(n, min, max)
+  if max < min then
+    local temp = min
+    min = max
+    max = temp
+  end
+  if n >= min and n <= max then
+    return n
+  end
+  local d = max - min + 1
+  y = (n - min) % d
+  return y + min
 end
 
 return Util

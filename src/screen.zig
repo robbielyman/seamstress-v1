@@ -12,6 +12,7 @@ const c = @cImport({
 var WIDTH: u16 = 256;
 var HEIGHT: u16 = 128;
 var ZOOM: u16 = 4;
+var allocator: std.mem.Allocator = undefined;
 const logger = std.log.scoped(.screen);
 
 const Gui = struct {
@@ -20,6 +21,8 @@ const Gui = struct {
     width: u16 = 256,
     height: u16 = 128,
     zoom: u16 = 4,
+    x: c_int = 0,
+    y: c_int = 0,
 };
 
 var windows: [2]Gui = undefined;
@@ -35,6 +38,17 @@ pub fn show(target: usize) void {
 
 pub fn set(new: usize) void {
     current = new;
+}
+
+pub fn move(x: c_int, y: c_int) void {
+    windows[current].x = x;
+    windows[current].y = y;
+}
+
+pub fn move_rel(x: c_int, y: c_int) void {
+    var gui = &windows[current];
+    gui.x += x;
+    gui.y += y;
 }
 
 pub fn refresh() void {
@@ -59,52 +73,253 @@ pub fn color(r: u8, g: u8, b: u8, a: u8) void {
     );
 }
 
-pub fn pixel(x: i32, y: i32) void {
+pub fn pixel(x: c_int, y: c_int) void {
     sdl_call(
         c.SDL_RenderDrawPoint(windows[current].render, x, y),
         "screen.pixel()",
     );
 }
 
-pub fn line(ax: i32, ay: i32, bx: i32, by: i32) void {
+pub fn pixel_rel() void {
+    const gui = windows[current];
     sdl_call(
-        c.SDL_RenderDrawLine(windows[current].render, ax, ay, bx, by),
+        c.SDL_RenderDrawPoint(gui.render, gui.x, gui.y),
+        "screen.pixel_rel()",
+    );
+}
+
+pub fn line(bx: c_int, by: c_int) void {
+    const gui = windows[current];
+    sdl_call(
+        c.SDL_RenderDrawLine(gui.render, gui.x, gui.y, bx, by),
         "screen.line()",
     );
 }
 
-pub fn rect(x: i32, y: i32, w: i32, h: i32) void {
-    var r = c.SDL_Rect{ .x = x, .y = y, .w = w, .h = h };
+pub fn line_rel(bx: c_int, by: c_int) void {
+    const gui = windows[current];
     sdl_call(
-        c.SDL_RenderDrawRect(windows[current].render, &r),
+        c.SDL_RenderDrawLine(gui.render, gui.x, gui.y, gui.x + bx, gui.y + by),
+        "screen.line()",
+    );
+}
+
+pub fn rect(w: i32, h: i32) void {
+    const gui = windows[current];
+    var r = c.SDL_Rect{ .x = gui.x, .y = gui.y, .w = w, .h = h };
+    sdl_call(
+        c.SDL_RenderDrawRect(gui.render, &r),
         "screen.rect()",
     );
 }
 
-pub fn rect_fill(x: i32, y: i32, w: i32, h: i32) void {
-    var r = c.SDL_Rect{ .x = x, .y = y, .w = w, .h = h };
+pub fn rect_fill(w: i32, h: i32) void {
+    const gui = windows[current];
+    var r = c.SDL_Rect{ .x = gui.x, .y = gui.y, .w = w, .h = h };
     sdl_call(
-        c.SDL_RenderFillRect(windows[current].render, &r),
+        c.SDL_RenderFillRect(gui.render, &r),
         "screen.rect_fill()",
     );
 }
 
-pub fn text(x: i32, y: i32, words: [:0]const u8) void {
+pub fn text(words: [:0]const u8) void {
+    if (words.len == 0) return;
     var r: u8 = undefined;
     var g: u8 = undefined;
     var b: u8 = undefined;
     var a: u8 = undefined;
-    _ = c.SDL_GetRenderDrawColor(windows[current].render, &r, &g, &b, &a);
+    const gui = windows[current];
+    _ = c.SDL_GetRenderDrawColor(gui.render, &r, &g, &b, &a);
     var col = c.SDL_Color{ .r = r, .g = g, .b = b, .a = a };
     var text_surf = c.TTF_RenderText_Solid(font, words, col);
-    var texture = c.SDL_CreateTextureFromSurface(windows[current].render, text_surf);
-    const rectangle = c.SDL_Rect{ .x = x, .y = y, .w = text_surf.*.w, .h = text_surf.*.h };
+    var texture = c.SDL_CreateTextureFromSurface(gui.render, text_surf);
+    const rectangle = c.SDL_Rect{ .x = gui.x, .y = gui.y, .w = text_surf.*.w, .h = text_surf.*.h };
     sdl_call(
-        c.SDL_RenderCopy(windows[current].render, texture, null, &rectangle),
+        c.SDL_RenderCopy(gui.render, texture, null, &rectangle),
         "screen.text()",
     );
     c.SDL_DestroyTexture(texture);
     c.SDL_FreeSurface(text_surf);
+}
+
+pub fn text_center(words: [:0]const u8) void {
+    if (words.len == 0) return;
+    var r: u8 = undefined;
+    var g: u8 = undefined;
+    var b: u8 = undefined;
+    var a: u8 = undefined;
+    const gui = windows[current];
+    _ = c.SDL_GetRenderDrawColor(gui.render, &r, &g, &b, &a);
+    var col = c.SDL_Color{ .r = r, .g = g, .b = b, .a = a };
+    var text_surf = c.TTF_RenderText_Solid(font, words, col);
+    var texture = c.SDL_CreateTextureFromSurface(gui.render, text_surf);
+    const radius = @divTrunc(text_surf.*.w, 2);
+    const rectangle = c.SDL_Rect{ .x = gui.x - radius, .y = gui.y, .w = text_surf.*.w, .h = text_surf.*.h };
+    sdl_call(
+        c.SDL_RenderCopy(gui.render, texture, null, &rectangle),
+        "screen.text()",
+    );
+    c.SDL_DestroyTexture(texture);
+    c.SDL_FreeSurface(text_surf);
+}
+
+pub fn text_right(words: [:0]const u8) void {
+    if (words.len == 0) return;
+    var r: u8 = undefined;
+    var g: u8 = undefined;
+    var b: u8 = undefined;
+    var a: u8 = undefined;
+    const gui = windows[current];
+    _ = c.SDL_GetRenderDrawColor(gui.render, &r, &g, &b, &a);
+    var col = c.SDL_Color{ .r = r, .g = g, .b = b, .a = a };
+    var text_surf = c.TTF_RenderText_Solid(font, words, col);
+    var texture = c.SDL_CreateTextureFromSurface(gui.render, text_surf);
+    const width = text_surf.*.w;
+    const rectangle = c.SDL_Rect{ .x = gui.x - width, .y = gui.y, .w = width, .h = text_surf.*.h };
+    sdl_call(
+        c.SDL_RenderCopy(gui.render, texture, null, &rectangle),
+        "screen.text()",
+    );
+    c.SDL_DestroyTexture(texture);
+    c.SDL_FreeSurface(text_surf);
+}
+
+pub fn arc(radius: i32, theta_1: f64, theta_2: f64) void {
+    std.debug.assert(0 <= theta_1);
+    std.debug.assert(theta_1 <= theta_2);
+    std.debug.assert(theta_2 <= std.math.tau);
+    const angle_length = (theta_2 - theta_1) * std.math.tau;
+    const perimeter_estimate: usize = 6 * @as(usize, @intCast(radius)) * @as(usize, @intFromFloat(angle_length));
+    const gui = windows[current];
+    var points = std.ArrayList(c.SDL_Point).initCapacity(allocator, perimeter_estimate) catch @panic("OOM!");
+    defer points.deinit();
+    var offset_x: i32 = 0;
+    var offset_y: i32 = radius;
+    var d = radius - 1;
+    while (offset_y >= offset_x) {
+        const pts = [8]c.SDL_Point{ .{
+            .x = gui.x + offset_x,
+            .y = gui.y + offset_y,
+        }, .{
+            .x = gui.x + offset_y,
+            .y = gui.y + offset_x,
+        }, .{
+            .x = gui.x - offset_x,
+            .y = gui.y + offset_y,
+        }, .{
+            .x = gui.x - offset_y,
+            .y = gui.y + offset_x,
+        }, .{
+            .x = gui.x + offset_x,
+            .y = gui.y - offset_y,
+        }, .{
+            .x = gui.x + offset_y,
+            .y = gui.y - offset_x,
+        }, .{
+            .x = gui.x - offset_x,
+            .y = gui.y - offset_y,
+        }, .{
+            .x = gui.x - offset_y,
+            .y = gui.y - offset_x,
+        } };
+        for (pts) |pt| {
+            const num: f64 = @floatFromInt(pt.x);
+            const denom: f64 = @floatFromInt(pt.y);
+            const theta = std.math.atan(num / denom);
+            if (theta_1 <= theta and theta <= theta_2) {
+                points.appendAssumeCapacity(pt);
+            }
+        }
+        if (d >= 2 * offset_x) {
+            d -= 2 * offset_x + 1;
+            offset_x += 1;
+        } else if (d < 2 * (radius - offset_y)) {
+            d += 2 * offset_y - 1;
+            offset_y -= 1;
+        } else {
+            d += 2 * (offset_y - offset_x - 1);
+            offset_y -= 1;
+            offset_x += 1;
+        }
+    }
+    const slice = points.items;
+    sdl_call(
+        c.SDL_RenderDrawPoints(gui.render, slice.ptr, @intCast(slice.len)),
+        "screen.arc()",
+    );
+}
+
+pub fn sector(radius: i32, theta_1: f64, theta_2: f64) void {
+    std.debug.assert(0 < theta_1);
+    std.debug.assert(theta_1 < theta_2);
+    std.debug.assert(theta_2 < std.math.tau);
+    const angle_length = (theta_2 - theta_1) * std.math.tau;
+    const perimeter_estimate: usize = 6 * @as(usize, @intCast(radius)) * @as(usize, @intFromFloat(angle_length));
+    const gui = windows[current];
+    var points = std.ArrayList(c.SDL_Point).initCapacity(allocator, perimeter_estimate) catch @panic("OOM!");
+    defer points.deinit();
+    points.appendAssumeCapacity(.{
+        .x = gui.x,
+        .y = gui.y,
+    });
+    var offset_x: i32 = 0;
+    var offset_y: i32 = radius;
+    var d = radius - 1;
+    while (offset_y >= offset_x) {
+        const pts = [8]c.SDL_Point{ .{
+            .x = gui.x + offset_x,
+            .y = gui.y + offset_y,
+        }, .{
+            .x = gui.x + offset_y,
+            .y = gui.y + offset_x,
+        }, .{
+            .x = gui.x - offset_x,
+            .y = gui.y + offset_y,
+        }, .{
+            .x = gui.x - offset_y,
+            .y = gui.y + offset_x,
+        }, .{
+            .x = gui.x + offset_x,
+            .y = gui.y - offset_y,
+        }, .{
+            .x = gui.x + offset_y,
+            .y = gui.y - offset_x,
+        }, .{
+            .x = gui.x - offset_x,
+            .y = gui.y - offset_y,
+        }, .{
+            .x = gui.x - offset_y,
+            .y = gui.y - offset_x,
+        } };
+        for (pts) |pt| {
+            const num: f64 = @floatFromInt(pt.x);
+            const denom: f64 = @floatFromInt(pt.y);
+            const theta = std.math.atan(num / denom);
+            if (theta_1 <= theta and theta <= theta_2) {
+                points.appendAssumeCapacity(pt);
+                points.appendAssumeCapacity(.{
+                    .x = gui.x,
+                    .y = gui.y,
+                });
+            }
+        }
+        if (d >= 2 * offset_x) {
+            d -= 2 * offset_x + 1;
+            offset_x += 1;
+        } else if (d < 2 * (radius - offset_y)) {
+            d += 2 * offset_y - 1;
+            offset_y -= 1;
+        } else {
+            d += 2 * (offset_y - offset_x - 1);
+            offset_y -= 1;
+            offset_x += 1;
+        }
+    }
+    const slice = points.items;
+    sdl_call(
+        c.SDL_RenderDrawPoints(gui.render, slice.ptr, @intCast(slice.len)),
+        "screen.sector()",
+    );
 }
 
 const Size = struct {
@@ -126,7 +341,8 @@ pub fn get_size() Size {
     };
 }
 
-pub fn init(width: u16, height: u16) !void {
+pub fn init(alloc_pointer: std.mem.Allocator, width: u16, height: u16) !void {
+    allocator = alloc_pointer;
     HEIGHT = height;
     WIDTH = width;
 
@@ -211,6 +427,7 @@ fn window_rect(gui: *Gui) void {
     var ysize: i32 = undefined;
     var xzoom: u16 = 1;
     var yzoom: u16 = 1;
+    const oldzoom = gui.zoom;
     c.SDL_GetWindowSize(gui.window, &xsize, &ysize);
     while ((1 + xzoom) * WIDTH <= xsize) : (xzoom += 1) {}
     while ((1 + yzoom) * HEIGHT <= ysize) : (yzoom += 1) {}
@@ -219,6 +436,8 @@ fn window_rect(gui: *Gui) void {
     const uysize: u16 = @intCast(ysize);
     gui.width = @divFloor(uxsize, gui.zoom);
     gui.height = @divFloor(uysize, gui.zoom);
+    gui.x = @divFloor(gui.x * oldzoom, gui.zoom);
+    gui.y = @divFloor(gui.y * oldzoom, gui.zoom);
     sdl_call(c.SDL_RenderSetScale(
         gui.render,
         @floatFromInt(gui.zoom),

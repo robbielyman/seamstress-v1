@@ -55,7 +55,8 @@ function binary:bang()
 end
 
 function binary:string()
-	return self.value
+  if self.behavior == 'trigger' then return '' end
+  return self.value == 1 and "on" or "off"
 end
 
 function binary:get_range()

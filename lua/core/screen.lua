@@ -39,6 +39,22 @@ function Screen.refresh()
 	_seamstress.screen_refresh()
 end
 
+--- move the current position.
+-- @tparam integer x target x-coordinate (1-based)
+-- @tparam integer y target y-coordinate (1-based)
+-- @function screen.move
+function Screen.move(x, y)
+	_seamstress.screen_move(x, y)
+end
+
+--- move the current position with relative coordinates.
+-- @tparam integer x relative target x-coordinate 
+-- @tparam integer y relative target y-coordinate
+-- @function screen.move_rel
+function Screen.move_rel(x, y)
+	_seamstress.screen_move_rel(x, y)
+end
+
 --- sets screen color.
 -- @tparam integer r red value (0-255)
 -- @tparam integer g green value (0-255)
@@ -57,43 +73,101 @@ function Screen.pixel(x, y)
 	_seamstress.screen_pixel(x, y)
 end
 
+--- draws a single pixel at the current coordinate.
+-- @function screen.pixel_rel
+function Screen.pixel_rel()
+	_seamstress.screen_pixel()
+end
+
 --- draws a line.
--- @tparam integer ax source x-coordinate (1-based)
--- @tparam integer ay source y-coordinate (1-based)
 -- @tparam integer bx target x-coordinate (1-based)
 -- @tparam integer by target y-coordinate (1-based)
 -- @function screen.line
-function Screen.line(ax, ay, bx, by)
-	_seamstress.screen_line(ax, ay, bx, by)
+function Screen.line(bx, by)
+	_seamstress.screen_line(bx, by)
+end
+
+--- draws a line relative to the current coordinates.
+-- @tparam integer bx target relative x-coordinate 
+-- @tparam integer by target relative y-coordinate
+-- @function screen.line_rel
+function Screen.line_rel(bx, by)
+	_seamstress.screen_line_rel(bx, by)
 end
 
 --- draws a rectangle.
--- @tparam integer x upper-left x-coordinate (1-based)
--- @tparam integer y upper-left y-coordinate (1-based)
 -- @tparam integer w width in pixels
 -- @tparam integer h height in pixels
 -- @function screen.rect
-function Screen.rect(x, y, w, h)
-	_seamstress.screen_rect(x, y, w, h)
+function Screen.rect(w, h)
+	_seamstress.screen_rect(w, h)
 end
 
 --- draws a filled-in rectangle.
--- @tparam integer x upper-left x-coordinate (1-based)
--- @tparam integer y upper-left y-coordinate (1-based)
 -- @tparam integer w width in pixels
 -- @tparam integer h height in pixels
 -- @function screen.rect_fill
-function Screen.rect_fill(x, y, w, h)
-	_seamstress.screen_rect_fill(x, y, w, h)
+function Screen.rect_fill(w, h)
+	_seamstress.screen_rect_fill(w, h)
+end
+
+--- draws a circle arc centered at the current position.
+-- angles are measured in radians and proceed clockwise
+-- with 0 pointing to the right. We should have
+-- `0 <= theta_1 <= theta_2 <= 2 * pi`
+-- @tparam integer radius in pixels
+-- @tparam number theta_1 initial angle in radians.
+-- @tparam number theta_2 terminal angle in radians.
+-- @function screen.arc
+function Screen.arc(radius, theta_1, theta_2)
+	_seamstress.screen_arc(radius, theta_1, theta_2)
+end
+
+--- draws a circle centered at the current position.
+-- @tparam integer radius in pixels
+-- @function screen.circle
+function Screen.circle(radius)
+	_seamstress.screen_arc(radius, 0, 2*math.pi)
+end
+
+--- draws a filled circle arc centered at the current position.
+-- angles are measured in radians and proceed clockwise
+-- with 0 pointing to the right. We should have
+-- `0 <= theta_1 <= theta_2 <= 2 * pi`
+-- @tparam integer radius in pixels
+-- @tparam number theta_1 initial angle in radians.
+-- @tparam number theta_2 terminal angle in radians.
+-- @function screen.sector
+function Screen.sector(radius, theta_1, theta_2)
+	_seamstress.screen_sector(radius, theta_1, theta_2)
+end
+
+--- draws a circle centered at the current position.
+-- @tparam integer radius in pixels
+-- @function screen.circle_fill
+function Screen.circle_fill(radius)
+	_seamstress.screen_sector(radius, 0, 2*math.pi)
 end
 
 --- draws text to the screen.
--- @tparam integer x upper-left x-coordinate (1-based)
--- @tparam integer y upper-left y-coordinate (1-based)
 -- @tparam string text text to draw
 -- @function screen.text
-function Screen.text(x, y, text)
-	_seamstress.screen_text(x, y, text)
+function Screen.text(text)
+	_seamstress.screen_text(text)
+end
+
+--- draws text to the screen.
+-- @tparam string text text to draw
+-- @function screen.text_center
+function Screen.text_center(text)
+	_seamstress.screen_text_center(text)
+end
+
+--- draws text to the screen.
+-- @tparam string text text to draw
+-- @function screen.text_right
+function Screen.text_right(text)
+	_seamstress.screen_text_right(text)
 end
 
 --- gets size of text.
@@ -109,6 +183,7 @@ end
 -- @function Screen.
 -- @treturn integer w width in pixels
 -- @treturn integer h height in pixels
+-- @function screen.get_size
 function Screen.get_size()
   return _seamstress.screen_get_size()
 end
@@ -122,19 +197,23 @@ _seamstress.screen = {
     elseif #mods == 1 and mods[1] == "ctrl" and char == "c" and state == 1 then
       _seamstress.quit_lvm()
     elseif window == 2 then
-      paramsMenu.key(keycodes[symbol], keycodes.modifier(modifiers), is_repeat, state, window)
+      paramsMenu.key(keycodes[symbol], keycodes.modifier(modifiers), is_repeat, state)
     elseif Screen.key ~= nil then
-      Screen.key(keycodes[symbol], keycodes.modifier(modifiers), is_repeat, state, window)
+      Screen.key(keycodes[symbol], keycodes.modifier(modifiers), is_repeat, state)
     end
   end,
   mouse = function(x, y, window)
-    if Screen.mouse ~= nil then
-      Screen.mouse(x, y, window)
+    if window == 2 then
+      paramsMenu.mouse(x, y)
+    elseif Screen.mouse ~= nil then
+      Screen.mouse(x, y)
     end
   end,
   click = function(x, y, state, button, window)
-    if Screen.click ~= nil then
-      Screen.click(x, y, state, button, window)
+    if window == 2 then
+      paramsMenu.click(x, y, state, button)
+    elseif Screen.click ~= nil then
+      Screen.click(x, y, state, button)
     end
   end,
   resized = function(x, y, window)
@@ -150,25 +229,22 @@ _seamstress.screen = {
 -- @tparam table modifiers a table with the names of modifier keys pressed down
 -- @tparam bool is_repeat true if the key is a repeat event
 -- @tparam integer state 1 for a press, 0 for release
--- @tparam integer window 1 for the main window, 2 for the params window
 -- @function screen.key
-function Screen.key(char, modifiers, is_repeat, state, window) end
+function Screen.key(char, modifiers, is_repeat, state) end
 
 --- callback executed when the user moves the mouse with the gui window focused.
 -- @tparam integer x x-coordinate
 -- @tparam integer y y-coordinate
--- @tparam integer window 1 for the main window, 2 for the params window
 -- @function screen.mouse
-function Screen.mouse(x, y, window) end
+function Screen.mouse(x, y) end
 
 --- callback executed when the user clicks the mouse on the gui window.
 -- @tparam integer x x-coordinate
 -- @tparam integer y y-coordinate
 -- @tparam integer state 1 for a press, 0 for release
 -- @tparam integer button bitmask for which button was pressed
--- @tparam integer window 1 for the main window, 2 for the params window
 -- @function screen.click
-function Screen.click(x, y, state, button, window) end
+function Screen.click(x, y, state, button) end
 
 --- callback executed when the user resizes a window
 -- @tparam integer x new x size

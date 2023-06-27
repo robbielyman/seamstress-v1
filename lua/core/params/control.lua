@@ -119,6 +119,7 @@ function Control:string(quant)
   else
     quant = quant or 0.01
     local a = util.round(self:get(), quant)
+    if self.controlspec.units == "" then return a end
     return a.." "..self.controlspec.units
   end
 end
