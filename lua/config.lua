@@ -25,3 +25,11 @@ path = {
 }
 
 _old_print = print
+
+-- norns compatibility fns
+
+-- as currently seamstress doesn't allow to switch scripts at runtime,
+-- PWD got added to package.path, making this fn a simple alias
+function include(file)
+  return require(file)
+end
