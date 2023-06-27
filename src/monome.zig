@@ -207,7 +207,7 @@ pub fn handle_add(
     argv: [*c][*c]c.lo_arg,
     argc: c_int,
     msg: c.lo_message,
-    user_data: c.lo_message,
+    user_data: ?*anyopaque,
 ) callconv(.C) c_int {
     _ = user_data;
     _ = msg;
@@ -228,7 +228,7 @@ pub fn handle_remove(
     argv: [*c][*c]c.lo_arg,
     argc: c_int,
     msg: c.lo_message,
-    user_data: c.lo_message,
+    user_data: ?*anyopaque,
 ) callconv(.C) c_int {
     _ = user_data;
     _ = msg;
@@ -275,7 +275,7 @@ fn handle_size(
     argv: [*c][*c]c.lo_arg,
     argc: c_int,
     msg: c.lo_message,
-    user_data: c.lo_message,
+    user_data: ?*anyopaque,
 ) callconv(.C) c_int {
     _ = msg;
     _ = argc;
@@ -302,7 +302,7 @@ fn handle_grid_key(
     argv: [*c][*c]c.lo_arg,
     argc: c_int,
     msg: c.lo_message,
-    user_data: c.lo_message,
+    user_data: ?*anyopaque,
 ) callconv(.C) c_int {
     _ = msg;
     _ = argc;
@@ -328,7 +328,7 @@ fn handle_arc_key(
     argv: [*c][*c]c.lo_arg,
     argc: c_int,
     msg: c.lo_message,
-    user_data: c.lo_message,
+    user_data: ?*anyopaque,
 ) callconv(.C) c_int {
     _ = msg;
     _ = argc;
@@ -353,7 +353,7 @@ fn handle_delta(
     argv: [*c][*c]c.lo_arg,
     argc: c_int,
     msg: c.lo_message,
-    user_data: c.lo_message,
+    user_data: ?*anyopaque,
 ) callconv(.C) c_int {
     _ = msg;
     _ = argc;
@@ -378,7 +378,7 @@ fn handle_tilt(
     argv: [*c][*c]c.lo_arg,
     argc: c_int,
     msg: c.lo_message,
-    user_data: c.lo_message,
+    user_data: ?*anyopaque,
 ) callconv(.C) c_int {
     _ = msg;
     _ = argc;

@@ -108,7 +108,7 @@ fn osc_receive(
     argv: [*c][*c]c.lo_arg,
     argc: c_int,
     msg: c.lo_message,
-    user_data: c.lo_message,
+    user_data: ?*anyopaque,
 ) callconv(.C) c_int {
     _ = user_data;
     const arg_size = @as(usize, @intCast(argc));

@@ -1,5 +1,4 @@
 pub usingnamespace @cImport({
-    @cInclude("lua/lua.h");
     @cInclude("stdlib.h");
     @cInclude("stdio.h");
     @cInclude("lo/lo.h");

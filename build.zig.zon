@@ -1,0 +1,26 @@
+.{
+    .name = "seamstress",
+    .version = "0.11.0",
+    .dependencies = .{
+        .SDL = .{
+            .url = "https://github.com/ryleelyman/SDL/archive/91f5c3d3aa4d35edf41b4d552a6b18a95ff2a948.tar.gz",
+            .hash = "1220c7cd560ac929039674876507900065428322add6ea0c1b4b38cd16d871976425",
+        },
+        .Lua = .{
+            .url = "https://github.com/ryleelyman/ziglua/archive/refs/tags/v0.1.1.tar.gz",
+            .hash = "12203f5e21e5ac3e80a95ffd335bbce74ce5b01baf4168be6fa3cf7861fae03e5b73",
+        },
+        .readline = .{
+            .url = "https://github.com/ryleelyman/readline/archive/b7ee957ab403bdc8b9f94e32cb1d4b004970d465.tar.gz",
+            .hash = "122059b095444e357135ffcb930dd4ef80a61ad2e9a511587d73b14750fa74a5a775",
+        },
+        .liblo = .{
+            .url = "https://github.com/ryleelyman/liblo/archive/95e304f995647314e6969e41bf1961ada302733d.tar.gz",
+            .hash = "1220e948b99d2de998a04d94abbff9395d61979f66a598a5a29b6cc1e0e7b32a2954",
+        },
+        .rtmidi = .{
+            .url = "https://github.com/ryleelyman/rtmidi/archive/3bcad6a934a35f264053f459b7231de5e40750e5.tar.gz",
+            .hash = "1220092b88556f2a17d31c0f64289ae8784be834bb84e4375468f36f5c1e70d9d256",
+        },
+    },
+}
