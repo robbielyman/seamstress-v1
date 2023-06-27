@@ -6,10 +6,10 @@ currently beta software.
 
 ## installation
 
-requires `liblo`, `sdl2`, `sdl2_ttf`, `rtmidi`, and `readline`. on macOS do
+requires `freetype2`, `harfbuzz` and `ncurses`. on macOS do
 
 ```bash
-brew install liblo readline rtmidi sdl2 sdl2_ttf
+brew install freetype2 harfbuzz ncurses
 ```
 
 building from source requires the master build of [zig](https://github.com/ziglang/zig).
@@ -21,6 +21,18 @@ to build, invoke
 ```bash
 git submodule update --init --recursive
 sudo zig build install -p /usr/local -Doptimize=ReleaseFast
+```
+
+If you get compile errors complaining about not being able to find header files,
+you may need to do the following once
+
+```bash
+pushd lib/readline
+zig build
+popd
+pushd lib/ziglua
+zig build
+popd
 ```
 
 ## usage
