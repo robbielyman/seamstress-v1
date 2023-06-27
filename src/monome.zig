@@ -98,7 +98,7 @@ pub const Monome = struct {
                     _ = c.lo_message_add_int32(message, xoff[idx]);
                     _ = c.lo_message_add_int32(message, yoff[idx]);
                 },
-                .Arc => _ = c.lo_message_add_int32(message, @intCast(i32, idx)),
+                .Arc => _ = c.lo_message_add_int32(message, @intCast(idx)),
             }
             var j: usize = 0;
             while (j < 64) : (j += 1) _ = c.lo_message_add_int32(message, self.data[idx][j]);
@@ -117,7 +117,7 @@ pub fn init(alloc_pointer: std.mem.Allocator, port: u16) !void {
     devices = try allocator.alloc(Monome, 8);
     for (devices, 0..) |*device, i| {
         device.* = .{};
-        device.id = @intCast(u8, i);
+        device.id = @intCast(i);
         device.from_port = device.id + 1 + port;
         const from_port_str = try std.fmt.allocPrintZ(allocator, "{d}", .{device.from_port});
         defer allocator.free(from_port_str);
@@ -241,7 +241,7 @@ pub fn handle_remove(
 }
 
 inline fn unwrap_string(str: [*c]const u8) []const u8 {
-    var slice = @ptrCast([*]const u8, str);
+    var slice: [*]const u8 = @ptrCast(str);
     var len: usize = 0;
     while (slice[len] != 0) : (len += 1) {}
     return slice[0..len];
@@ -280,9 +280,9 @@ fn handle_size(
     _ = argc;
     _ = types;
     _ = path;
-    const i = @ptrCast(*u8, user_data);
-    devices[i.*].cols = @intCast(u8, argv[0].*.i);
-    devices[i.*].rows = @intCast(u8, argv[1].*.i);
+    const i: *u8 = @ptrCast(user_data);
+    devices[i.*].cols = @intCast(argv[0].*.i);
+    devices[i.*].rows = @intCast(argv[1].*.i);
     devices[i.*].quads = (devices[i.*].cols * devices[i.*].rows) / 64;
     if (!devices[i.*].connected) {
         devices[i.*].connected = true;
@@ -306,7 +306,7 @@ fn handle_grid_key(
     _ = argc;
     _ = types;
     _ = path;
-    const i = @ptrCast(*u8, user_data);
+    const i: *u8 = @ptrCast(user_data);
     const event = .{
         .Grid_Key = .{
             .id = i.*,
@@ -331,7 +331,7 @@ fn handle_arc_key(
     _ = argc;
     _ = types;
     _ = path;
-    const i = @ptrCast(*u8, user_data);
+    const i: *u8 = @ptrCast(user_data);
     const event = .{
         .Arc_Key = .{
             .id = i.*,
@@ -355,7 +355,7 @@ fn handle_delta(
     _ = argc;
     _ = types;
     _ = path;
-    const i = @ptrCast(*u8, user_data);
+    const i: *u8 = @ptrCast(user_data);
     const event = .{
         .Arc_Encoder = .{
             .id = i.*,
@@ -379,7 +379,7 @@ fn handle_tilt(
     _ = argc;
     _ = types;
     _ = path;
-    const i = @ptrCast(*u8, user_data);
+    const i: *u8 = @ptrCast(user_data);
     const event = .{
         .Grid_Tilt = .{
             .id = i.*,

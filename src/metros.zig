@@ -125,7 +125,7 @@ pub fn start(idx: u8, seconds: f64, count: i64, stage: i64) !void {
     if (seconds > 0.0) {
         metro.seconds = seconds;
     }
-    const delta = @intFromFloat(u64, metro.seconds * std.time.ns_per_s);
+    const delta: u64 = @intFromFloat(metro.seconds * std.time.ns_per_s);
     metro.reset(stage);
     try metro.init(delta, count);
 }
@@ -136,7 +136,7 @@ pub fn set_period(idx: u8, seconds: f64) !void {
     if (seconds > 0.0) {
         metro.seconds = seconds;
     }
-    metro.delta = @intFromFloat(u64, metro.seconds * std.time.ns_per_s);
+    metro.delta = @intFromFloat(metro.seconds * std.time.ns_per_s);
 }
 
 const max_num_metros = 36;

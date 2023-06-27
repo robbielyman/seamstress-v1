@@ -171,7 +171,7 @@ fn osc_send(l: *Lua) i32 {
     defer allocator.free(msg);
     var i: usize = 1;
     while (i <= len) : (i += 1) {
-        l.pushInteger(@intCast(c_longlong, i));
+        l.pushInteger(@as(c_longlong, @intCast(i)));
         _ = l.getTable(3);
         msg[i - 1] = switch (l.typeOf(-1)) {
             .nil => osc.Lo_Arg{ .Lo_Nil = false },
@@ -212,9 +212,9 @@ fn grid_set_led(l: *Lua) i32 {
     check_num_args(l, 4);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const x = @intCast(u8, l.checkInteger(2) - 1);
-    const y = @intCast(u8, l.checkInteger(3) - 1);
-    const val = @intCast(u8, l.checkInteger(4));
+    const x = @as(u8, @intCast(l.checkInteger(2) - 1));
+    const y = @as(u8, @intCast(l.checkInteger(3) - 1));
+    const val = @as(u8, @intCast(l.checkInteger(4)));
     md.grid_set_led(x, y, val);
     l.setTop(0);
     return 0;
@@ -230,7 +230,7 @@ fn grid_all_led(l: *Lua) i32 {
     check_num_args(l, 2);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const val = @intCast(u8, l.checkInteger(2));
+    const val = @as(u8, @intCast(l.checkInteger(2)));
     md.grid_all_led(val);
     l.setTop(0);
     return 0;
@@ -272,7 +272,7 @@ fn grid_set_rotation(l: *Lua) i32 {
     check_num_args(l, 2);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const rotation = @intCast(u16, l.checkInteger(2));
+    const rotation = @as(u16, @intCast(l.checkInteger(2)));
     md.set_rotation(rotation);
     l.setTop(0);
     return 0;
@@ -288,7 +288,7 @@ fn grid_tilt_enable(l: *Lua) i32 {
     check_num_args(l, 2);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const sensor = @intCast(u8, l.checkInteger(2) - 1);
+    const sensor = @as(u8, @intCast(l.checkInteger(2) - 1));
     md.tilt_set(sensor, 1);
     return 0;
 }
@@ -303,7 +303,7 @@ fn grid_tilt_disable(l: *Lua) i32 {
     check_num_args(l, 2);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const sensor = @intCast(u8, l.checkInteger(2) - 1);
+    const sensor = @as(u8, @intCast(l.checkInteger(2) - 1));
     md.tilt_set(sensor, 0);
     return 0;
 }
@@ -320,9 +320,9 @@ fn arc_set_led(l: *Lua) i32 {
     check_num_args(l, 4);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const ring = @intCast(u8, l.checkInteger(2) - 1);
-    const led = @intCast(u8, l.checkInteger(3) - 1);
-    const val = @intCast(u8, l.checkInteger(4));
+    const ring = @as(u8, @intCast(l.checkInteger(2) - 1));
+    const led = @as(u8, @intCast(l.checkInteger(3) - 1));
+    const val = @as(u8, @intCast(l.checkInteger(4)));
     md.arc_set_led(ring, led, val);
     l.setTop(0);
     return 0;
@@ -338,7 +338,7 @@ fn arc_all_led(l: *Lua) i32 {
     check_num_args(l, 2);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const val = @intCast(u8, l.checkInteger(2));
+    const val = @as(u8, @intCast(l.checkInteger(2)));
     md.grid_all_led(val);
     l.setTop(0);
     return 0;
@@ -370,7 +370,7 @@ fn monome_intensity(l: *Lua) i32 {
     check_num_args(l, 2);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const level = @intCast(u8, l.checkInteger(2));
+    const level = @as(u8, @intCast(l.checkInteger(2)));
     md.intensity(level);
     l.setTop(0);
     return 0;
@@ -394,8 +394,8 @@ fn screen_refresh(l: *Lua) i32 {
 // @function screen_pixel
 fn screen_pixel(l: *Lua) i32 {
     check_num_args(l, 2);
-    const x = @intCast(i32, l.checkInteger(1)) - 1;
-    const y = @intCast(i32, l.checkInteger(2)) - 1;
+    const x = @as(i32, @intCast(l.checkInteger(1))) - 1;
+    const y = @as(i32, @intCast(l.checkInteger(2))) - 1;
     screen.pixel(x, y);
     l.setTop(0);
     return 0;
@@ -411,10 +411,10 @@ fn screen_pixel(l: *Lua) i32 {
 // @function screen_line
 fn screen_line(l: *Lua) i32 {
     check_num_args(l, 4);
-    const ax = @intCast(i32, l.checkInteger(1)) - 1;
-    const ay = @intCast(i32, l.checkInteger(2)) - 1;
-    const bx = @intCast(i32, l.checkInteger(3)) - 1;
-    const by = @intCast(i32, l.checkInteger(4)) - 1;
+    const ax = @as(i32, @intCast(l.checkInteger(1))) - 1;
+    const ay = @as(i32, @intCast(l.checkInteger(2))) - 1;
+    const bx = @as(i32, @intCast(l.checkInteger(3))) - 1;
+    const by = @as(i32, @intCast(l.checkInteger(4))) - 1;
     screen.line(ax, ay, bx, by);
     l.setTop(0);
     return 0;
@@ -430,10 +430,10 @@ fn screen_line(l: *Lua) i32 {
 // @function screen_rect
 fn screen_rect(l: *Lua) i32 {
     check_num_args(l, 4);
-    const x = @intCast(i32, l.checkInteger(1)) - 1;
-    const y = @intCast(i32, l.checkInteger(2)) - 1;
-    const w = @intCast(i32, l.checkInteger(3));
-    const h = @intCast(i32, l.checkInteger(4));
+    const x = @as(i32, @intCast(l.checkInteger(1))) - 1;
+    const y = @as(i32, @intCast(l.checkInteger(2))) - 1;
+    const w = @as(i32, @intCast(l.checkInteger(3)));
+    const h = @as(i32, @intCast(l.checkInteger(4)));
     screen.rect(x, y, w, h);
     l.setTop(0);
     return 0;
@@ -449,10 +449,10 @@ fn screen_rect(l: *Lua) i32 {
 // @function screen_rect_fill
 fn screen_rect_fill(l: *Lua) i32 {
     check_num_args(l, 4);
-    const x = @intCast(i32, l.checkInteger(1)) - 1;
-    const y = @intCast(i32, l.checkInteger(2)) - 1;
-    const w = @intCast(i32, l.checkInteger(3));
-    const h = @intCast(i32, l.checkInteger(4));
+    const x = @as(i32, @intCast(l.checkInteger(1))) - 1;
+    const y = @as(i32, @intCast(l.checkInteger(2))) - 1;
+    const w = @as(i32, @intCast(l.checkInteger(3)));
+    const h = @as(i32, @intCast(l.checkInteger(4)));
     screen.rect_fill(x, y, w, h);
     l.setTop(0);
     return 0;
@@ -467,8 +467,8 @@ fn screen_rect_fill(l: *Lua) i32 {
 // @function screen_text
 fn screen_text(l: *Lua) i32 {
     check_num_args(l, 3);
-    const x = @intCast(i32, l.checkInteger(1)) - 1;
-    const y = @intCast(i32, l.checkInteger(2)) - 1;
+    const x = @as(i32, @intCast(l.checkInteger(1))) - 1;
+    const y = @as(i32, @intCast(l.checkInteger(2))) - 1;
     const words = l.checkString(3);
     screen.text(x, y, std.mem.span(words));
     l.setTop(0);
@@ -485,10 +485,10 @@ fn screen_text(l: *Lua) i32 {
 // @function screen_color
 fn screen_color(l: *Lua) i32 {
     check_num_args(l, 4);
-    const r = @intCast(u8, l.checkInteger(1));
-    const g = @intCast(u8, l.checkInteger(2));
-    const b = @intCast(u8, l.checkInteger(3));
-    const a = @intCast(u8, l.checkInteger(4));
+    const r = @as(u8, @intCast(l.checkInteger(1)));
+    const g = @as(u8, @intCast(l.checkInteger(2)));
+    const b = @as(u8, @intCast(l.checkInteger(3)));
+    const a = @as(u8, @intCast(l.checkInteger(4)));
     screen.color(r, g, b, a);
     l.setTop(0);
     return 0;
@@ -510,7 +510,7 @@ fn screen_clear(l: *Lua) i32 {
 // @function screen_set
 fn screen_set(l: *Lua) i32 {
     check_num_args(l, 1);
-    const value = @intCast(usize, l.checkInteger(1)) - 1;
+    const value = @as(usize, @intCast(l.checkInteger(1))) - 1;
     if (value > 1 or value < 0) return 0;
     screen.set(value);
     return 0;
@@ -557,7 +557,7 @@ fn screen_get_text_size(l: *Lua) i32 {
 // @function metro_start
 fn metro_start(l: *Lua) i32 {
     check_num_args(l, 4);
-    const idx = @intCast(u8, l.checkInteger(1) - 1);
+    const idx = @as(u8, @intCast(l.checkInteger(1) - 1));
     const seconds = l.checkNumber(2);
     const count = l.checkInteger(3);
     const stage = l.checkInteger(4);
@@ -573,7 +573,7 @@ fn metro_start(l: *Lua) i32 {
 // @function metro_stop
 fn metro_stop(l: *Lua) i32 {
     check_num_args(l, 1);
-    const idx = @intCast(u8, l.checkInteger(1) - 1);
+    const idx = @as(u8, @intCast(l.checkInteger(1) - 1));
     metro.stop(idx) catch unreachable;
     l.setTop(0);
     return 0;
@@ -586,7 +586,7 @@ fn metro_stop(l: *Lua) i32 {
 // @function metro_set_time
 fn metro_set_time(l: *Lua) i32 {
     check_num_args(l, 2);
-    const idx = @intCast(u8, l.checkInteger(1) - 1);
+    const idx = @as(u8, @intCast(l.checkInteger(1) - 1));
     const seconds = l.checkNumber(2);
     metro.set_period(idx, seconds) catch unreachable;
     l.setTop(0);
@@ -606,14 +606,14 @@ fn midi_write(l: *Lua) i32 {
     l.checkType(2, ziglua.LuaType.table);
     const len = l.rawLen(2);
     var i: c_longlong = 1;
-    var msg = allocator.allocSentinel(u8, @intCast(usize, len), 0) catch |err| {
+    var msg = allocator.allocSentinel(u8, @as(usize, @intCast(len)), 0) catch |err| {
         if (err == error.OutOfMemory) logger.err("out of memory!", .{});
         return 0;
     };
     while (i <= len) : (i += 1) {
         l.pushInteger(i);
         _ = l.getTable(2);
-        msg[@intCast(usize, i - 1)] = @intCast(u8, l.toInteger(-1) catch unreachable);
+        msg[@as(usize, @intCast(i - 1))] = @as(u8, @intCast(l.toInteger(-1) catch unreachable));
     }
     midi.Device.Guts.output.write(dev, msg);
     allocator.free(msg);
@@ -683,7 +683,7 @@ fn clock_cancel(l: *Lua) i32 {
     const idx = l.checkInteger(1);
     l.setTop(0);
     if (idx < 0 or idx > 100) return 0;
-    clock.cancel(@intCast(u8, idx));
+    clock.cancel(@as(u8, @intCast(idx)));
     return 0;
 }
 
@@ -752,7 +752,7 @@ pub fn osc_event(
     var path_copy = try allocator.allocSentinel(u8, path.len, 0);
     std.mem.copyForwards(u8, path_copy, path);
     _ = lvm.pushString(path_copy);
-    lvm.createTable(@intCast(i32, msg.len), 0);
+    lvm.createTable(@as(i32, @intCast(msg.len)), 0);
     var i: usize = 0;
     while (i < msg.len) : (i += 1) {
         switch (msg[i]) {
@@ -762,7 +762,7 @@ pub fn osc_event(
                 _ = lvm.pushString(a);
             },
             .Lo_Blob => |a| {
-                var ptr = @ptrCast([*]u8, a.dataptr.?);
+                var ptr: [*]u8 = @ptrCast(a.dataptr.?);
                 var len: usize = 0;
                 _ = lvm.pushBytes(ptr[0..len]);
             },
@@ -787,7 +787,7 @@ pub fn osc_event(
                 lvm.pushNumber(std.math.inf(f64));
             },
         }
-        lvm.rawSetIndex(-2, @intCast(c_longlong, i + 1));
+        lvm.rawSetIndex(-2, @as(c_longlong, @intCast(i + 1)));
     }
 
     lvm.createTable(2, 0);
@@ -817,7 +817,7 @@ pub fn monome_add(dev: *monome.Monome) !void {
         .Arc => "monome arc",
     };
     try push_lua_func("monome", "add");
-    lvm.pushInteger(@intCast(i64, id + 1));
+    lvm.pushInteger(@as(i64, @intCast(id + 1)));
     var port_copy = try allocator.allocSentinel(u8, port.len, 0);
     defer allocator.free(port_copy);
     std.mem.copyForwards(u8, port_copy, port);
@@ -829,13 +829,13 @@ pub fn monome_add(dev: *monome.Monome) !void {
 
 pub fn monome_remove(id: usize) !void {
     try push_lua_func("monome", "remove");
-    lvm.pushInteger(@intCast(i64, id + 1));
+    lvm.pushInteger(@as(i64, @intCast(id + 1)));
     try docall(&lvm, 1, 0);
 }
 
 pub fn grid_key(id: usize, x: i32, y: i32, state: i32) !void {
     try push_lua_func("grid", "key");
-    lvm.pushInteger(@intCast(i64, id + 1));
+    lvm.pushInteger(@as(i64, @intCast(id + 1)));
     lvm.pushInteger(x + 1);
     lvm.pushInteger(y + 1);
     lvm.pushInteger(state);
@@ -844,7 +844,7 @@ pub fn grid_key(id: usize, x: i32, y: i32, state: i32) !void {
 
 pub fn grid_tilt(id: usize, sensor: i32, x: i32, y: i32, z: i32) !void {
     try push_lua_func("grid", "tilt");
-    lvm.pushInteger(@intCast(i64, id + 1));
+    lvm.pushInteger(@as(i64, @intCast(id + 1)));
     lvm.pushInteger(sensor + 1);
     lvm.pushInteger(x + 1);
     lvm.pushInteger(y + 1);
@@ -854,7 +854,7 @@ pub fn grid_tilt(id: usize, sensor: i32, x: i32, y: i32, z: i32) !void {
 
 pub fn arc_delta(id: usize, ring: i32, delta: i32) !void {
     try push_lua_func("arc", "delta");
-    lvm.pushInteger(@intCast(i64, id + 1));
+    lvm.pushInteger(@as(i64, @intCast(id + 1)));
     lvm.pushInteger(ring + 1);
     lvm.pushInteger(delta);
     try docall(&lvm, 3, 0);
@@ -862,7 +862,7 @@ pub fn arc_delta(id: usize, ring: i32, delta: i32) !void {
 
 pub fn arc_key(id: usize, ring: i32, state: i32) !void {
     try push_lua_func("arc", "delta");
-    lvm.pushInteger(@intCast(i64, id + 1));
+    lvm.pushInteger(@as(i64, @intCast(id + 1)));
     lvm.pushInteger(ring + 1);
     lvm.pushInteger(state);
     try docall(&lvm, 3, 0);
@@ -874,7 +874,7 @@ pub fn screen_key(sym: i32, mod: u16, repeat: bool, state: bool, window: usize) 
     lvm.pushInteger(mod);
     lvm.pushBoolean(repeat);
     lvm.pushInteger(if (state) 1 else 0);
-    lvm.pushInteger(@intCast(c_longlong, window));
+    lvm.pushInteger(@as(c_longlong, @intCast(window)));
     try docall(&lvm, 5, 0);
 }
 
@@ -882,7 +882,7 @@ pub fn screen_mouse(x: f64, y: f64, window: usize) !void {
     try push_lua_func("screen", "mouse");
     lvm.pushNumber(x + 1);
     lvm.pushNumber(y + 1);
-    lvm.pushInteger(@intCast(c_longlong, window));
+    lvm.pushInteger(@as(c_longlong, @intCast(window)));
     try docall(&lvm, 3, 0);
 }
 
@@ -892,7 +892,7 @@ pub fn screen_click(x: f64, y: f64, state: bool, button: u8, window: usize) !voi
     lvm.pushNumber(y + 1);
     lvm.pushInteger(if (state) 1 else 0);
     lvm.pushInteger(button);
-    lvm.pushInteger(@intCast(c_longlong, window));
+    lvm.pushInteger(@as(c_longlong, @intCast(window)));
     try docall(&lvm, 5, 0);
 }
 
@@ -900,7 +900,7 @@ pub fn screen_resized(w: i32, h: i32, window: usize) !void {
     try push_lua_func("screen", "resized");
     lvm.pushInteger(w);
     lvm.pushInteger(h);
-    lvm.pushInteger(@intCast(c_longlong, window));
+    lvm.pushInteger(@as(c_longlong, @intCast(window)));
     try docall(&lvm, 3, 0);
 }
 
@@ -937,11 +937,11 @@ pub fn midi_event(id: u32, timestamp: f64, bytes: []const u8) !void {
     try push_lua_func("midi", "event");
     lvm.pushInteger(id + 1);
     lvm.pushNumber(timestamp);
-    lvm.createTable(@intCast(i32, bytes.len), 0);
+    lvm.createTable(@as(i32, @intCast(bytes.len)), 0);
     var i: usize = 0;
     while (i < bytes.len) : (i += 1) {
         lvm.pushInteger(bytes[i]);
-        lvm.rawSetIndex(-2, @intCast(c_longlong, i + 1));
+        lvm.rawSetIndex(-2, @as(c_longlong, @intCast(i + 1)));
     }
     try docall(&lvm, 3, 0);
 }
@@ -968,7 +968,7 @@ fn do_resume(l: *Lua, idx: c_longlong) i32 {
     };
     switch (status) {
         ziglua.ResumeStatus.ok => {
-            clock.cancel(@intCast(u8, idx));
+            clock.cancel(@as(u8, @intCast(idx)));
             return top;
         },
         ziglua.ResumeStatus.yield => {
@@ -977,7 +977,7 @@ fn do_resume(l: *Lua, idx: c_longlong) i32 {
             switch (sleep_type) {
                 0 => {
                     const seconds = l.checkNumber(2);
-                    clock.schedule_sleep(@intCast(u8, idx - 1), seconds);
+                    clock.schedule_sleep(@as(u8, @intCast(idx - 1)), seconds);
                 },
                 1 => {
                     const beats = l.checkNumber(2);
@@ -986,7 +986,7 @@ fn do_resume(l: *Lua, idx: c_longlong) i32 {
                         const val = l.checkNumber(3);
                         break :blk val;
                     } else 0;
-                    clock.schedule_sync(@intCast(u8, idx - 1), beats, offset);
+                    clock.schedule_sync(@as(u8, @intCast(idx - 1)), beats, offset);
                 },
                 else => {
                     l.setTop(0);

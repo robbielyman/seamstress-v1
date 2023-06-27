@@ -54,7 +54,7 @@ pub fn lo_error_handler(
 }
 
 inline fn unwrap_string(str: *u8) [:0]u8 {
-    var slice = @ptrCast([*]u8, str);
+    var slice: [*]u8 = @ptrCast(str);
     var len: usize = 0;
     while (slice[len] != 0) : (len += 1) {}
     return slice[0..len :0];
@@ -111,7 +111,7 @@ fn osc_receive(
     user_data: c.lo_message,
 ) callconv(.C) c_int {
     _ = user_data;
-    const arg_size = @intCast(usize, argc);
+    const arg_size = @as(usize, @intCast(argc));
     var message: []Lo_Arg = allocator.alloc(Lo_Arg, arg_size) catch @panic("OOM!");
 
     var i: usize = 0;
@@ -124,7 +124,7 @@ fn osc_receive(
                 message[i] = Lo_Arg{ .Lo_Float = argv[i].*.f };
             },
             c.LO_STRING => {
-                var slice = @ptrCast([*]u8, &argv[i].*.s);
+                var slice = @as([*]u8, @ptrCast(&argv[i].*.s));
                 var len: usize = 0;
                 while (slice[len] != 0) : (len += 1) {}
                 message[i] = Lo_Arg{ .Lo_String = slice[0..len :0] };
@@ -133,7 +133,7 @@ fn osc_receive(
                 const arg = argv[i];
                 message[i] = Lo_Arg{ .Lo_Blob = Lo_Blob_t{
                     .dataptr = c.lo_blob_dataptr(arg),
-                    .datasize = @intCast(i32, c.lo_blob_datasize(arg)),
+                    .datasize = @as(i32, @intCast(c.lo_blob_datasize(arg))),
                 } };
             },
             c.LO_INT64 => {
@@ -143,7 +143,7 @@ fn osc_receive(
                 message[i] = Lo_Arg{ .Lo_Double = argv[i].*.d };
             },
             c.LO_SYMBOL => {
-                var slice = @ptrCast([*]u8, &argv[i].*.S);
+                var slice = @as([*]u8, @ptrCast(&argv[i].*.S));
                 var len: usize = 0;
                 while (slice[len] != 0) : (len += 1) {}
                 message[i] = Lo_Arg{ .Lo_Symbol = slice[0..len :0] };
@@ -215,7 +215,7 @@ pub fn send(
             Lo_Arg_t.Lo_Int64 => |a| _ = c.lo_message_add_int64(message, a),
             Lo_Arg_t.Lo_Double => |a| _ = c.lo_message_add_double(message, a),
             Lo_Arg_t.Lo_Symbol => |a| _ = c.lo_message_add_symbol(message, a),
-            Lo_Arg_t.Lo_Midi => |a| _ = c.lo_message_add_midi(message, @ptrCast([*c]u8, @constCast(a[0..4]))),
+            Lo_Arg_t.Lo_Midi => |a| _ = c.lo_message_add_midi(message, @as([*c]u8, @ptrCast(@constCast(a[0..4])))),
             Lo_Arg_t.Lo_True => _ = c.lo_message_add_true(message),
             Lo_Arg_t.Lo_False => _ = c.lo_message_add_false(message),
             Lo_Arg_t.Lo_Nil => _ = c.lo_message_add_nil(message),

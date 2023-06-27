@@ -63,7 +63,7 @@ pub const Device = struct {
         };
         pub const output = struct {
             pub fn write(self: *Device, message: []const u8) void {
-                _ = c.rtmidi_out_send_message(self.ptr.?, message.ptr, @intCast(c_int, message.len));
+                _ = c.rtmidi_out_send_message(self.ptr.?, message.ptr, @intCast(message.len));
                 if (!self.ptr.?.*.ok) {
                     const err = std.mem.span(self.ptr.?.*.msg);
                     logger.err("error in device {s}: {s}", .{ self.name.?, err });
@@ -109,7 +109,7 @@ pub fn init(alloc_pointer: std.mem.Allocator) !void {
     devices = try allocator.alloc(Device, 32);
     var idx: usize = 0;
     while (idx < 32) : (idx += 1) {
-        devices[idx] = .{ .id = @intCast(u8, idx) };
+        devices[idx] = .{ .id = @as(u8, @intCast(idx)) };
     }
     thread = try std.Thread.spawn(.{}, main_loop, .{});
 }
@@ -167,7 +167,7 @@ fn main_loop() !void {
         while (i < in_count) : (i += 1) {
             var len: c_int = 256;
             _ = c.rtmidi_get_port_name(midi_in, i, null, &len);
-            const usize_len = @intCast(usize, len);
+            const usize_len = @as(usize, @intCast(len));
             var buf = try allocator.allocSentinel(u8, usize_len, 0);
             defer allocator.free(buf);
             _ = c.rtmidi_get_port_name(midi_in, i, buf.ptr, &len);
@@ -186,7 +186,7 @@ fn main_loop() !void {
         while (i < out_count) : (i += 1) {
             var len: c_int = 256;
             _ = c.rtmidi_get_port_name(midi_out, i, null, &len);
-            const usize_len = @intCast(usize, len);
+            const usize_len = @as(usize, @intCast(len));
             var buf = try allocator.allocSentinel(u8, usize_len, 0);
             defer allocator.free(buf);
             _ = c.rtmidi_get_port_name(midi_out, i, buf.ptr, &len);

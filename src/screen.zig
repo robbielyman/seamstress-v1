@@ -215,12 +215,14 @@ fn window_rect(gui: *Gui) void {
     while ((1 + xzoom) * WIDTH <= xsize) : (xzoom += 1) {}
     while ((1 + yzoom) * HEIGHT <= ysize) : (yzoom += 1) {}
     gui.zoom = if (xzoom < yzoom) xzoom else yzoom;
-    gui.width = @divFloor(@intCast(u16, xsize), gui.zoom);
-    gui.height = @divFloor(@intCast(u16, ysize), gui.zoom);
+    const uxsize: u16 = @intCast(xsize);
+    const uysize: u16 = @intCast(ysize);
+    gui.width = @divFloor(uxsize, gui.zoom);
+    gui.height = @divFloor(uysize, gui.zoom);
     sdl_call(c.SDL_RenderSetScale(
         gui.render,
-        @floatFromInt(f32, gui.zoom),
-        @floatFromInt(f32, gui.zoom),
+        @floatFromInt(gui.zoom),
+        @floatFromInt(gui.zoom),
     ), "window_rect()");
 }
 
@@ -245,23 +247,27 @@ pub fn check() void {
                 quit = true;
             },
             c.SDL_MOUSEMOTION => {
-                const zoom = @floatFromInt(f64, windows[ev.button.windowID - 1].zoom);
+                const zoom: f64 = @floatFromInt(windows[ev.button.windowID - 1].zoom);
+                const x: f64 = @floatFromInt(ev.button.x);
+                const y: f64 = @floatFromInt(ev.button.y);
                 const event = .{
                     .Screen_Mouse_Motion = .{
-                        .x = @floatFromInt(f64, ev.button.x) / zoom,
-                        .y = @floatFromInt(f64, ev.button.y) / zoom,
+                        .x = x / zoom,
+                        .y = y / zoom,
                         .window = ev.motion.windowID,
                     },
                 };
                 events.post(event);
             },
             c.SDL_MOUSEBUTTONDOWN, c.SDL_MOUSEBUTTONUP => {
-                const zoom = @floatFromInt(f64, windows[ev.button.windowID - 1].zoom);
+                const zoom: f64 = @floatFromInt(windows[ev.button.windowID - 1].zoom);
+                const x: f64 = @floatFromInt(ev.button.x);
+                const y: f64 = @floatFromInt(ev.button.y);
                 const event = .{
                     .Screen_Mouse_Click = .{
                         .state = ev.button.state == c.SDL_PRESSED,
-                        .x = @floatFromInt(f64, ev.button.x) / zoom,
-                        .y = @floatFromInt(f64, ev.button.y) / zoom,
+                        .x = x / zoom,
+                        .y = y / zoom,
                         .button = ev.button.button,
                         .window = ev.button.windowID,
                     },

@@ -20,7 +20,7 @@ pub fn build(b: *std.Build) void {
 
     b.installArtifact(exe);
     const install_lua_files = b.addInstallDirectory(.{
-        .source_dir = "lua",
+        .source_dir = .{ .path = "lua" },
         .install_dir = .{ .custom = "share/seamstress" },
         .install_subdir = "lua",
     });
