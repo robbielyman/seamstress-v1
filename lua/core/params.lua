@@ -56,23 +56,24 @@ function ParamSet:add(args)
     local name = args.name or id
 
     if args.type == "number"  then
-      param = self:add_number(id, name, args.min, args.max, args.default, args.units)
+      self:add_number(id, name, args.min, args.max, args.default, args.units)
     elseif args.type == "option" then
-      param = self:add_option(id, name, args.options, args.default)
+      self:add_option(id, name, args.options, args.default)
     elseif args.type == "control" then
-      param = self:add_control(id, name, args.controlspec, args.formatter)
+      self:add_control(id, name, args.controlspec, args.formatter)
     elseif args.type == "binary" then
-      param = self:add_binary(id, name, args.behavior or 'toggle', args.default)
+      self:add_binary(id, name, args.behavior or 'toggle', args.default)
     elseif args.type == "trigger" then
-      param = self:add_trigger(id, name)
+      self:add_trigger(id, name)
     elseif args.type == "separator" then
-      param = separator.new(id, name)
+      self:add_separator(id, name)
     elseif args.type == "group" then
-      param = group.new(id, name, args.n)
+      self:add_group(id, name, args.n)
     else
       print("paramset.add() error: unknown type")
-      return nil
     end
+
+    return nil
   end
 
   local overwrite = true
