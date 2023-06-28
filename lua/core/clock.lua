@@ -111,7 +111,7 @@ function clock.add_params()
     seamstress.state.clock.source)
   params:set_action("clock_source",
     function(x)
-      if x == 1 then clock.internal.set_tempo(params:get("clock_get_tempo")) end
+      if x == 1 then clock.internal.set_tempo(params:get("clock_tempo")) end
     end)
   params:set_save("clock_source", false)
   params:add_number("clock_tempo", "tempo", 1, 300, seamstress.state.clock.tempo)
