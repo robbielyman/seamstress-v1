@@ -21,6 +21,8 @@ seamstress.state = require 'core/state'
 
 --- global init function to be overwritten in user scripts.
 init = function () end
+--- global cleanup function to be overwritten in user scripts.
+cleanup = function () end
 
 _seamstress.monome = {
   add = function (id, serial, name, dev)
@@ -47,8 +49,12 @@ _startup = function (script_file)
     print("create such a file and place it in either CWD or ~/seamstress")
   else
     require(script_file)
+  end
     clock.add_params()
     init()
     paramsMenu.init()
-  end
+end
+
+_seamstress.cleanup = function()
+  if cleanup ~= nil then cleanup() end
 end

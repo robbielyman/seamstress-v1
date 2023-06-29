@@ -188,8 +188,8 @@ pub fn arc(radius: i32, theta_1: f64, theta_2: f64) void {
     std.debug.assert(0 <= theta_1);
     std.debug.assert(theta_1 <= theta_2);
     std.debug.assert(theta_2 <= std.math.tau);
-    const angle_length = (theta_2 - theta_1) * std.math.tau;
-    const perimeter_estimate: usize = 6 * @as(usize, @intCast(radius)) * @as(usize, @intFromFloat(angle_length)) + 9;
+    const angle_length = (theta_2 - theta_1) * @as(f64, @floatFromInt(radius));
+    const perimeter_estimate: usize = 2 * @as(usize, @intFromFloat(angle_length)) + 9;
     const gui = windows[current];
     var points = std.ArrayList(c.SDL_Point).initCapacity(allocator, perimeter_estimate) catch @panic("OOM!");
     defer points.deinit();
@@ -249,9 +249,81 @@ pub fn arc(radius: i32, theta_1: f64, theta_2: f64) void {
     );
 }
 
-pub fn sector(radius: i32, theta_1: f64, theta_2: f64) void {
-    var i: i32 = 0;
-    while (i <= radius) : (i += 1) arc(i, theta_1, theta_2);
+pub fn circle(radius: i32) void {
+    const perimeter_estimate: usize = @intFromFloat(2 * std.math.tau * @as(f64, @floatFromInt(radius)));
+    const gui = windows[current];
+    var points = std.ArrayList(c.SDL_Point).initCapacity(allocator, perimeter_estimate) catch @panic("OOM!");
+    defer points.deinit();
+    var offset_x: i32 = 0;
+    var offset_y: i32 = radius;
+    var d = radius - 1;
+    while (offset_y >= offset_x) {
+        const pts = [8]c.SDL_Point{ .{
+            .x = gui.x + offset_x,
+            .y = gui.y + offset_y,
+        }, .{
+            .x = gui.x + offset_y,
+            .y = gui.y + offset_x,
+        }, .{
+            .x = gui.x - offset_x,
+            .y = gui.y + offset_y,
+        }, .{
+            .x = gui.x - offset_y,
+            .y = gui.y + offset_x,
+        }, .{
+            .x = gui.x + offset_x,
+            .y = gui.y - offset_y,
+        }, .{
+            .x = gui.x + offset_y,
+            .y = gui.y - offset_x,
+        }, .{
+            .x = gui.x - offset_x,
+            .y = gui.y - offset_y,
+        }, .{
+            .x = gui.x - offset_y,
+            .y = gui.y - offset_x,
+        } };
+        points.appendSliceAssumeCapacity(&pts);
+        if (d >= 2 * offset_x) {
+            d -= 2 * offset_x + 1;
+            offset_x += 1;
+        } else if (d < 2 * (radius - offset_y)) {
+            d += 2 * offset_y - 1;
+            offset_y -= 1;
+        } else {
+            d += 2 * (offset_y - offset_x - 1);
+            offset_y -= 1;
+            offset_x += 1;
+        }
+    }
+    const slice = points.items;
+    sdl_call(
+        c.SDL_RenderDrawPoints(gui.render, slice.ptr, @intCast(slice.len)),
+        "screen.circle()",
+    );
+}
+
+pub fn circle_fill(radius: i32) void {
+    const r = if (radius < 0) -radius else radius;
+    const rsquared = radius * radius;
+    const gui = windows[current];
+    var points = std.ArrayList(c.SDL_Point).initCapacity(allocator, @intCast(4 * rsquared + 2)) catch @panic("OOM!");
+    defer points.deinit();
+    var i = -r;
+    while (i <= r) : (i += 1) {
+        var j = -r;
+        while (j <= r) : (j += 1) {
+            if (i * i + j * j < rsquared) points.appendAssumeCapacity(.{
+                .x = gui.x + i,
+                .y = gui.y + j,
+            });
+        }
+    }
+    const slice = points.items;
+    sdl_call(
+        c.SDL_RenderDrawPoints(gui.render, slice.ptr, @intCast(slice.len)),
+        "screen.circle_fill()",
+    );
 }
 
 const Size = struct {
@@ -273,7 +345,7 @@ pub fn get_size() Size {
     };
 }
 
-pub fn init(alloc_pointer: std.mem.Allocator, width: u16, height: u16) !void {
+pub fn init(alloc_pointer: std.mem.Allocator, width: u16, height: u16, resources: []const u8) !void {
     allocator = alloc_pointer;
     HEIGHT = height;
     WIDTH = width;
@@ -288,7 +360,9 @@ pub fn init(alloc_pointer: std.mem.Allocator, width: u16, height: u16) !void {
         return error.Fail;
     }
 
-    var f = c.TTF_OpenFont("/usr/local/share/seamstress/resources/04b03.ttf", 8);
+    const filename = try std.fmt.allocPrintZ(allocator, "{s}/04b03.ttf", .{resources});
+    defer allocator.free(filename);
+    var f = c.TTF_OpenFont(filename, 8);
     font = f orelse {
         logger.err("screen.init(): {s}\n", .{c.TTF_GetError()});
         return error.Fail;

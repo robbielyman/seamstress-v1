@@ -13,7 +13,6 @@ pub const Event = enum {
     Quit,
     Exec_Code_Line,
     OSC,
-    Reset_LVM,
     Monome_Add,
     Monome_Remove,
     Grid_Key,
@@ -37,7 +36,6 @@ pub const Data = union(Event) {
     Quit: void,
     Exec_Code_Line: event_exec_code_line,
     OSC: event_osc,
-    Reset_LVM: void,
     Monome_Add: event_monome_add,
     Monome_Remove: event_monome_remove,
     Grid_Key: event_grid_key,
@@ -185,6 +183,7 @@ const Queue = struct {
         self.write_head = node.next;
         node.next = null;
         node.prev = null;
+        std.debug.assert(self.write_size > 0);
         self.write_size -= 1;
         return node;
     }
@@ -343,7 +342,6 @@ fn handle(event: *Data) !void {
         .Quit => quit = true,
         .Exec_Code_Line => |e| try spindle.exec_code_line(e.line),
         .OSC => |e| try spindle.osc_event(e.from_host, e.from_port, e.path, e.msg),
-        .Reset_LVM => try spindle.reset_lua(),
         .Monome_Add => |e| try spindle.monome_add(e.dev),
         .Monome_Remove => |e| try spindle.monome_remove(e.id),
         .Grid_Key => |e| try spindle.grid_key(e.id, e.x, e.y, e.state),

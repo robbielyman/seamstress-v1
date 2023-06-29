@@ -15,13 +15,10 @@ const c = @import("input.zig").c;
 
 const Lua = ziglua.Lua;
 var lvm: Lua = undefined;
-var config_file: []const u8 = undefined;
-var script_file: [:0]const u8 = undefined;
 var allocator: std.mem.Allocator = undefined;
 const logger = std.log.scoped(.spindle);
 
-pub fn init(config: []const u8, alloc_pointer: std.mem.Allocator) !void {
-    config_file = config;
+pub fn init(prefix: []const u8, config: []const u8, alloc_pointer: std.mem.Allocator) !void {
     allocator = alloc_pointer;
 
     logger.info("starting lua vm", .{});
@@ -62,7 +59,8 @@ pub fn init(config: []const u8, alloc_pointer: std.mem.Allocator) !void {
     register_seamstress("screen_set", ziglua.wrap(screen_set));
     register_seamstress("screen_show", ziglua.wrap(screen_show));
     register_seamstress("screen_arc", ziglua.wrap(screen_arc));
-    register_seamstress("screen_sector", ziglua.wrap(screen_sector));
+    register_seamstress("screen_circle", ziglua.wrap(screen_circle));
+    register_seamstress("screen_circle_fill", ziglua.wrap(screen_circle_fill));
     register_seamstress("screen_move", ziglua.wrap(screen_move));
     register_seamstress("screen_move_rel", ziglua.wrap(screen_move_rel));
     register_seamstress("screen_get_size", ziglua.wrap(screen_get_size));
@@ -74,7 +72,6 @@ pub fn init(config: []const u8, alloc_pointer: std.mem.Allocator) !void {
 
     register_seamstress("midi_write", ziglua.wrap(midi_write));
 
-    register_seamstress("clock_resume", ziglua.wrap(clock_resume));
     register_seamstress("clock_get_tempo", ziglua.wrap(clock_get_tempo));
     register_seamstress("clock_get_beats", ziglua.wrap(clock_get_beats));
     register_seamstress("clock_internal_set_tempo", ziglua.wrap(clock_internal_set_tempo));
@@ -82,7 +79,6 @@ pub fn init(config: []const u8, alloc_pointer: std.mem.Allocator) !void {
     register_seamstress("clock_internal_stop", ziglua.wrap(clock_internal_stop));
     register_seamstress("clock_cancel", ziglua.wrap(clock_cancel));
 
-    register_seamstress("reset_lvm", ziglua.wrap(reset_lvm));
     register_seamstress("quit_lvm", ziglua.wrap(quit_lvm));
 
     register_seamstress("print", ziglua.wrap(lua_print));
@@ -91,15 +87,16 @@ pub fn init(config: []const u8, alloc_pointer: std.mem.Allocator) !void {
     lvm.setField(-2, "local_port");
     _ = lvm.pushString(args.remote_port);
     lvm.setField(-2, "remote_port");
+    const prefixZ = try allocator.dupeZ(u8, prefix);
+    defer allocator.free(prefixZ);
+    _ = lvm.pushString(prefixZ);
+    lvm.setField(-2, "prefix");
 
     lvm.setGlobal("_seamstress");
 
-    const cmd = try std.fmt.allocPrint(allocator, "dofile({s})\n ", .{config});
+    const cmd = try std.fmt.allocPrint(allocator, "dofile(\"{s}\")\n", .{config});
     defer allocator.free(cmd);
-    var realcmd = try allocator.allocSentinel(u8, cmd.len, 0);
-    defer allocator.free(realcmd);
-    std.mem.copyForwards(u8, realcmd, cmd);
-    try run_code(realcmd[0..cmd.len :0]);
+    try run_code(cmd);
     try run_code("require('core/seamstress')");
 }
 
@@ -109,14 +106,20 @@ fn register_seamstress(name: [:0]const u8, f: ziglua.CFn) void {
 }
 
 pub fn deinit() void {
-    logger.info("shutting down lua vm", .{});
-    lvm.deinit();
-    if (save_buf) |s| allocator.free(s);
+    defer {
+        logger.info("shutting down lua vm", .{});
+        lvm.deinit();
+        if (save_buf) |s| allocator.free(s);
+    }
+    logger.info("calling cleanup", .{});
+    _ = lvm.getGlobal("_seamstress") catch unreachable;
+    _ = lvm.getField(-1, "cleanup");
+    lvm.remove(-2);
+    docall(&lvm, 0, 0) catch unreachable;
 }
 
 pub fn startup(script: [:0]const u8) !void {
-    script_file = script;
-    _ = lvm.pushString(script_file);
+    _ = lvm.pushString(script);
     _ = try lvm.getGlobal("_startup");
     lvm.insert(1);
     try docall(&lvm, 1, 0);
@@ -553,22 +556,33 @@ fn screen_arc(l: *Lua) i32 {
     const theta_1 = l.checkNumber(2);
     const theta_2 = l.checkNumber(3);
     screen.arc(@intCast(radius), theta_1, theta_2);
+    l.setTop(0);
     return 0;
 }
 
-/// draws a filled-in circle arc to the screen.
-// users should use `screen.sector` instead
+/// draws a circle to the screen.
+// users should use `screen.circle` instead
 // @param radius radius of the circle in pixels
-// @param theta_1 angle to start at (0-2*pi)
-// @param theta_2 angle to finish at (0-2*pi)
-// @see screen.sector
-// @function screen_sector
-fn screen_sector(l: *Lua) i32 {
-    check_num_args(l, 3);
+// @see screen.circle
+// @function screen_circle
+fn screen_circle(l: *Lua) i32 {
+    check_num_args(l, 1);
     const radius = l.checkInteger(1);
-    const theta_1 = l.checkNumber(2);
-    const theta_2 = l.checkNumber(3);
-    screen.sector(@intCast(radius), theta_1, theta_2);
+    screen.circle(@intCast(radius));
+    l.setTop(0);
+    return 0;
+}
+
+/// draws a filled-in circle to the screen.
+// users should use `screen.circle_fill` instead
+// @param radius radius of the circle in pixels
+// @see screen.circle_fill
+// @function screen_circle_fill
+fn screen_circle_fill(l: *Lua) i32 {
+    check_num_args(l, 1);
+    const radius = l.checkInteger(1);
+    screen.circle_fill(@intCast(radius));
+    l.setTop(0);
     return 0;
 }
 
@@ -671,7 +685,7 @@ fn metro_start(l: *Lua) i32 {
 fn metro_stop(l: *Lua) i32 {
     check_num_args(l, 1);
     const idx: u8 = @intCast(l.checkInteger(1) - 1);
-    metro.stop(idx) catch unreachable;
+    metro.stop(idx);
     l.setTop(0);
     return 0;
 }
@@ -777,36 +791,10 @@ fn clock_internal_stop(l: *Lua) i32 {
 // @function clock_cancel
 fn clock_cancel(l: *Lua) i32 {
     check_num_args(l, 1);
-    const idx = l.checkInteger(1);
+    const idx = l.checkInteger(1) - 1;
     l.setTop(0);
     if (idx < 0 or idx > 100) return 0;
     clock.cancel(@intCast(idx));
-    return 0;
-}
-
-/// resumes coroutine.
-// @param id coroutine id (1-100);
-// @param co coroutine corresponding to id
-// @param ... args passed to `coroutine.resume`.
-// @see clock.run
-// @function clock_run
-fn clock_resume(l: *Lua) i32 {
-    const num_args = l.getTop();
-    if (num_args < 2) return 0;
-    const idx = l.checkInteger(1);
-    var co = l.toThread(2) catch unreachable;
-    l.pop(2);
-    return do_resume(&co, idx);
-}
-
-/// resets lua VM.
-// @function reset_lvm
-fn reset_lvm(l: *Lua) i32 {
-    check_num_args(l, 0);
-    events.post(.{
-        .Reset_LVM = {},
-    });
-    l.setTop(0);
     return 0;
 }
 
@@ -898,12 +886,6 @@ pub fn osc_event(
     lvm.rawSetIndex(-2, 2);
 
     // report(lvm, docall(lvm, 3, 0));
-}
-
-pub fn reset_lua() !void {
-    deinit();
-    try init(config_file, allocator);
-    try startup(script_file);
 }
 
 pub fn monome_add(dev: *monome.Monome) !void {
@@ -1052,49 +1034,44 @@ pub fn resume_clock(idx: u8) !void {
     _ = lvm.getIndex(-1, i);
     var thread = try lvm.toThread(-1);
     lvm.pop(4);
-    _ = do_resume(&thread, i);
-}
-
-fn do_resume(l: *Lua, idx: c_longlong) i32 {
     var top: i32 = 0;
-    const status = l.resumeThread(null, l.getTop() - 1, &top) catch {
-        _ = message_handler(l);
-        _ = lua_print(l);
-        l.setTop(0);
-        return 0;
+    const status = thread.resumeThread(lvm, 0, &top) catch {
+        _ = message_handler(&lvm);
+        _ = lua_print(&lvm);
+        lvm.setTop(0);
+        return;
     };
     switch (status) {
         ziglua.ResumeStatus.ok => {
             clock.cancel(@intCast(idx));
-            return top;
+            lvm.setTop(0);
+            return;
         },
         ziglua.ResumeStatus.yield => {
-            if (top < 2) l.raiseErrorStr("error: clock.sleep/sync requires at least 1 argument", .{});
-            const sleep_type = l.checkInteger(1);
+            if (top < 2) lvm.raiseErrorStr("error: clock.sleep/sync requires at least 1 argument", .{});
+            const sleep_type = lvm.checkInteger(1);
             switch (sleep_type) {
                 0 => {
-                    const seconds = l.checkNumber(2);
+                    const seconds = lvm.checkNumber(2);
                     clock.schedule_sleep(@intCast(idx - 1), seconds);
                 },
                 1 => {
-                    const beats = l.checkNumber(2);
-                    l.pop(1);
+                    const beats = lvm.checkNumber(2);
+                    lvm.pop(1);
                     const offset = if (top >= 3) blk: {
-                        const val = l.checkNumber(3);
+                        const val = lvm.checkNumber(3);
                         break :blk val;
                     } else 0;
                     clock.schedule_sync(@intCast(idx - 1), beats, offset);
                 },
                 else => {
-                    l.setTop(0);
-                    l.raiseErrorStr("expected CLOCK_SCHEDULE_SLEEP or CLOCK_SCHEDULE_SYNC, got {}", .{sleep_type});
-                    return 1;
+                    lvm.setTop(0);
+                    lvm.raiseErrorStr("expected CLOCK_SCHEDULE_SLEEP or CLOCK_SCHEDULE_SYNC, got {}", .{sleep_type});
                 },
             }
         },
     }
-    l.setTop(0);
-    return 0;
+    lvm.setTop(0);
 }
 
 pub fn clock_transport(ev_type: clock.Transport) !void {
@@ -1122,11 +1099,11 @@ fn lua_print(l: *Lua) i32 {
     return 0;
 }
 
-fn run_code(code: [:0]const u8) !void {
+fn run_code(code: []const u8) !void {
     try dostring(&lvm, code, "s_run_code");
 }
 
-fn dostring(l: *Lua, str: [:0]const u8, name: [:0]const u8) !void {
+fn dostring(l: *Lua, str: []const u8, name: [:0]const u8) !void {
     try l.loadBuffer(str, name, ziglua.Mode.text);
     try docall(l, 0, 0);
 }

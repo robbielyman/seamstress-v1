@@ -4,10 +4,9 @@
 local home = os.getenv('HOME')
 local pwd = os.getenv('PWD')
 local seamstress_home = home .. '/seamstress'
-local seamstress = '/usr/local/share/seamstress/lua'
-local sys = seamstress .. '/?.lua;'
-local core = seamstress .. '/core/?.lua;'
-local lib = seamstress .. '/lib/?.lua;'
+local sys = _seamstress.prefix .. '/?.lua;'
+local core = _seamstress.prefix .. '/core/?.lua;'
+local lib = _seamstress.prefix .. '/lib/?.lua;'
 local luafiles = pwd .. '/?.lua;'
 local seamstressfiles = seamstress_home .. '/?.lua;'
 

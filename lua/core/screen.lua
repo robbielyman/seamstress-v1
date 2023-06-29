@@ -127,26 +127,14 @@ end
 -- @tparam integer radius in pixels
 -- @function screen.circle
 function Screen.circle(radius)
-	_seamstress.screen_arc(radius, 0, 2*math.pi)
-end
-
---- draws a filled circle arc centered at the current position.
--- angles are measured in radians and proceed clockwise
--- with 0 pointing to the right. We should have
--- `0 <= theta_1 <= theta_2 <= 2 * pi`
--- @tparam integer radius in pixels
--- @tparam number theta_1 initial angle in radians.
--- @tparam number theta_2 terminal angle in radians.
--- @function screen.sector
-function Screen.sector(radius, theta_1, theta_2)
-	_seamstress.screen_sector(radius, theta_1, theta_2)
+	_seamstress.screen_circle(radius)
 end
 
 --- draws a circle centered at the current position.
 -- @tparam integer radius in pixels
 -- @function screen.circle_fill
 function Screen.circle_fill(radius)
-	_seamstress.screen_sector(radius, 0, 2*math.pi)
+	_seamstress.screen_circle_fill(radius)
 end
 
 --- draws text to the screen.

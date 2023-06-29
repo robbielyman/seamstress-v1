@@ -4,84 +4,26 @@ const events = @import("events.zig");
 const Status = enum { Running, Stopped };
 const logger = std.log.scoped(.metros);
 
-const Metro_List = struct {
-    const Node = struct { next: ?*Node, prev: ?*Node, metro: *Metro, id: u8 };
-    head: ?*Node,
-    tail: ?*Node,
-    size: u8,
-    fn search(self: *Metro_List, id: u8) ?*Node {
-        var node = self.head;
-        while (node) |n| {
-            if (n.id == id) return n;
-            node = n.next;
-        }
-        return null;
-    }
-    pub fn add_or_find(self: *Metro_List, id: u8) !*Metro {
-        if (self.search(id)) |n| return n.metro;
-        var metro = try allocator.create(Metro);
-        metro.* = Metro{
-            .count = -1,
-            .seconds = 1.0,
-            .stage = 0,
-            .stage_lock = .{},
-            .status_lock = .{},
-            .thread = null,
-            .delta = undefined,
-            .status = Status.Stopped,
-            .id = id,
-            // blank slate
-        };
-        var new_node = try allocator.create(Node);
-        new_node.* = Node{ .next = null, .prev = null, .metro = metro, .id = id };
-        var node = self.head;
-        while (node != null and node.?.next != null) : (node = node.?.next) {}
-        if (node == null) {
-            std.debug.assert(self.size == 0);
-            self.head = new_node;
-        } else {
-            node.?.next = new_node;
-            new_node.prev = node;
-        }
-        self.tail = new_node;
-        self.size += 1;
-        return metro;
-    }
-    pub fn remove_and_free(self: *Metro_List, id: u8) !void {
-        const nd = self.search(id);
-        if (nd) |node| {
-            defer allocator.destroy(node);
-            var prev = node.prev;
-            var next = node.next;
-            if (node == self.head) self.head = next;
-            if (node == self.tail) self.tail = prev;
-            if (prev) |p| p.next = next;
-            if (next) |n| n.prev = prev;
-            self.size -= 1;
-            try node.metro.stop();
-            allocator.destroy(node.metro);
-        }
-    }
-};
-
 const Metro = struct {
     // metro struct
-    status: Status,
-    seconds: f64,
+    status: Status = .Stopped,
+    seconds: f64 = 1.0,
     id: u8,
-    count: i64,
-    stage: i64,
-    delta: u64,
-    thread: ?std.Thread,
-    stage_lock: std.Thread.Mutex,
-    status_lock: std.Thread.Mutex,
-    fn stop(self: *Metro) !void {
+    hot: bool = true,
+    count: i64 = -1,
+    stage: i64 = 0,
+    delta: u64 = undefined,
+    thread: ?std.Thread = null,
+    stage_lock: std.Thread.Mutex = .{},
+    status_lock: std.Thread.Mutex = .{},
+    fn stop(self: *Metro) void {
         self.status_lock.lock();
         self.status = Status.Stopped;
         self.status_lock.unlock();
         if (self.thread) |pid| {
             pid.join();
         }
+        self.thread = null;
     }
     fn bang(self: *Metro) void {
         const event = .{ .Metro = .{ .id = self.id, .stage = self.stage } };
@@ -103,12 +45,12 @@ const Metro = struct {
     }
 };
 
-pub fn stop(idx: u8) !void {
+pub fn stop(idx: u8) void {
     if (idx < 0 or idx >= max_num_metros) {
         logger.warn("invalid index, max count of metros is {d}", .{max_num_metros});
         return;
     }
-    try metros.remove_and_free(idx);
+    metros[idx].stop();
 }
 
 pub fn start(idx: u8, seconds: f64, count: i64, stage: i64) !void {
@@ -116,10 +58,10 @@ pub fn start(idx: u8, seconds: f64, count: i64, stage: i64) !void {
         logger.warn("invalid index; not added. max count of metros is {d}", .{max_num_metros});
         return;
     }
-    var metro = try metros.add_or_find(idx);
+    var metro = &metros[idx];
     metro.status_lock.lock();
     if (metro.status == Status.Running) {
-        try metro.stop();
+        metro.stop();
     }
     metro.status_lock.unlock();
     if (seconds > 0.0) {
@@ -132,7 +74,7 @@ pub fn start(idx: u8, seconds: f64, count: i64, stage: i64) !void {
 
 pub fn set_period(idx: u8, seconds: f64) !void {
     if (idx < 0 or idx >= max_num_metros) return;
-    const metro = try metros.add_or_find(idx);
+    var metro = metros[idx];
     if (seconds > 0.0) {
         metro.seconds = seconds;
     }
@@ -140,18 +82,24 @@ pub fn set_period(idx: u8, seconds: f64) !void {
 }
 
 const max_num_metros = 36;
-var metros = Metro_List{ .head = null, .tail = null, .size = 0 };
+var metros: []Metro = undefined;
 var allocator: std.mem.Allocator = undefined;
 
 pub fn init(alloc_pointer: std.mem.Allocator) !void {
     allocator = alloc_pointer;
+    metros = try allocator.alloc(Metro, max_num_metros);
+    for (metros, 0..) |*metro, idx| {
+        metro.* = .{ .id = @intCast(idx) };
+    }
+}
+
+pub fn set_hot(idx: u8) void {
+    metros[idx].hot = true;
 }
 
 pub fn deinit() void {
-    var i: u8 = 0;
-    while (i < max_num_metros) : (i += 1) {
-        try metros.remove_and_free(i);
-    }
+    defer allocator.free(metros);
+    for (metros) |*metro| metro.stop();
 }
 
 fn loop(self: *Metro) void {
