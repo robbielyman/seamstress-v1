@@ -24,7 +24,7 @@ var allocator: std.mem.Allocator = undefined;
 
 pub fn main() !void {
     start_time = std.time.milliTimestamp();
-    var loc_buf = [_]u8{0} ** 1024;
+    var loc_buf = [_]u8{0} ** std.fs.MAX_PATH_BYTES;
     const location = try std.fs.selfExeDirPath(&loc_buf);
     const logger = std.log.scoped(.main);
     try args.parse();
@@ -38,7 +38,7 @@ pub fn main() !void {
 
     const path = try std.fs.path.join(allocator, &.{ location, "..", "share", "seamstress", "lua" });
     defer allocator.free(path);
-    var pref_buf = [_]u8{0} ** 1024;
+    var pref_buf = [_]u8{0} ** std.fs.MAX_PATH_BYTES;
     const prefix = try std.fs.realpath(path, &pref_buf);
     defer logger.info("seamstress shutdown complete", .{});
     const config = std.process.getEnvVarOwned(allocator, "SEAMSTRESS_CONFIG") catch |err| blk: {
