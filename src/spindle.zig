@@ -77,6 +77,8 @@ pub fn init(prefix: []const u8, config: []const u8, alloc_pointer: std.mem.Alloc
     register_seamstress("clock_internal_set_tempo", ziglua.wrap(clock_internal_set_tempo));
     register_seamstress("clock_internal_start", ziglua.wrap(clock_internal_start));
     register_seamstress("clock_internal_stop", ziglua.wrap(clock_internal_stop));
+    register_seamstress("clock_schedule_sleep", ziglua.wrap(clock_schedule_sleep));
+    register_seamstress("clock_schedule_sync", ziglua.wrap(clock_schedule_sync));
     register_seamstress("clock_cancel", ziglua.wrap(clock_cancel));
 
     register_seamstress("quit_lvm", ziglua.wrap(quit_lvm));
@@ -732,6 +734,39 @@ fn midi_write(l: *Lua) i32 {
     return 0;
 }
 
+/// schedules coroutine for sleep.
+// users should use `clock.sleep` instead
+// @see clock.sleep
+// @function clock_schedule_sleep
+fn clock_schedule_sleep(l: *Lua) i32 {
+    const top = l.getTop();
+    if (top < 2) {
+        l.raiseErrorStr("expected >= 2 arguments, got {d}!\n", .{top});
+        return 1;
+    }
+    const idx = l.checkInteger(1);
+    const seconds = l.checkNumber(2);
+    clock.schedule_sleep(@intCast(idx - 1), seconds);
+    return top - 2;
+}
+
+/// schedules coroutine for sync.
+// users should use `clock.sync` instead
+// @see clock.sync
+// @function clock_schedule_sync
+fn clock_schedule_sync(l: *Lua) i32 {
+    const top = l.getTop();
+    if (top < 2) {
+        l.raiseErrorStr("expected >= 2 arguments, got {d}!\n", .{top});
+        return 1;
+    }
+    const idx = l.checkInteger(1);
+    const beats = l.checkNumber(2);
+    const offset = if (top >= 3) l.checkNumber(3) else 0;
+    clock.schedule_sync(@intCast(idx - 1), beats, offset);
+    return if (top >= 3) top - 3 else top - 2;
+}
+
 /// returns current tempo.
 // users should use `clock.get_tempo` instead
 // @return bpm
@@ -1025,53 +1060,10 @@ pub fn midi_event(id: u32, timestamp: f64, bytes: []const u8) !void {
     try docall(&lvm, 3, 0);
 }
 
-// outward-facing clock resume
 pub fn resume_clock(idx: u8) !void {
-    const i = idx + 1;
-    _ = try lvm.getGlobal("_seamstress");
-    _ = lvm.getField(-1, "clock");
-    _ = lvm.getField(-1, "threads");
-    _ = lvm.getIndex(-1, i);
-    var thread = try lvm.toThread(-1);
-    lvm.pop(4);
-    var top: i32 = 0;
-    const status = thread.resumeThread(lvm, 0, &top) catch {
-        _ = message_handler(&lvm);
-        _ = lua_print(&lvm);
-        lvm.setTop(0);
-        return;
-    };
-    switch (status) {
-        ziglua.ResumeStatus.ok => {
-            clock.cancel(@intCast(idx));
-            lvm.setTop(0);
-            return;
-        },
-        ziglua.ResumeStatus.yield => {
-            if (top < 2) lvm.raiseErrorStr("error: clock.sleep/sync requires at least 1 argument", .{});
-            const sleep_type = lvm.checkInteger(1);
-            switch (sleep_type) {
-                0 => {
-                    const seconds = lvm.checkNumber(2);
-                    clock.schedule_sleep(@intCast(idx - 1), seconds);
-                },
-                1 => {
-                    const beats = lvm.checkNumber(2);
-                    lvm.pop(1);
-                    const offset = if (top >= 3) blk: {
-                        const val = lvm.checkNumber(3);
-                        break :blk val;
-                    } else 0;
-                    clock.schedule_sync(@intCast(idx - 1), beats, offset);
-                },
-                else => {
-                    lvm.setTop(0);
-                    lvm.raiseErrorStr("expected CLOCK_SCHEDULE_SLEEP or CLOCK_SCHEDULE_SYNC, got {}", .{sleep_type});
-                },
-            }
-        },
-    }
-    lvm.setTop(0);
+    try push_lua_func("clock", "resume");
+    lvm.pushInteger(idx + 1);
+    try docall(&lvm, 1, 0);
 }
 
 pub fn clock_transport(ev_type: clock.Transport) !void {

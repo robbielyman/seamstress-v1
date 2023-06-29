@@ -2,9 +2,38 @@
 -- @module clock
 
 local clock = {}
+local SCHEDULE_SLEEP = 0
+local SCHEDULE_SYNC = 1
 
-_seamstress.clock = {}
-_seamstress.clock.threads = {}
+_seamstress.clock = {
+  threads = {},
+  resume = function (id, ...)
+    local coro = _seamstress.clock.threads[id]
+    local result, mode, time, offset = coroutine.resume(coro, ...)
+    if coroutine.status(coro) == "dead" then
+      if result then
+        clock.cancel(id)
+      else
+        error(mode)
+      end
+    else
+      if result and mode ~= nil then
+        if mode == SCHEDULE_SLEEP then
+          _seamstress.clock_schedule_sleep(id, time)
+        elseif mode == SCHEDULE_SYNC then
+          if offset ~= nil then
+            _seamstress.clock_schedule_sync(id, time, offset)
+          else
+            _seamstress.clock_schedule_sync(id, time)
+          end
+        else
+          error('invalid clock scheduler mode: ' .. mode)
+        end
+      end
+    end
+  end
+}
+
 local clock_id_counter = 1
 local function new_id()
   local id = clock_id_counter
@@ -21,7 +50,7 @@ function clock.run(f, ...)
   local co = coroutine.create(f)
   local id = new_id()
   _seamstress.clock.threads[id] = co
-  coroutine.resume(co, ...)
+  _seamstress.clock.resume(id, ...)
   return id
 end
 
@@ -33,8 +62,6 @@ function clock.cancel(id)
   _seamstress.clock.threads[id] = nil
 end
 
-local SCHEDULE_SLEEP = 0
-local SCHEDULE_SYNC = 1
 --- suspend coroutine and schedule resuming time.
 -- call from *within* a coroutine function started by `clock.run`
 -- @tparam float s seconds to wait for
@@ -103,6 +130,7 @@ _seamstress.transport = {
     if clock.transport.reset then clock.transport.reset() end
   end,
 }
+
 
 function clock.add_params()
   local send_midi_clock = {}
