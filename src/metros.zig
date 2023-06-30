@@ -10,6 +10,7 @@ const Metro = struct {
     seconds: f64 = 1.0,
     id: u8,
     hot: bool = true,
+    missed: usize = 0,
     count: i64 = -1,
     stage: i64 = 0,
     delta: u64 = undefined,
@@ -23,11 +24,18 @@ const Metro = struct {
         if (self.thread) |pid| {
             pid.join();
         }
+        if (self.missed > 0) {
+            logger.warn("thread {d}: missed {d} events!", .{ self.id + 1, self.missed });
+            self.missed = 0;
+        }
         self.thread = null;
     }
     fn bang(self: *Metro) void {
-        const event = .{ .Metro = .{ .id = self.id, .stage = self.stage } };
-        events.post(event);
+        if (self.hot) {
+            const event = .{ .Metro = .{ .id = self.id, .stage = self.stage } };
+            events.post(event);
+            self.hot = false;
+        } else self.missed += 1;
     }
     fn init(self: *Metro, delta: u64, count: i64) !void {
         self.delta = delta;

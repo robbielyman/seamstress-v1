@@ -4,159 +4,98 @@ const osc = @import("serialosc.zig");
 const monome = @import("monome.zig");
 const screen = @import("screen.zig");
 const clock = @import("clock.zig");
+const metros = @import("metros.zig");
 const midi = @import("midi.zig");
 
 const logger = std.log.scoped(.events);
 
-pub const Event = enum {
-    // list of event types
-    Quit,
-    Exec_Code_Line,
-    OSC,
-    Monome_Add,
-    Monome_Remove,
-    Grid_Key,
-    Grid_Tilt,
-    Arc_Encoder,
-    Arc_Key,
-    Screen_Key,
-    Screen_Mouse_Motion,
-    Screen_Mouse_Click,
-    Screen_Check,
-    Screen_Resized,
-    Metro,
-    MIDI_Add,
-    MIDI_Remove,
-    MIDI,
-    Clock_Resume,
-    Clock_Transport,
-};
-
-pub const Data = union(Event) {
+pub const Data = union(enum) {
     Quit: void,
-    Exec_Code_Line: event_exec_code_line,
-    OSC: event_osc,
-    Monome_Add: event_monome_add,
-    Monome_Remove: event_monome_remove,
-    Grid_Key: event_grid_key,
-    Grid_Tilt: event_grid_tilt,
-    Arc_Encoder: event_arc_delta,
-    Arc_Key: event_arc_key,
-    Screen_Key: event_screen_key,
-    Screen_Mouse_Motion: event_screen_mouse_motion,
-    Screen_Mouse_Click: event_screen_mouse_click,
+    Exec_Code_Line: struct {
+        line: [:0]const u8,
+    },
+    OSC: struct {
+        from_host: [:0]const u8,
+        from_port: [:0]const u8,
+        path: [:0]const u8,
+        msg: []osc.Lo_Arg,
+    },
+    Monome_Add: struct {
+        dev: *monome.Monome,
+    },
+    Monome_Remove: struct {
+        id: usize,
+    },
+    Grid_Key: struct {
+        id: usize,
+        x: i32,
+        y: i32,
+        state: i32,
+    },
+    Grid_Tilt: struct {
+        id: usize,
+        sensor: i32,
+        x: i32,
+        y: i32,
+        z: i32,
+    },
+    Arc_Encoder: struct {
+        id: usize,
+        ring: i32,
+        delta: i32,
+    },
+    Arc_Key: struct {
+        id: usize,
+        ring: i32,
+        state: i32,
+    },
+    Screen_Key: struct {
+        sym: i32,
+        mod: u16,
+        repeat: bool,
+        state: bool,
+        window: usize,
+    },
+    Screen_Mouse_Motion: struct {
+        x: f64,
+        y: f64,
+        window: usize,
+    },
+    Screen_Mouse_Click: struct {
+        x: f64,
+        y: f64,
+        state: bool,
+        button: u8,
+        window: usize,
+    },
     Screen_Check: void,
-    Screen_Resized: event_screen_resized,
-    Metro: event_metro,
-    MIDI_Add: event_midi_add,
-    MIDI_Remove: event_midi_remove,
-    MIDI: event_midi,
-    Clock_Resume: event_resume,
-    Clock_Transport: event_transport,
-};
-
-const event_exec_code_line = struct {
-    line: [:0]const u8 = undefined,
-};
-
-const event_osc = struct {
-    from_host: [:0]const u8 = undefined,
-    from_port: [:0]const u8 = undefined,
-    path: [:0]const u8 = undefined,
-    msg: []osc.Lo_Arg = undefined,
-};
-
-const event_monome_add = struct {
-    dev: *monome.Monome = undefined,
-};
-
-const event_monome_remove = struct {
-    id: usize = undefined,
-};
-
-const event_grid_key = struct {
-    id: usize = undefined,
-    x: i32 = undefined,
-    y: i32 = undefined,
-    state: i32 = undefined,
-};
-
-const event_grid_tilt = struct {
-    id: usize = undefined,
-    sensor: i32 = undefined,
-    x: i32 = undefined,
-    y: i32 = undefined,
-    z: i32 = undefined,
-};
-
-const event_arc_delta = struct {
-    id: usize = undefined,
-    ring: i32 = undefined,
-    delta: i32 = undefined,
-};
-
-const event_arc_key = struct {
-    id: usize = undefined,
-    ring: i32 = undefined,
-    state: i32 = undefined,
-};
-
-const event_screen_key = struct {
-    sym: i32 = undefined,
-    mod: u16 = undefined,
-    repeat: bool = undefined,
-    state: bool = undefined,
-    window: usize = undefined,
-};
-
-const event_screen_mouse_motion = struct {
-    x: f64 = undefined,
-    y: f64 = undefined,
-    window: usize = undefined,
-};
-
-const event_screen_mouse_click = struct {
-    x: f64 = undefined,
-    y: f64 = undefined,
-    state: bool = undefined,
-    button: u8 = undefined,
-    window: usize = undefined,
-};
-
-const event_screen_check = struct {};
-
-const event_screen_resized = struct {
-    w: i32 = undefined,
-    h: i32 = undefined,
-    window: usize = undefined,
-};
-
-const event_metro = struct {
-    id: u8 = undefined,
-    stage: i64 = undefined,
-};
-
-const event_midi_add = struct {
-    dev: *midi.Device = undefined,
-};
-
-const event_midi_remove = struct {
-    id: u32 = undefined,
-    dev_type: midi.Dev_t = undefined,
-};
-
-const event_midi = struct {
-    id: u32 = undefined,
-    timestamp: f64 = undefined,
-    message: []const u8 = undefined,
-};
-
-const event_resume = struct {
-    id: u8 = undefined,
-};
-
-const event_transport = struct {
-    transport: clock.Transport = undefined,
+    Screen_Resized: struct {
+        w: i32,
+        h: i32,
+        window: usize,
+    },
+    Metro: struct {
+        id: u8,
+        stage: i64,
+    },
+    MIDI_Add: struct {
+        dev: *midi.Device,
+    },
+    MIDI_Remove: struct {
+        id: u32,
+        dev_type: midi.Dev_t,
+    },
+    MIDI: struct {
+        id: u32,
+        timestamp: f64,
+        message: []const u8,
+    },
+    Clock_Resume: struct {
+        id: u8,
+    },
+    Clock_Transport: struct {
+        transport: clock.Transport,
+    },
 };
 
 var allocator: std.mem.Allocator = undefined;
@@ -183,7 +122,7 @@ const Queue = struct {
         self.write_head = node.next;
         node.next = null;
         node.prev = null;
-        std.debug.assert(self.write_size > 0);
+        if (self.write_size == 1) self.write_tail = null;
         self.write_size -= 1;
         return node;
     }
@@ -217,6 +156,7 @@ const Queue = struct {
         if (self.read_head) |n| {
             const ev = n.ev;
             self.read_head = n.next;
+            n.next = null;
             self.return_to_pool(n);
             if (self.read_size == 1) self.read_tail = null;
             self.read_size -= 1;
@@ -254,7 +194,7 @@ pub fn init(alloc_ptr: std.mem.Allocator) !void {
         .lock = .{},
     };
     var i: u16 = 0;
-    while (i < 1000) : (i += 1) {
+    while (i < 5000) : (i += 1) {
         var node = try allocator.create(Queue.Node);
         var data = try allocator.create(Data);
         data.* = undefined;
@@ -351,9 +291,15 @@ fn handle(event: *Data) !void {
         .Screen_Key => |e| try spindle.screen_key(e.sym, e.mod, e.repeat, e.state, e.window),
         .Screen_Mouse_Motion => |e| try spindle.screen_mouse(e.x, e.y, e.window),
         .Screen_Mouse_Click => |e| try spindle.screen_click(e.x, e.y, e.state, e.button, e.window),
-        .Screen_Check => screen.check(),
+        .Screen_Check => {
+            screen.check();
+            screen.pending -= 1;
+        },
         .Screen_Resized => |e| try spindle.screen_resized(e.w, e.h, e.window),
-        .Metro => |e| try spindle.metro_event(e.id, e.stage),
+        .Metro => |e| {
+            try spindle.metro_event(e.id, e.stage);
+            metros.set_hot(e.id);
+        },
         .MIDI_Add => |e| try spindle.midi_add(e.dev),
         .MIDI_Remove => |e| try spindle.midi_remove(e.dev_type, e.id),
         .MIDI => |e| try spindle.midi_event(e.id, e.timestamp, e.message),

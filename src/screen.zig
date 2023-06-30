@@ -14,6 +14,8 @@ var HEIGHT: u16 = 128;
 var ZOOM: u16 = 4;
 var allocator: std.mem.Allocator = undefined;
 const logger = std.log.scoped(.screen);
+pub var pending: usize = 0;
+var missed: usize = 0;
 
 const Gui = struct {
     window: *c.SDL_Window = undefined,
@@ -542,6 +544,7 @@ pub fn check() void {
 pub fn deinit() void {
     quit = true;
     thread.join();
+    if (missed > 0) logger.warn("missed {d} events", .{missed});
     c.TTF_CloseFont(font);
     var i: usize = 0;
     while (i < 2) : (i += 1) {
@@ -554,7 +557,10 @@ pub fn deinit() void {
 
 fn loop() void {
     while (!quit) {
-        events.post(.{ .Screen_Check = {} });
+        if (pending < 100) {
+            events.post(.{ .Screen_Check = {} });
+            pending += 1;
+        } else missed += 1;
         std.time.sleep(10 * std.time.ns_per_ms);
     }
 }
