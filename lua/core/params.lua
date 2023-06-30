@@ -141,9 +141,9 @@ end
 --- add binary.
 -- @tparam string id (no spaces)
 -- @tparam string name (can contain spaces)
--- @tparam integer default 0 or 1
 -- @tparam string behavior "toggle" or "trigger" or "momentary"; defaults to "toggle"
-function ParamSet:add_binary(id, name, default, behavior)
+-- @tparam integer default 0 or 1
+function ParamSet:add_binary(id, name, behavior, default)
 	self:add { param = binary.new(id, name, behavior or "toggle", default) }
 end
 
