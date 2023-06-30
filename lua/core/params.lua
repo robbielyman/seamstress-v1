@@ -71,6 +71,11 @@ function ParamSet:add(args)
       self:add_group(id, name, args.n)
     else
       print("paramset.add() error: unknown type")
+      return nil
+    end
+
+    if args.action then
+      self:set_action(id, args.action)
     end
 
     return nil
@@ -108,9 +113,6 @@ function ParamSet:add(args)
     self.lookup[param.id] = self.count
   end
   self.hidden[self.count] = false
-  if args.action then
-    param.action = args.action
-  end
 end
 
 --- add number.
