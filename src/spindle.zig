@@ -74,6 +74,8 @@ pub fn init(prefix: []const u8, config: []const u8, alloc_pointer: std.mem.Alloc
 
     register_seamstress("clock_get_tempo", ziglua.wrap(clock_get_tempo));
     register_seamstress("clock_get_beats", ziglua.wrap(clock_get_beats));
+    register_seamstress("clock_set_source", ziglua.wrap(clock_set_source));
+    register_seamstress("clock_link_set_tempo", ziglua.wrap(clock_link_set_tempo));
     register_seamstress("clock_internal_set_tempo", ziglua.wrap(clock_internal_set_tempo));
     register_seamstress("clock_internal_start", ziglua.wrap(clock_internal_start));
     register_seamstress("clock_internal_stop", ziglua.wrap(clock_internal_stop));
@@ -798,6 +800,29 @@ fn clock_internal_set_tempo(l: *Lua) i32 {
     check_num_args(l, 1);
     const bpm = l.checkNumber(1);
     clock.set_tempo(bpm);
+    return 0;
+}
+
+/// sets link clock tempo.
+// not yet implemented!!
+// users should use the clock param instead
+// @param bpm
+// @function clock_link_set_tempo
+fn clock_link_set_tempo(l: *Lua) i32 {
+    check_num_args(l, 1);
+    const bpm = l.checkNumber(1);
+    clock.link_set_tempo(bpm);
+    return 0;
+}
+
+/// sets clock source.
+// users should use the clock source param instead
+// @param source
+// @function clock_set_source
+fn clock_set_source(l: *Lua) i32 {
+    check_num_args(l, 1);
+    const source = l.checkInteger(1);
+    clock.set_source(@enumFromInt(source)) catch unreachable;
     return 0;
 }
 

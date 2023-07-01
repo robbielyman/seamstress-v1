@@ -42,8 +42,7 @@ pub const Device = struct {
                         return;
                     }
                     if (len == 0) break;
-                    var line = try allocator.alloc(u8, len);
-                    std.mem.copyForwards(u8, line, self.guts.Input.buf[0..len]);
+                    var line = try allocator.dupe(u8, self.guts.Input.buf[0..len]);
                     const event = .{
                         .MIDI = .{
                             .message = line,
@@ -57,7 +56,7 @@ pub const Device = struct {
             fn loop(self: *Device) !void {
                 while (self.connected) {
                     try Device.Guts.input.read(self);
-                    std.time.sleep(std.time.ns_per_us * 300);
+                    std.time.sleep(std.time.ns_per_us * 3);
                 }
             }
         };
@@ -132,6 +131,7 @@ fn main_loop() !void {
     ) orelse return error.Fail;
     var in_name: [:0]const u8 = try std.fmt.allocPrintZ(allocator, "{s}", .{"seamstress_in"});
     c.rtmidi_open_virtual_port(midi_in, "seamstress_in");
+    c.rtmidi_in_ignore_types(midi_in, false, false, false);
     devices[0].connected = true;
     devices[0].ptr = midi_in;
     devices[0].name = in_name;
@@ -265,6 +265,7 @@ fn add(dev_type: Dev_t, port_number: c_uint, name: [:0]const u8) !?u8 {
             var c_name = try allocator.allocSentinel(u8, name.len, 0);
             std.mem.copyForwards(u8, c_name, name);
             c.rtmidi_open_port(ptr, port_number, c_name.ptr);
+            c.rtmidi_in_ignore_types(ptr, false, false, false);
             const id = device.id;
             device.ptr = ptr;
             device.name = c_name;

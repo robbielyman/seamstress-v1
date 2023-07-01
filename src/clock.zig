@@ -3,6 +3,8 @@ const events = @import("events.zig");
 
 pub const Transport = enum { Start, Stop, Reset };
 
+pub const Source = enum(c_longlong) { Internal, MIDI, Link };
+
 const Clock = struct {
     inactive: bool = true,
     delta: i128 = 0,
@@ -58,6 +60,7 @@ const Fabric = struct {
 
 var allocator: std.mem.Allocator = undefined;
 var fabric: *Fabric = undefined;
+var source: Source = .Internal;
 
 pub fn init(alloc_pointer: std.mem.Allocator) !void {
     allocator = alloc_pointer;
@@ -145,7 +148,55 @@ pub fn start() !void {
 pub fn reset(beat: u64) void {
     const num_ticks = beat * 96;
     fabric.ticks_since_start = num_ticks;
-    var event = try events.new(events.Event.Clock_Transport);
-    event.Clock_Transport.transport = Transport.Reset;
-    try events.post(event);
+    var event = .{
+        .Clock_Transport = .{
+            .transport = .Reset,
+        },
+    };
+    events.post(event);
+}
+
+pub fn midi(message: u8, timestamp: f64) !void {
+    switch (source) {
+        .MIDI => {},
+        else => return,
+    }
+    switch (message) {
+        0xfa => {
+            try start();
+            reset(0);
+        },
+        0xfc => {
+            stop();
+        },
+        0xfb => {
+            try start();
+        },
+        0xf8 => {
+            midi_update_tempo(timestamp);
+        },
+        else => {},
+    }
+}
+
+// var last: f64 = -1;
+
+fn midi_update_tempo(timestamp: f64) void {
+    const new_bpm = 60 / (24 * timestamp);
+    set_tempo((new_bpm + fabric.tempo) / 2);
+}
+
+pub fn set_source(new: Source) !void {
+    defer source = new;
+    if (source != new) {
+        switch (new) {
+            .MIDI => try start(),
+            .Internal => try start(),
+            .Link => {},
+        }
+    }
+}
+
+pub fn link_set_tempo(bpm: f64) void {
+    _ = bpm;
 }

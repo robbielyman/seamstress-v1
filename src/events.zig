@@ -356,7 +356,12 @@ fn handle(event: *Data) !void {
         .Metro => |e| try spindle.metro_event(e.id, e.stage),
         .MIDI_Add => |e| try spindle.midi_add(e.dev),
         .MIDI_Remove => |e| try spindle.midi_remove(e.dev_type, e.id),
-        .MIDI => |e| try spindle.midi_event(e.id, e.timestamp, e.message),
+        .MIDI => |e| {
+            switch (e.message[0]) {
+                0xfa, 0xfb, 0xfc, 0xf8 => try clock.midi(e.message[0], e.timestamp),
+                else => try spindle.midi_event(e.id, e.timestamp, e.message),
+            }
+        },
         .Clock_Resume => |e| try spindle.resume_clock(e.id),
         .Clock_Transport => |e| try spindle.clock_transport(e.transport),
     }

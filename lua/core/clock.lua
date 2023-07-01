@@ -7,7 +7,7 @@ local SCHEDULE_SYNC = 1
 
 _seamstress.clock = {
   threads = {},
-  resume = function (id, ...)
+  resume = function(id, ...)
     local coro = _seamstress.clock.threads[id]
     local result, mode, time, offset = coroutine.resume(coro, ...)
     if coroutine.status(coro) == "dead" then
@@ -80,20 +80,34 @@ end
 --- returns the current time in beats since reset was called.
 -- @treturn number beats time in beats
 function clock.get_beats()
-  _seamstress.clock_get_beats()
+  return _seamstress.clock_get_beats()
 end
 
 --- returns the current tempo in bpm
 -- @treturn number bpm
 function clock.get_tempo()
-  _seamstress.clock_get_tempo()
+  return _seamstress.clock_get_tempo()
 end
 
 --- returns the length in seconds of a single beat
 -- @treturn number seconds
-function clock.get_beat_per_sec()
+function clock.get_sec_per_beat()
   local bpm = clock.get_tempo()
   return 60 / bpm
+end
+
+clock.set_source = function(source)
+  if type(source) == "number" then
+    _seamstress.clock_set_source(source - 1)
+  elseif source == "internal" then
+    _seamstress.clock_set_source(0)
+  elseif source == "midi" then
+    _seamstress.clock_set_source(1)
+  -- elseif source == "link" then
+  --   _seamstress.clock_set_source(2)
+  else
+    error("unknown clock source: " .. source)
+  end
 end
 
 clock.transport = {
@@ -117,6 +131,12 @@ clock.internal = {
   end
 }
 
+-- clock.link = {
+--   set_tempo = function(bpm)
+--     return _seamstress.clock_link_set_tempo(bpm)
+--   end,
+-- }
+
 clock.tempo_change_handler = nil
 
 _seamstress.transport = {
@@ -135,10 +155,11 @@ _seamstress.transport = {
 function clock.add_params()
   local send_midi_clock = {}
   params:add_group("CLOCK", "CLOCK", 19)
-  params:add_option("clock_source", "source", { "internal" },
+  params:add_option("clock_source", "source", { "internal", "midi" },
     seamstress.state.clock.source)
   params:set_action("clock_source",
     function(x)
+      clock.set_source(params:string("clock_source"))
       if x == 1 then clock.internal.set_tempo(params:get("clock_tempo")) end
     end)
   params:set_save("clock_source", false)
@@ -162,7 +183,7 @@ function clock.add_params()
   params:add_separator("midi_clock_out_separator", "midi clock out")
   for i = 1, 16 do
     local short_name = string.len(midi.voutports[i].name) <= 20 and midi.voutports[i].name or
-    util.acronym(midi.voutports[i].name)
+        util.acronym(midi.voutports[i].name)
     params:add_binary("clock_midi_out_" .. i, i .. ". " .. short_name, "toggle", seamstress.state.clock.midi_out[i])
     params:set_action("clock_midi_out_" .. i,
       function(x)
@@ -197,9 +218,15 @@ function clock.add_params()
     end
   end)
 
-  -- update tempo param value (currently a no-op)
+  -- update tempo param value
   clock.run(function()
     while true do
+      local source = params:string("clock_source")
+      if source ~= "internal" then
+        local bpm = _seamstress.clock_get_tempo()
+        params:set("clock_tempo", bpm)
+        paramsMenu.redraw()
+      end
       clock.sleep(1)
     end
   end)
