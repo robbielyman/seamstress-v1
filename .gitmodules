@@ -10,9 +10,9 @@
 [submodule "lib/rtmidi"]
 	path = lib/rtmidi
 	url = https://github.com/thestk/rtmidi
-[submodule "lib/readline"]
-	path = lib/readline
-	url = https://git.savannah.gnu.org/git/readline.git
 [submodule "zig-sdl"]
 	path = lib/SDL
 	url = https://github.com/andrewrk/SDL
+[submodule "lib/readline"]
+	path = lib/readline
+	url = https://github.com/ryleelyman/readline
