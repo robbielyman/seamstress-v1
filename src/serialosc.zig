@@ -132,8 +132,8 @@ fn osc_receive(
             c.LO_BLOB => {
                 const arg = argv[i];
                 message[i] = Lo_Arg{ .Lo_Blob = Lo_Blob_t{
-                    .dataptr = c.lo_blob_dataptr(@as(*c.struct_lo_blob_, @ptrCast(arg))),
-                    .datasize = @as(i32, @intCast(c.lo_blob_datasize(@as(*c.struct_lo_blob_, @ptrCast(arg))))),
+                    .dataptr = c.lo_blob_dataptr(@as(c.lo_blob, @ptrCast(arg))),
+                    .datasize = @as(i32, @intCast(c.lo_blob_datasize(@as(c.lo_blob, @ptrCast(arg))))),
                 } };
             },
             c.LO_INT64 => {

@@ -1,18 +1,18 @@
-[submodule "lib/ziglua"]
-	path = lib/ziglua
-	url = https://github.com/natecraddock/ziglua
 [submodule "doc"]
 	path = doc
 	url = https://github.com/ryleelyman/seamstress-docs
-[submodule "lib/liblo"]
-	path = lib/liblo
-	url = https://github.com/radarsat1/liblo
-[submodule "lib/rtmidi"]
-	path = lib/rtmidi
-	url = https://github.com/thestk/rtmidi
-[submodule "zig-sdl"]
-	path = lib/SDL
-	url = https://github.com/andrewrk/SDL
 [submodule "lib/readline"]
 	path = lib/readline
 	url = https://github.com/ryleelyman/readline
+[submodule "lib/SDL"]
+	path = lib/SDL
+	url = https://github.com/ryleelyman/SDL
+[submodule "lib/rtmidi"]
+	path = lib/rtmidi
+	url = https://github.com/ryleelyman/rtmidi
+[submodule "lib/ziglua"]
+	path = lib/ziglua
+	url = https://github.com/ryleelyman/ziglua
+[submodule "lib/liblo"]
+	path = lib/liblo
+	url = https://github.com/ryleelyman/liblo

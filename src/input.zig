@@ -1,6 +1,11 @@
 const std = @import("std");
 const events = @import("events.zig");
-const c = @import("c_imports.zig");
+pub const c = @cImport({
+    @cInclude("stdlib.h");
+    @cInclude("stdio.h");
+    @cInclude("readline/readline.h");
+    @cInclude("readline/history.h");
+});
 
 var quit = false;
 pub var readline = true;

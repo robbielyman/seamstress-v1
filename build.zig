@@ -53,7 +53,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    exe.linkLibrary(zig_liblo.artifact("lo"));
+    exe.linkLibrary(zig_liblo.artifact("liblo"));
 
     exe.addIncludePath("/opt/homebrew/include");
 
