@@ -96,6 +96,7 @@ pub fn main() !void {
 
     logger.info("entering main loop", .{});
     try events.loop();
+    spindle.deinit();
 }
 
 fn print_version() !void {
