@@ -15,8 +15,8 @@
             .hash = "12201b740a49944b9b858ebe9690d28d401357a24e86fea0f7d1b47c93e8de547472",
         },
         .liblo = .{
-            .url = "https://github.com/ryleelyman/liblo/archive/3629c35d9fa5c15b61a99bdcb62d0edf2da841df.tar.gz",
-            .hash = "12205dab28b5561c698b7202973f483ff72dbc835e8a5de3777b13ee3eac7e1cdea3",
+            .url = "https://github.com/ryleelyman/liblo/archive/07af8f43e86d55a5059483d321a1ae4b4411725c.tar.gz",
+            .hash = "122086ea282a05e8b683377f0bd6fef374eea2da3e4a85bd1c4a4b9749ce48cd5746",
         },
         .rtmidi = .{
             .url = "https://github.com/ryleelyman/rtmidi/archive/7f8ad8342aa046017e1eea900e81ee22c842e0ac.tar.gz",

@@ -14,6 +14,7 @@ pub fn build(b: *std.Build) void {
     exe.addIncludePath("lib/ziglua/zig-out/include/lua");
     exe.addIncludePath("lib/readline/zig-out/include/readline");
     exe.addIncludePath("lib/readline/zig-out/include");
+    exe.addIncludePath("lib/liblo/zig-out/include");
 
     const install_lua_files = b.addInstallDirectory(.{
         .source_dir = .{ .path = "lua" },
