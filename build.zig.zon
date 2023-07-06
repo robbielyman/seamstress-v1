@@ -3,16 +3,16 @@
     .version = "0.11.0",
     .dependencies = .{
         .SDL = .{
-            .url = "https://github.com/ryleelyman/SDL/archive/91f5c3d3aa4d35edf41b4d552a6b18a95ff2a948.tar.gz",
-            .hash = "1220c7cd560ac929039674876507900065428322add6ea0c1b4b38cd16d871976425",
+            .url = "https://github.com/ryleelyman/SDL/archive/c033d3e3ac6c9617f36b56f7a392e38595e11666.tar.gz",
+            .hash = "1220f928af3723901f146aba69c34742568358dd1f69fa7a63a2184e0c45a4eefeb8",
         },
         .Lua = .{
             .url = "https://github.com/ryleelyman/ziglua/archive/54f258b4aa70529cd1f62ef0253927aff452005e.tar.gz",
             .hash = "1220ad42f490a333986d276e8d4c44a0cbd4008bfece2e897330a10be7191849bf8e",
         },
         .readline = .{
-            .url = "https://github.com/ryleelyman/readline/archive/b7ee957ab403bdc8b9f94e32cb1d4b004970d465.tar.gz",
-            .hash = "122059b095444e357135ffcb930dd4ef80a61ad2e9a511587d73b14750fa74a5a775",
+            .url = "https://github.com/ryleelyman/readline/archive/644ece9ba4b086b455307a4324dbdf45aca1547b.tar.gz",
+            .hash = "12201b740a49944b9b858ebe9690d28d401357a24e86fea0f7d1b47c93e8de547472",
         },
         .liblo = .{
             .url = "https://github.com/ryleelyman/liblo/archive/3629c35d9fa5c15b61a99bdcb62d0edf2da841df.tar.gz",
