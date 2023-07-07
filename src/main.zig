@@ -82,7 +82,7 @@ pub fn main() !void {
     const height = try std.fmt.parseUnsigned(u16, args.height, 10);
     const assets_path = try std.fs.path.join(allocator, &.{ location, "..", "share", "seamstress", "resources" });
     defer allocator.free(assets_path);
-    var assets_buf = [_]u8{0} ** 1024;
+    var assets_buf = [_]u8{0} ** std.fs.MAX_PATH_BYTES;
     const assets = try std.fs.realpath(assets_path, &assets_buf);
     try screen.init(allocator, width, height, assets);
     defer screen.deinit();
