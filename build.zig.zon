@@ -3,8 +3,8 @@
     .version = "0.11.0",
     .dependencies = .{
         .SDL = .{
-            .url = "https://github.com/ryleelyman/SDL/archive/ca651e898b3cf958d7fa5b11d5aa269d0e3a7a9f.tar.gz",
-            .hash = "12202d75987d1788f8033b5260818e737ebf25243750243fa8433d1bef9acb0be92b",
+            .url = "https://github.com/ryleelyman/SDL/archive/96d919ec383ebdcb2f101ee82486f1696ba65d29.tar.gz",
+            .hash = "1220055d94b378dc250dcdf3afbd37baa9d998fdb2010ef31fe2dc6f19f1b659191c",
         },
         .Lua = .{
             .url = "https://github.com/ryleelyman/ziglua/archive/54f258b4aa70529cd1f62ef0253927aff452005e.tar.gz",
