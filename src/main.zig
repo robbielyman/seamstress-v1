@@ -92,11 +92,10 @@ pub fn main() !void {
 
     logger.info("spinning spindle", .{});
     try spindle.startup(args.script_file);
-    defer spindle.deinit();
 
     logger.info("entering main loop", .{});
     try events.loop();
-    spindle.deinit();
+    defer spindle.deinit();
 }
 
 fn print_version() !void {
