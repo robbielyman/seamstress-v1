@@ -32,6 +32,12 @@ jobs:
       - name: install lib deps
         run: |
           sudo apt-get -qq update && sudo apt-get -qy install liblua5.4-dev libpipewire-0.3-dev
+      - name: pwd
+        run: |
+          pwd
+      - name: ls ziglua
+        run: |
+          cd lib/ziglua && ls
       - name: build
         run: |
           cd lib/ziglua && /opt/zig/zig build
