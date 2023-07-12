@@ -20,7 +20,7 @@ jobs:
           wget https://ziglang.org/builds/zig-linux-x86_64-0.11.0-dev.3971+6bc9c4f71.tar.xz
           tar -xf zig-linux-x86_64-0.11.0-dev.3971+6bc9c4f71.tar.xz -C /opt/zig
           ls /opt/zig
-      - name: install lib deps
+      - name: show zig install dir
         run: |
           ls /opt/zig
       # - name: install os deps
