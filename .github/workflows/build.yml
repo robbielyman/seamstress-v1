@@ -18,7 +18,7 @@ jobs:
           submodules: 'true'
       - name: show submodules
         run: |
-          ls lib/
+          ls lib/lib/ziglua
       - name: download & install zig
         run: |
           mkdir /opt/zig
