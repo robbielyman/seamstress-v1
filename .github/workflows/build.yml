@@ -31,7 +31,8 @@ jobs:
       # - name: fetch submodules
       - name: install lib deps
         run: |
-          sudo apt-get -qq update && sudo apt-get -qy install liblua5.4-dev libpipewire-0.3-dev
+          sudo apt-get -qq update && sudo apt-get -qy install liblua5.4-dev libasound2-dev libpipewire-0.3-dev libdbus-1-dev libwayland-dev
+          # maybe also libsdl2-ttf-dev
       - name: ls ziglua
         run: |
           cd lib/ziglua && ls
