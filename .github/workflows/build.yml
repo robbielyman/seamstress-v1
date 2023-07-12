@@ -1,0 +1,47 @@
+name: Build artifacts
+
+on:
+  # release:
+  #   types: [published]
+  push:
+    tags:
+      - '*.*.*'
+
+  workflow_dispatch:
+
+jobs:
+  build-static:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: download & install zig
+        run: |
+          wget https://ziglang.org/builds/zig-linux-x86_64-0.11.0-dev.3971+6bc9c4f71.tar.xz
+          tar -xf zig-linux-x86_64-0.11.0-dev.3971+6bc9c4f71.tar.xz -C /opt/zig
+      # - name: install os deps
+      #   run: |
+      #     apt-get -qq update && apt-get -qy install fakeroot
+      # - name: fetch submodules
+      - name: install lib deps
+        run: |
+          apt-get -qq update && apt-get -qy install liblua5.4-dev libpipewire-0.3-dev
+      - name: build
+        run: |
+          cd lib/ziglua && /opt/zig/zig build
+          cd --
+          /opt/zig/zig build
+      - name: make archive
+        run: |
+          tar -czvf seamstress-${{ github.ref_name }}.tar.gz zig-out/
+      - uses: actions/upload-artifact@v2
+        with:
+          name: ${{ github.ref_name }}
+          path: |
+            ./*.tar.gz
+      - name: Release
+        uses: softprops/action-gh-release@v1
+        # if: ${{ github.event.release.tag_name }}
+        with:
+          name: ${{ github.ref_name }}
+          # draft: true
+          files: ./*.tar.gz
