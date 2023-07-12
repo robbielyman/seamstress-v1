@@ -1116,8 +1116,7 @@ pub fn clock_transport(ev_type: clock.Transport) !void {
 
 fn lua_print(l: *Lua) i32 {
     if (input.readline) {
-        _ = c.rl_set_prompt("");
-        _ = c.rl_redisplay();
+        _ = c.rl_clear_visible_line();
     }
     const n = l.getTop();
     l.checkStackErr(2, "too many results to print");
@@ -1126,7 +1125,7 @@ fn lua_print(l: *Lua) i32 {
     l.call(n, 0);
     if (input.readline) {
         _ = c.rl_set_prompt("> ");
-        _ = c.rl_redisplay();
+        _ = c.rl_forced_update_display();
     } else {
         stdout.print("> ", .{}) catch unreachable;
     }
@@ -1222,14 +1221,14 @@ fn handle_line(l: *Lua, line: [:0]const u8) !void {
         };
     }
     if (input.readline) {
-        _ = c.rl_set_prompt("");
-        _ = c.rl_redisplay();
+        _ = c.rl_clear_visible_line();
     }
     try docall(l, 0, ziglua.mult_return);
     if (l.getTop() == 0) {
         if (input.readline) {
+            _ = c.rl_clear_visible_line();
             _ = c.rl_set_prompt("> ");
-            _ = c.rl_redisplay();
+            _ = c.rl_forced_update_display();
         } else {
             try stdout.print("> ", .{});
         }

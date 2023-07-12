@@ -8,8 +8,8 @@ var allocator: std.mem.Allocator = undefined;
 var thread: std.Thread = undefined;
 var quit = false;
 var devices: []Device = undefined;
-var midi_in: *c.RtMidiWrapper = undefined;
-var midi_out: *c.RtMidiWrapper = undefined;
+var midi_in_counter: *c.RtMidiWrapper = undefined;
+var midi_out_counter: *c.RtMidiWrapper = undefined;
 const logger = std.log.scoped(.midi);
 
 const RtMidiPrefix = "seamstress";
@@ -106,29 +106,15 @@ fn remove(id: usize) void {
 pub fn init(alloc_pointer: std.mem.Allocator) !void {
     allocator = alloc_pointer;
     devices = try allocator.alloc(Device, 32);
-    var idx: usize = 0;
-    while (idx < 32) : (idx += 1) {
-        devices[idx] = .{ .id = @as(u8, @intCast(idx)) };
+    inline for (0..32) |idx| {
+        devices[@intCast(idx)] = .{ .id = idx };
     }
-    thread = try std.Thread.spawn(.{}, main_loop, .{});
-}
-
-// NB: on Linux, RtMidi keeps on reanouncing registered devices w/ the added `RtMidiPrefix`
-// this function allows retecting if a device name has this prefix (and thus is already registered)
-fn is_prefixed(src: []const u8) bool {
-    const prefix = RtMidiPrefix ++ ":";
-    if (src.len > prefix.len and std.mem.eql(u8, prefix, src[0..prefix.len])) {
-        return true;
-    }
-    return false;
-}
-
-fn main_loop() !void {
-    midi_in = c.rtmidi_in_create(
+    var midi_in = c.rtmidi_in_create(
         c.RTMIDI_API_UNSPECIFIED,
         RtMidiPrefix,
         1024,
-    ) orelse return error.Fail;
+    );
+    if (midi_in.*.ok == false) return error.Fail;
     var in_name: [:0]const u8 = try std.fmt.allocPrintZ(allocator, "{s}", .{"seamstress_in"});
     c.rtmidi_open_virtual_port(midi_in, "seamstress_in");
     c.rtmidi_in_ignore_types(midi_in, false, false, false);
@@ -142,10 +128,11 @@ fn main_loop() !void {
     };
     events.post(event_once);
 
-    midi_out = c.rtmidi_out_create(
+    var midi_out = c.rtmidi_out_create(
         c.RTMIDI_API_UNSPECIFIED,
         RtMidiPrefix,
-    ) orelse return error.Fail;
+    );
+    if (midi_out.*.ok == false) return error.Fail;
     var out_name: [:0]const u8 = try std.fmt.allocPrintZ(allocator, "{s}", .{"seamstress_out"});
     c.rtmidi_open_virtual_port(midi_out, "seamstress_out");
     devices[1].connected = true;
@@ -157,20 +144,39 @@ fn main_loop() !void {
     };
     events.post(event_again);
 
+    thread = try std.Thread.spawn(.{}, main_loop, .{});
+}
+
+// NB: on Linux, RtMidi keeps on reanouncing registered devices
+// w/ the added `RtMidiPrefix`
+// this function allows detecting if a device name has this prefix
+// (and thus is already registered)
+fn is_prefixed(src: []const u8) bool {
+    const prefix = RtMidiPrefix ++ ":";
+    if (src.len > prefix.len and std.mem.eql(u8, prefix, src[0..prefix.len])) {
+        return true;
+    }
+    return false;
+}
+
+fn main_loop() !void {
+    midi_in_counter = c.rtmidi_in_create_default();
+    midi_out_counter = c.rtmidi_out_create_default();
     while (!quit) {
+        std.time.sleep(std.time.ns_per_s);
         var is_active: [32]bool = undefined;
         var i: c_uint = 0;
         while (i < 32) : (i += 1) is_active[i] = false;
 
-        const in_count = c.rtmidi_get_port_count(midi_in);
+        const in_count = c.rtmidi_get_port_count(midi_in_counter);
         i = 0;
         while (i < in_count) : (i += 1) {
             var len: c_int = 256;
-            _ = c.rtmidi_get_port_name(midi_in, i, null, &len);
+            _ = c.rtmidi_get_port_name(midi_in_counter, i, null, &len);
             const usize_len = @as(usize, @intCast(len));
             var buf = try allocator.allocSentinel(u8, usize_len, 0);
             defer allocator.free(buf);
-            _ = c.rtmidi_get_port_name(midi_in, i, buf.ptr, &len);
+            _ = c.rtmidi_get_port_name(midi_in_counter, i, buf.ptr, &len);
             const spanned = std.mem.span(buf.ptr);
             if (!is_prefixed(spanned)) {
                 if (find(.Input, spanned)) |id| {
@@ -181,15 +187,15 @@ fn main_loop() !void {
             }
         }
 
-        const out_count = c.rtmidi_get_port_count(midi_out);
+        const out_count = c.rtmidi_get_port_count(midi_out_counter);
         i = 0;
         while (i < out_count) : (i += 1) {
             var len: c_int = 256;
-            _ = c.rtmidi_get_port_name(midi_out, i, null, &len);
+            _ = c.rtmidi_get_port_name(midi_out_counter, i, null, &len);
             const usize_len = @as(usize, @intCast(len));
             var buf = try allocator.allocSentinel(u8, usize_len, 0);
             defer allocator.free(buf);
-            _ = c.rtmidi_get_port_name(midi_out, i, buf.ptr, &len);
+            _ = c.rtmidi_get_port_name(midi_out_counter, i, buf.ptr, &len);
             const spanned = std.mem.span(buf.ptr);
             if (!is_prefixed(spanned)) {
                 if (find(.Output, spanned)) |id| {
@@ -215,7 +221,6 @@ fn main_loop() !void {
             }
             if (devices[i].connected and !is_active[i]) remove(i);
         }
-        std.time.sleep(std.time.ns_per_s);
     }
 }
 

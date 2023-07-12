@@ -19,8 +19,8 @@
             .hash = "122086ea282a05e8b683377f0bd6fef374eea2da3e4a85bd1c4a4b9749ce48cd5746",
         },
         .rtmidi = .{
-            .url = "https://github.com/ryleelyman/rtmidi/archive/e997cec132c63f21cd58dc50c1096d9cd556d67d.tar.gz",
-            .hash = "122012fc5b4116067b99ee85e00a7a4cc5be085dd46eb63785ae574f0775d15a9b6a",
+            .url = "https://github.com/ryleelyman/rtmidi/archive/0616d443dd61890bde63d5044ae0f07f6b15ea1f.tar.gz",
+            .hash = "1220a92433e9915f96fe442497364f71c8f03d93546c9b2ece1f0a109dffcb82e24e",
         },
     },
 }
