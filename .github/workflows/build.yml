@@ -27,7 +27,7 @@ jobs:
       #     apt-get -qq update && apt-get -qy install fakeroot
       - name: install lib deps
         run: |
-          sudo apt-get -qq update && sudo apt-get -qy install liblua5.4-dev libasound2-dev libpipewire-0.3-dev libdbus-1-dev libwayland-dev libxkbcommon-dev libsamplerate0-dev libgudev-1.0-0
+          sudo apt-get -qq update && sudo apt-get -qy install liblua5.4-dev multimedia-devel libgudev-1.0-0 libasound2-dev libpipewire-0.3-dev libdbus-1-dev libwayland-dev libsdl2-dev
           # maybe also libsdl2-ttf-dev
       - name: build ziglua
         run: |
