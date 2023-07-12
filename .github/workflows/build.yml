@@ -38,9 +38,14 @@ jobs:
       - name: ls ziglua
         run: |
           cd lib/ziglua && ls
-      - name: build
+      - name: pwd2
         run: |
-          cd lib/ziglua && /opt/zig/zig build
+          pwd
+      - name: build ziglua
+        run: |
+          /opt/zig/zig build
+      - name: build seamstress
+        run: |
           cd --
           /opt/zig/zig build
       - name: make archive
