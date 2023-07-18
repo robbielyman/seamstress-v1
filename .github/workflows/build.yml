@@ -37,7 +37,7 @@ jobs:
           /opt/zig/zig build
       - name: make archive
         run: |
-          tar -czvf seamstress-${{ github.ref_name }}.tar.gz -C zig-out .
+          cd zig-out/ && tar -czvf ../seamstress-${{ github.ref_name }}.tar.gz .
       - uses: actions/upload-artifact@v2
         with:
           name: ${{ github.ref_name }}
