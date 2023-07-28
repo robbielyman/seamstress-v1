@@ -27,25 +27,8 @@ jobs:
           name: linux-${{ github.ref_name }}
           path: |
             ./*.tar.gz
-  macos-aarch64:
-   runs-on: macos-latest
-   steps:
-      - uses: actions/checkout@v2
-        with:
-          submodules: 'true'
-      - name: build seamstress
-        run: |
-          bash ci/macos-latest.sh
-      - name: zip artifact
-        run: |
-          cd zig-out/ && zip -r9 ../seamstress-macos-aarch64-${{ github.ref_name }}.zip .
-      - uses: actions/upload-artifact@v2
-        with:
-          name: macos-aarch64-${{ github.ref_name }}
-          path: |
-            ./*.zip
   macos-x86_64:
-    runs-on: macos-11
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v2
         with:
@@ -60,16 +43,4 @@ jobs:
         with:
           name: macos-x86_64-${{ github.ref_name }}
           path: |
-            ./*.zip
-  release:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Release
-        uses: softprops/action-gh-release@v1
-        if: startsWith(github.ref, 'refs/tags/')
-        with:
-          name: ${{ github.ref_name }}
-          draft: true
-          files: |
-            ./*.tar.gz
             ./*.zip
