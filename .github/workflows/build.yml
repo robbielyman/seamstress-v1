@@ -18,7 +18,7 @@ jobs:
           submodules: 'true'
       - name: build seamstress
         run: |
-          sh ci/ubuntu.sh
+          bash ci/ubuntu.sh
       - name: zip artifact
         run: |
           cd zig-out/ && tar -czvf ../seamstress-linux-${{ github.ref_name }}.tar.gz .
@@ -35,7 +35,7 @@ jobs:
           submodules: 'true'
       - name: build seamstress
         run: |
-          sh ci/macos-latest.sh
+          bash ci/macos-latest.sh
       - name: zip artifact
         run: |
           cd zig-out/ && zip -r9 ../seamstress-macos-aarch64-${{ github.ref_name }}.zip .
@@ -52,7 +52,7 @@ jobs:
           submodules: 'true'
       - name: build seamstress
         run: |
-          sh ci/macos-11.sh
+          bash ci/macos-11.sh
       - name: zip artifact
         run: |
           cd zig-out/ && zip -r9 ../seamstress-macos-x86_64-${{ github.ref_name }}.zip .
