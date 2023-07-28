@@ -3,7 +3,7 @@ name: Build artifacts
 on:
   push:
     tags:
-      - '*.*.*'
+      - 'v*.*.*'
 
   workflow_dispatch:
 
@@ -54,4 +54,4 @@ jobs:
           draft: true
           files: |
             ./macos-x86_64-${{ github.ref_name }}/*.zip
-            ./linux-x86_64-${{ github.ref_name }}*.tar.gz
+            ./linux-x86_64-${{ github.ref_name }}/*.tar.gz
