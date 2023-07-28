@@ -1,6 +1,6 @@
 #!/bin/sh
 
-mkdir /opt/zig
+sudo mkdir /opt/zig
 wget https://ziglang.org/builds/zig-macos-x86_64-0.11.0-dev.3971+6bc9c4f71.tar.xz
 tar -xf zig-macos-x86_64-0.11.0-dev.3971+6bc9c4f71.tar.xz -C /tmp
 cp -R /tmp/zig-macos-x86_64-0.11.0-dev.3971+6bc9c4f71/* /opt/zig
