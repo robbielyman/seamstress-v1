@@ -10,43 +10,64 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-static:
+  linux-x86_64:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
         with:
           submodules: 'true'
-      - name: download & install zig
-        run: |
-          mkdir /opt/zig
-          wget https://ziglang.org/builds/zig-linux-x86_64-0.11.0-dev.3971+6bc9c4f71.tar.xz
-          tar -xf zig-linux-x86_64-0.11.0-dev.3971+6bc9c4f71.tar.xz -C /tmp
-          cp -R /tmp/zig-linux-x86_64-0.11.0-dev.3971+6bc9c4f71/* /opt/zig
-      # - name: install os deps
-      #   run: |
-      #     apt-get -qq update && apt-get -qy install fakeroot
-      - name: install lib deps
-        run: |
-          sudo apt-get -qq update && sudo apt-get -qy install liblua5.4-dev multimedia-devel libgudev-1.0-0 libdbus-1-dev libwayland-dev libsdl2-dev libasound2-dev libjack-jackd2-dev libpipewire-0.3-dev
-          # maybe also libsdl2-ttf-dev
-      - name: build ziglua
-        run: |
-          cd lib/ziglua && /opt/zig/zig build
       - name: build seamstress
         run: |
-          /opt/zig/zig build
-      - name: make archive
+          sh ci/ubuntu.sh
+      - name: zip artifact
         run: |
-          cd zig-out/ && tar -czvf ../seamstress-${{ github.ref_name }}.tar.gz .
+          cd zig-out/ && tar -czvf ../seamstress-linux-${{ github.ref_name }}.tar.gz .
       - uses: actions/upload-artifact@v2
         with:
-          name: ${{ github.ref_name }}
+          name: linux-${{ github.ref_name }}
           path: |
             ./*.tar.gz
+  macos-aarch64:
+   runs-on: macos-latest
+   steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: 'true'
+      - name: build seamstress
+        run: |
+          sh ci/macos-latest.sh
+      - name: zip artifact
+        run: |
+          cd zig-out/ && zip -r9 ../seamstress-macos-aarch64-${{ github.ref_name }}.zip .
+      - uses: actions/upload-artifact@v2
+        with:
+          name: macos-aarch64-${{ github.ref_name }}
+          path: |
+            ./*.zip
+  macos-x86_64:
+    runs-on: macos-11
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          submodules: 'true'
+      - name: build seamstress
+        run: |
+          sh ci/macos-11.sh
+      - name: zip artifact
+        run: |
+          cd zig-out/ && zip -r9 ../seamstress-macos-x86_64-${{ github.ref_name }}.zip .
+      - uses: actions/upload-artifact@v2
+        with:
+          name: macos-x86_64-${{ github.ref_name }}
+          path: |
+            ./*.zip
+  release:
       - name: Release
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
           name: ${{ github.ref_name }}
           draft: true
-          files: ./*.tar.gz
+          files: |
+            ./*.tar.gz
+            ./*.zip
