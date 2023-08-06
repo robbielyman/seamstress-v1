@@ -65,7 +65,7 @@ fn print_usage() !void {
     const stdout_file = std.io.getStdOut().writer();
     var bw = std.io.bufferedWriter(stdout_file);
     const stdout = bw.writer();
-    try stdout.print("Start seamstress-zig with optional overrides:\n", .{});
+    try stdout.print("Start seamstress with optional overrides:\n", .{});
     try stdout.print("-s    override user script [current {s}]\n", .{script_file});
     try stdout.print("-l    override OSC listen port [current {s}]\n", .{local_port});
     try stdout.print("-b    override OSC broadcast port [current {s}]\n", .{remote_port});
