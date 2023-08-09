@@ -27,7 +27,7 @@ _old_print = print
 
 function include(file)
   -- local dirs = {norns.state.path, _path.code, _path.extn}
-  local dirs = {path.pwd, path.seamstress_home}
+  local dirs = {path.pwd, path.seamstress}
   for _, dir in ipairs(dirs) do
     local p = dir..'/'..file..'.lua'
     -- if util.file_exists(p) then
