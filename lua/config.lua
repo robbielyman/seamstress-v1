@@ -24,3 +24,20 @@ path = {
 }
 
 _old_print = print
+
+function include(file)
+  -- local dirs = {norns.state.path, _path.code, _path.extn}
+  local dirs = {path.pwd, path.seamstress_home}
+  for _, dir in ipairs(dirs) do
+    local p = dir..'/'..file..'.lua'
+    -- if util.file_exists(p) then
+    if util.exists(p) then
+      print("including "..p)
+      return dofile(p)
+    end
+  end
+
+  -- didn't find anything
+  print("### MISSING INCLUDE: "..file)
+  error("MISSING INCLUDE: "..file,2)
+end
