@@ -49,16 +49,32 @@ _seamstress.monome = {
 
 --- startup function; called by spindle to start the script.
 -- @tparam string script_file set by calling seamstress with `-s filename`
-_startup = function(script_file)
-	if not util.exists(script_file .. ".lua") and not util.exists(path.seamstress .. "/" .. script_file .. ".lua") then
-		print("seamstress was unable to find user-provided " .. script_file .. ".lua file!")
-		print("create such a file and place it in either CWD or ~/seamstress")
-	else
-		require(script_file)
-	end
-	clock.add_params()
-	init()
-	paramsMenu.init()
+_startup = function (script_file)
+  local filename
+  if util.exists(script_file..'.lua') then
+    filename = string.sub(script_file,1,1) == "/" and script_file or os.getenv("PWD").."/"..script_file
+  elseif util.exists(path.seamstress .. '/' .. script_file .. '.lua') then
+    filename = path.seamstress .. '/' .. script_file
+  else
+    print("seamstress was unable to find user-provided " .. script_file .. ".lua file!")
+    print("create such a file and place it in either CWD or ~/seamstress")
+  end
+
+  if filename then
+    filename = filename .. '.lua'
+    path, scriptname = filename:match("^(.*)/([^.]*).*$")
+
+    seamstress.state.script = filename
+    seamstress.state.path = path
+    seamstress.state.name = scriptname
+    seamstress.state.shortname = seamstress.state.name:match( "([^/]+)$" )
+
+    require(script_file)
+  end
+
+  clock.add_params()
+  init()
+  paramsMenu.init()
 end
 
 _seamstress.cleanup = function()
