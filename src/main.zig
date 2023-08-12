@@ -105,6 +105,16 @@ pub fn main() !void {
         defer if (args.watch and filepath != null) watcher.deinit();
     }
     std.io.getStdIn().close();
+    try print_goodbye();
+    std.io.getStdOut().close();
+}
+
+fn print_goodbye() !void {
+    const stdout_file = std.io.getStdOut().writer();
+    var bw = std.io.bufferedWriter(stdout_file);
+    const stdout = bw.writer();
+    try stdout.print("SEAMSTRESS: goodbye\n", .{});
+    try bw.flush();
 }
 
 fn print_version() !void {
