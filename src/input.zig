@@ -36,7 +36,7 @@ pub fn deinit() void {
 fn input_run() !void {
     _ = c.rl_initialize();
     c.rl_prep_terminal(1);
-    defer c.rl_deprep_terminal();
+    defer _ = c.rl_reset_terminal(null);
     c.using_history();
     c.stifle_history(500);
     const home = std.os.getenv("HOME");
