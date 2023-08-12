@@ -9,6 +9,7 @@ const osc = @import("serialosc.zig");
 const input = @import("input.zig");
 const screen = @import("screen.zig");
 const midi = @import("midi.zig");
+const socket = @import("socket.zig");
 const watcher = @import("watcher.zig");
 
 const VERSION = .{ .major = 0, .minor = 17, .patch = 2 };
@@ -76,6 +77,11 @@ pub fn main() !void {
         logger.info("init input", .{});
         try input.init(allocator);
         defer input.deinit();
+
+        logger.info("init socket", .{});
+        const sock = try std.fmt.parseUnsigned(u16, args.socket_port, 10);
+        try socket.init(allocator, sock);
+        defer socket.deinit();
 
         logger.info("init screen", .{});
         const width = try std.fmt.parseUnsigned(u16, args.width, 10);

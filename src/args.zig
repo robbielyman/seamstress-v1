@@ -3,6 +3,7 @@ const std = @import("std");
 pub var script_file: []const u8 = "script";
 pub var local_port: [:0]const u8 = "7777";
 pub var remote_port: [:0]const u8 = "6666";
+pub var socket_port: [:0]const u8 = "8888";
 pub var width: [:0]const u8 = "256";
 pub var height: [:0]const u8 = "128";
 pub var watch = false;
@@ -32,6 +33,12 @@ pub fn parse() !void {
             'l' => {
                 if (args.next()) |next| {
                     local_port = next;
+                    continue;
+                }
+            },
+            'p' => {
+                if (args.next()) |next| {
+                    socket_port = next;
                     continue;
                 }
             },
@@ -88,6 +95,7 @@ fn print_usage() !void {
     try stdout.print("-s       override user script [current {s}]\n", .{script_file});
     try stdout.print("-l       override OSC listen port [current {s}]\n", .{local_port});
     try stdout.print("-b       override OSC broadcast port [current {s}]\n", .{remote_port});
+    try stdout.print("-p       override socket listen port [current {s}]\n", .{socket_port});
     try stdout.print("-w       watch the directory containing the script file for changes\n", .{});
     try stdout.print("-x       override window width [current {s}]\n", .{width});
     try stdout.print("-y       override window height [current {s}]\n", .{height});
