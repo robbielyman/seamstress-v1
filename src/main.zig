@@ -12,7 +12,7 @@ const midi = @import("midi.zig");
 const socket = @import("socket.zig");
 const watcher = @import("watcher.zig");
 
-const VERSION = .{ .major = 0, .minor = 17, .patch = 2 };
+const VERSION = .{ .major = 0, .minor = 17, .patch = 3 };
 
 pub const std_options = struct {
     pub const log_level = .info;
