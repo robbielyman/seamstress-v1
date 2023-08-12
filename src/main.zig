@@ -11,7 +11,7 @@ const screen = @import("screen.zig");
 const midi = @import("midi.zig");
 const watcher = @import("watcher.zig");
 
-const VERSION = .{ .major = 0, .minor = 17, .patch = 1 };
+const VERSION = .{ .major = 0, .minor = 17, .patch = 2 };
 
 pub const std_options = struct {
     pub const log_level = .info;
