@@ -139,8 +139,10 @@ pub fn deinit() void {
     docall(&lvm, 0, 0) catch unreachable;
 }
 
-pub fn startup(script: [:0]const u8) !?[*:0]const u8 {
-    _ = lvm.pushString(script);
+pub fn startup(script: []const u8) !?[*:0]const u8 {
+    const script_string = allocator.dupeZ(u8, script) catch @panic("OOM!");
+    defer allocator.free(script_string);
+    _ = lvm.pushString(script_string);
     _ = try lvm.getGlobal("_startup");
     lvm.insert(1);
     const base = lvm.getTop() - 1;
