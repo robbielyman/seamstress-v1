@@ -45,7 +45,7 @@ const Metro = struct {
     fn init(self: *Metro, delta: u64, count: i64) !void {
         self.delta = delta;
         self.count = count;
-        self.thread = try allocator.create(Thread);
+        self.thread = allocator.create(Thread) catch @panic("OOM!");
         self.thread.?.* = .{
             .quit = false,
             .pid = try std.Thread.spawn(.{}, loop, .{ self, self.thread.? }),
@@ -95,7 +95,7 @@ pub fn start(idx: u8, seconds: f64, count: i64, stage: i64) !void {
     try metro.init(delta, count);
 }
 
-pub fn set_period(idx: u8, seconds: f64) !void {
+pub fn set_period(idx: u8, seconds: f64) void {
     if (idx < 0 or idx >= max_num_metros) return;
     var metro = metros[idx];
     if (seconds > 0.0) {

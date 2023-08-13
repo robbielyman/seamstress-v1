@@ -217,10 +217,7 @@ fn osc_send(l: *Lua) i32 {
     }
     l.checkType(3, ziglua.LuaType.table);
     const len = l.rawLen(3);
-    msg = allocator.alloc(osc.Lo_Arg, len) catch |err| {
-        if (err == error.OutOfMemory) logger.err("out of memory!", .{});
-        return 0;
-    };
+    msg = allocator.alloc(osc.Lo_Arg, len) catch @panic("OOM!");
     defer allocator.free(msg);
     var i: usize = 1;
     while (i <= len) : (i += 1) {
@@ -269,9 +266,9 @@ fn grid_set_led(l: *Lua) i32 {
     check_num_args(l, 4);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const x: u8 = @intCast(l.checkInteger(2) - 1);
-    const y: u8 = @intCast(l.checkInteger(3) - 1);
-    const val: u8 = @intCast(l.checkInteger(4));
+    const x: u8 = @intFromFloat(l.checkNumber(2) - 1);
+    const y: u8 = @intFromFloat(l.checkNumber(3) - 1);
+    const val: u8 = @intFromFloat(l.checkNumber(4));
     md.grid_set_led(x, y, val);
     l.setTop(0);
     return 0;
@@ -287,7 +284,7 @@ fn grid_all_led(l: *Lua) i32 {
     check_num_args(l, 2);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const val: u8 = @intCast(l.checkInteger(2));
+    const val: u8 = @intFromFloat(l.checkNumber(2));
     md.grid_all_led(val);
     l.setTop(0);
     return 0;
@@ -329,7 +326,7 @@ fn grid_set_rotation(l: *Lua) i32 {
     check_num_args(l, 2);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const rotation: u16 = @intCast(l.checkInteger(2));
+    const rotation: u16 = @intFromFloat(l.checkNumber(2));
     md.set_rotation(rotation);
     l.setTop(0);
     return 0;
@@ -345,7 +342,7 @@ fn grid_tilt_enable(l: *Lua) i32 {
     check_num_args(l, 2);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const sensor: u8 = @intCast(l.checkInteger(2) - 1);
+    const sensor: u8 = @intFromFloat(l.checkNumber(2) - 1);
     md.tilt_set(sensor, 1);
     return 0;
 }
@@ -360,7 +357,7 @@ fn grid_tilt_disable(l: *Lua) i32 {
     check_num_args(l, 2);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const sensor: u8 = @intCast(l.checkInteger(2) - 1);
+    const sensor: u8 = @intFromFloat(l.checkNumber(2) - 1);
     md.tilt_set(sensor, 0);
     return 0;
 }
@@ -377,9 +374,9 @@ fn arc_set_led(l: *Lua) i32 {
     check_num_args(l, 4);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const ring: u8 = @intCast(l.checkInteger(2) - 1);
-    const led: u8 = @intCast(l.checkInteger(3) - 1);
-    const val: u8 = @intCast(l.checkInteger(4));
+    const ring: u8 = @intFromFloat(l.checkNumber(2) - 1);
+    const led: u8 = @intFromFloat(l.checkNumber(3) - 1);
+    const val: u8 = @intFromFloat(l.checkNumber(4));
     md.arc_set_led(ring, led, val);
     l.setTop(0);
     return 0;
@@ -395,7 +392,7 @@ fn arc_all_led(l: *Lua) i32 {
     check_num_args(l, 2);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const val: u8 = @intCast(l.checkInteger(2));
+    const val: u8 = @intFromFloat(l.checkNumber(2));
     md.grid_all_led(val);
     l.setTop(0);
     return 0;
@@ -427,7 +424,7 @@ fn monome_intensity(l: *Lua) i32 {
     check_num_args(l, 2);
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
-    const level: u8 = @intCast(l.checkInteger(2));
+    const level: u8 = @intFromFloat(l.checkNumber(2));
     md.intensity(level);
     l.setTop(0);
     return 0;
@@ -454,6 +451,7 @@ fn screen_move(l: *Lua) i32 {
     const x = l.checkNumber(1);
     const y = l.checkNumber(2);
     screen.move(@intFromFloat(x - 1), @intFromFloat(y - 1));
+    l.setTop(0);
     return 0;
 }
 
@@ -468,6 +466,7 @@ fn screen_move_rel(l: *Lua) i32 {
     const x = l.checkNumber(1);
     const y = l.checkNumber(2);
     screen.move_rel(@intFromFloat(x), @intFromFloat(y));
+    l.setTop(0);
     return 0;
 }
 
@@ -482,6 +481,7 @@ fn screen_pixel(l: *Lua) i32 {
     const x = l.checkNumber(1);
     const y = l.checkNumber(2);
     screen.pixel(@intFromFloat(x - 1), @intFromFloat(y - 1));
+    l.setTop(0);
     return 0;
 }
 
@@ -506,6 +506,7 @@ fn screen_line(l: *Lua) i32 {
     const bx = l.checkNumber(1);
     const by = l.checkNumber(2);
     screen.line(@intFromFloat(bx - 1), @intFromFloat(by - 1));
+    l.setTop(0);
     return 0;
 }
 
@@ -520,6 +521,7 @@ fn screen_line_rel(l: *Lua) i32 {
     const bx = l.checkNumber(1);
     const by = l.checkNumber(2);
     screen.line_rel(@intFromFloat(bx), @intFromFloat(by));
+    l.setTop(0);
     return 0;
 }
 
@@ -562,6 +564,7 @@ fn screen_text(l: *Lua) i32 {
     check_num_args(l, 1);
     const words = l.checkString(1);
     screen.text(std.mem.span(words));
+    l.setTop(0);
     return 0;
 }
 
@@ -574,6 +577,7 @@ fn screen_text_center(l: *Lua) i32 {
     check_num_args(l, 1);
     const words = l.checkString(1);
     screen.text_center(std.mem.span(words));
+    l.setTop(0);
     return 0;
 }
 
@@ -586,6 +590,7 @@ fn screen_text_right(l: *Lua) i32 {
     check_num_args(l, 1);
     const words = l.checkString(1);
     screen.text_right(std.mem.span(words));
+    l.setTop(0);
     return 0;
 }
 
@@ -657,7 +662,7 @@ fn screen_triangle(l: *Lua) i32 {
         @floatCast(by),
         @floatCast(cx),
         @floatCast(cy),
-    ) catch unreachable;
+    );
     return 0;
 }
 
@@ -692,7 +697,7 @@ fn screen_quad(l: *Lua) i32 {
         @floatCast(cy),
         @floatCast(dx),
         @floatCast(dy),
-    ) catch unreachable;
+    );
     return 0;
 }
 
@@ -711,6 +716,7 @@ fn screen_new_texture(l: *Lua) i32 {
         @intFromFloat(width),
         @intFromFloat(height),
     ) catch {
+        l.raiseErrorStr("unable to create texture!", .{});
         l.pushNil();
         return 1;
     };
@@ -728,6 +734,7 @@ fn screen_new_texture_from_file(l: *Lua) i32 {
     check_num_args(l, 1);
     const filename = l.checkString(1);
     const texture = screen.new_texture_from_file(std.mem.span(filename)) catch {
+        l.raiseErrorStr("unable to create texture!", .{});
         l.pushNil();
         return 1;
     };
@@ -742,6 +749,7 @@ fn screen_new_texture_from_file(l: *Lua) i32 {
 // @function screen_texture_dimensions
 fn screen_texture_dimensions(l: *Lua) i32 {
     check_num_args(l, 1);
+    l.checkType(1, .light_userdata);
     const texture = l.toUserdata(screen.Texture, 1) catch unreachable;
     l.pushInteger(texture.width);
     l.pushInteger(texture.height);
@@ -757,11 +765,14 @@ fn screen_texture_dimensions(l: *Lua) i32 {
 // @function screen_render_texture
 fn screen_render_texture(l: *Lua) i32 {
     check_num_args(l, 4);
+    l.checkType(1, .light_userdata);
     const texture = l.toUserdata(screen.Texture, 1) catch unreachable;
     const x = l.checkNumber(2) - 1;
     const y = l.checkNumber(3) - 1;
     const zoom = l.checkNumber(4);
-    screen.render_texture(texture, @intFromFloat(x), @intFromFloat(y), zoom) catch unreachable;
+    screen.render_texture(texture, @intFromFloat(x), @intFromFloat(y), zoom) catch {
+        l.raiseErrorStr("unable to render texture!", .{});
+    };
     return 0;
 }
 /// renders texture at given coordinates with rotation and flip
@@ -776,6 +787,7 @@ fn screen_render_texture(l: *Lua) i32 {
 // @function screen_render_texture_extended
 fn screen_render_texture_extended(l: *Lua) i32 {
     check_num_args(l, 7);
+    l.checkType(1, .light_userdata);
     const texture = l.toUserdata(screen.Texture, 1) catch unreachable;
     const x = l.checkNumber(2) - 1;
     const y = l.checkNumber(3) - 1;
@@ -792,7 +804,7 @@ fn screen_render_texture_extended(l: *Lua) i32 {
         deg,
         flip_h,
         flip_v,
-    ) catch unreachable;
+    ) catch l.raiseErrorStr("unable to render texture!", .{});
     return 0;
 }
 
@@ -811,10 +823,7 @@ fn screen_geometry(l: *Lua) i32 {
     } else null;
     l.checkType(1, ziglua.LuaType.table);
     const len = l.rawLen(1);
-    var verts = allocator.alloc(screen.Vertex, len) catch |err| {
-        if (err == error.OutOfMemory) logger.err("out of memory!", .{});
-        return 0;
-    };
+    var verts = allocator.alloc(screen.Vertex, len) catch @panic("OOM!");
     defer allocator.free(verts);
     for (verts, 0..) |*v, i| {
         const t = l.getIndex(1, @intCast(i + 1));
@@ -842,7 +851,7 @@ fn screen_geometry(l: *Lua) i32 {
         break :blk ind;
     } else null;
     defer if (indices) |i| allocator.free(i);
-    screen.define_geometry(texture, verts, indices) catch unreachable;
+    screen.define_geometry(texture, verts, indices);
     l.setTop(0);
     return 0;
 }
@@ -925,11 +934,16 @@ fn process_t_coord(l: *Lua) screen.Vertex.Position {
 // @function screen_color
 fn screen_color(l: *Lua) i32 {
     check_num_args(l, 4);
-    const r: u8 = @intFromFloat(l.checkNumber(1));
-    const g: u8 = @intFromFloat(l.checkNumber(2));
-    const b: u8 = @intFromFloat(l.checkNumber(3));
-    const a: u8 = @intFromFloat(l.checkNumber(4));
-    screen.color(r, g, b, a);
+    const r: i32 = @intFromFloat(l.checkNumber(1));
+    const g: i32 = @intFromFloat(l.checkNumber(2));
+    const b: i32 = @intFromFloat(l.checkNumber(3));
+    const a: i32 = @intFromFloat(l.checkNumber(4));
+    screen.color(
+        @min(@max(0, r), 255),
+        @min(@max(0, g), 255),
+        @min(@max(0, b), 255),
+        @min(@max(0, a), 255),
+    );
     l.setTop(0);
     return 0;
 }
@@ -1029,10 +1043,15 @@ fn metro_start(l: *Lua) i32 {
     check_num_args(l, 4);
     const idx: u8 = @intCast(l.checkInteger(1) - 1);
     const seconds = l.checkNumber(2);
-    const count = l.checkInteger(3);
-    const stage = l.checkInteger(4) - 1;
-    metro.start(idx, seconds, count, stage) catch unreachable;
+    const count = l.checkNumber(3);
+    const stage = l.checkNumber(4) - 1;
     l.setTop(0);
+    metro.start(
+        idx,
+        seconds,
+        @intFromFloat(count),
+        @intFromFloat(stage),
+    ) catch l.raiseErrorStr("unable to create thread!", .{});
     return 0;
 }
 
@@ -1043,7 +1062,7 @@ fn metro_start(l: *Lua) i32 {
 // @function metro_stop
 fn metro_stop(l: *Lua) i32 {
     check_num_args(l, 1);
-    const idx: u8 = @intCast(l.checkInteger(1) - 1);
+    const idx: u8 = @intFromFloat(l.checkNumber(1) - 1);
     metro.stop(idx);
     l.setTop(0);
     return 0;
@@ -1056,9 +1075,9 @@ fn metro_stop(l: *Lua) i32 {
 // @function metro_set_time
 fn metro_set_time(l: *Lua) i32 {
     check_num_args(l, 2);
-    const idx: u8 = @intCast(l.checkInteger(1) - 1);
+    const idx: u8 = @intFromFloat(l.checkNumber(1) - 1);
     const seconds = l.checkNumber(2);
-    metro.set_period(idx, seconds) catch unreachable;
+    metro.set_period(idx, seconds);
     l.setTop(0);
     return 0;
 }
@@ -1076,17 +1095,17 @@ fn midi_write(l: *Lua) i32 {
     l.checkType(2, ziglua.LuaType.table);
     const len = l.rawLen(2);
     var i: c_longlong = 1;
-    var msg = allocator.allocSentinel(u8, @intCast(len), 0) catch |err| {
-        if (err == error.OutOfMemory) logger.err("out of memory!", .{});
-        return 0;
-    };
+    var msg = allocator.allocSentinel(u8, @intCast(len), 0) catch @panic("OOM!");
+    defer allocator.free(msg);
     while (i <= len) : (i += 1) {
         l.pushInteger(i);
         _ = l.getTable(2);
-        msg[@intCast(i - 1)] = @intCast(l.toInteger(-1) catch unreachable);
+        msg[@intCast(i - 1)] = @intFromFloat(l.toNumber(-1) catch {
+            l.raiseErrorStr("expected integer argument to midi_write!", .{});
+            return 0;
+        });
     }
     midi.Device.Guts.output.write(dev, msg);
-    allocator.free(msg);
     l.setTop(0);
     return 0;
 }
@@ -1098,12 +1117,12 @@ fn midi_write(l: *Lua) i32 {
 fn clock_schedule_sleep(l: *Lua) i32 {
     const top = l.getTop();
     if (top < 2) {
-        l.raiseErrorStr("expected >= 2 arguments, got {d}!\n", .{top});
+        l.raiseErrorStr("expected >= 2 arguments, got %d!\n", .{top});
         return 1;
     }
-    const idx = l.checkInteger(1);
+    const idx = l.checkNumber(1) - 1;
     const seconds = l.checkNumber(2);
-    clock.schedule_sleep(@intCast(idx - 1), seconds);
+    clock.schedule_sleep(@intFromFloat(idx), seconds);
     return top - 2;
 }
 
@@ -1117,10 +1136,10 @@ fn clock_schedule_sync(l: *Lua) i32 {
         l.raiseErrorStr("expected >= 2 arguments, got {d}!\n", .{top});
         return 1;
     }
-    const idx = l.checkInteger(1);
+    const idx = l.checkNumber(1) - 1;
     const beats = l.checkNumber(2);
     const offset = if (top >= 3) l.checkNumber(3) else 0;
-    clock.schedule_sync(@intCast(idx - 1), beats, offset);
+    clock.schedule_sync(@intFromFloat(idx), beats, offset);
     return if (top >= 3) top - 3 else top - 2;
 }
 
@@ -1177,7 +1196,9 @@ fn clock_link_set_tempo(l: *Lua) i32 {
 fn clock_set_source(l: *Lua) i32 {
     check_num_args(l, 1);
     const source = l.checkInteger(1);
-    clock.set_source(@enumFromInt(source)) catch unreachable;
+    clock.set_source(@enumFromInt(source)) catch {
+        l.raiseErrorStr("failed to start clock!", .{});
+    };
     return 0;
 }
 
@@ -1186,7 +1207,9 @@ fn clock_set_source(l: *Lua) i32 {
 // @function clock_internal_start
 fn clock_internal_start(l: *Lua) i32 {
     check_num_args(l, 0);
-    clock.start() catch unreachable;
+    clock.start() catch {
+        l.raiseErrorStr("failed to start clock!", .{});
+    };
     return 0;
 }
 
@@ -1206,10 +1229,10 @@ fn clock_internal_stop(l: *Lua) i32 {
 // @function clock_cancel
 fn clock_cancel(l: *Lua) i32 {
     check_num_args(l, 1);
-    const idx = l.checkInteger(1) - 1;
+    const idx = l.checkNumber(1) - 1;
     l.setTop(0);
     if (idx < 0 or idx > 100) return 0;
-    clock.cancel(@intCast(idx));
+    clock.cancel(@intFromFloat(idx));
     return 0;
 }
 

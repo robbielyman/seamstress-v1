@@ -84,8 +84,8 @@ var font: *c.TTF_Font = undefined;
 var thread: std.Thread = undefined;
 var quit = false;
 
-pub fn define_geometry(texture: ?*const Texture, vertices: []const Vertex, indices: ?[]const usize) !void {
-    var verts = try allocator.alloc(c.SDL_Vertex, vertices.len);
+pub fn define_geometry(texture: ?*const Texture, vertices: []const Vertex, indices: ?[]const usize) void {
+    var verts = allocator.alloc(c.SDL_Vertex, vertices.len) catch @panic("OOM!");
     defer allocator.free(verts);
     for (vertices, verts) |v, *w| {
         w.* = .{
@@ -115,7 +115,7 @@ pub fn define_geometry(texture: ?*const Texture, vertices: []const Vertex, indic
         };
     } else null;
     const ind = if (indices) |i| blk: {
-        var list = try allocator.alloc(c_int, i.len);
+        var list = allocator.alloc(c_int, i.len) catch @panic("OOM!");
         for (list, 0..) |*l, j| {
             l.* = @intCast(i[j]);
         }
@@ -134,7 +134,7 @@ pub fn define_geometry(texture: ?*const Texture, vertices: []const Vertex, indic
     if (txt) |t| c.SDL_DestroyTexture(t);
 }
 
-pub fn triangle(ax: f32, ay: f32, bx: f32, by: f32, cx: f32, cy: f32) !void {
+pub fn triangle(ax: f32, ay: f32, bx: f32, by: f32, cx: f32, cy: f32) void {
     var r: u8 = undefined;
     var g: u8 = undefined;
     var b: u8 = undefined;
@@ -156,10 +156,10 @@ pub fn triangle(ax: f32, ay: f32, bx: f32, by: f32, cx: f32, cy: f32) !void {
             .y = cy,
         }, .color = col, .tex_coord = .{} },
     };
-    try define_geometry(null, &vertices, null);
+    define_geometry(null, &vertices, null);
 }
 
-pub fn quad(ax: f32, ay: f32, bx: f32, by: f32, cx: f32, cy: f32, dx: f32, dy: f32) !void {
+pub fn quad(ax: f32, ay: f32, bx: f32, by: f32, cx: f32, cy: f32, dx: f32, dy: f32) void {
     var r: u8 = undefined;
     var g: u8 = undefined;
     var b: u8 = undefined;
@@ -185,12 +185,12 @@ pub fn quad(ax: f32, ay: f32, bx: f32, by: f32, cx: f32, cy: f32, dx: f32, dy: f
             .y = dy,
         }, .color = col, .tex_coord = .{} },
     };
-    try define_geometry(null, &vertices, &.{ 0, 2, 1, 0, 2, 3 });
+    define_geometry(null, &vertices, &.{ 0, 2, 1, 0, 2, 3 });
 }
 
 pub fn new_texture(width: u16, height: u16) !*Texture {
     const n: usize = @as(usize, width * windows[current].zoom) * @as(usize, height * windows[current].zoom) * 4;
-    var pixels = try allocator.alloc(u8, n);
+    var pixels = allocator.alloc(u8, n) catch @panic("OOM!");
     defer allocator.free(pixels);
     sdl_call(c.SDL_RenderReadPixels(
         windows[current].render,
