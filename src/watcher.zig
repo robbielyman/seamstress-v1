@@ -47,6 +47,7 @@ fn build_files(dir: std.fs.IterableDir) !bool {
         switch (entry.kind) {
             .file => {
                 const file = try dir.dir.openFile(entry.name, .{});
+                defer file.close();
                 const metadata = try file.metadata();
                 const time = metadata.modified();
                 if (find(entry.name)) |f| {
