@@ -62,9 +62,13 @@ pub const Device = struct {
         };
         pub const output = struct {
             pub fn write(self: *Device, message: []const u8) void {
-                _ = c.rtmidi_out_send_message(self.ptr.?, message.ptr, @intCast(message.len));
-                if (!self.ptr.?.*.ok) {
-                    const err = std.mem.span(self.ptr.?.*.msg);
+                const rtmidi = self.ptr orelse {
+                    logger.err("no device for {s}", .{self.name.?});
+                    return;
+                };
+                _ = c.rtmidi_out_send_message(rtmidi, message.ptr, @intCast(message.len));
+                if (!rtmidi.*.ok) {
+                    const err = std.mem.span(rtmidi.*.msg);
                     logger.err("error in device {s}: {s}", .{ self.name.?, err });
                     self.connected = false;
                 }
