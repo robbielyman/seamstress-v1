@@ -119,6 +119,8 @@ function ParamSet:add(args)
     self.lookup[param.id] = self.count
   end
   self.hidden[self.count] = false
+
+  self:lookup_param(param.id).midi_mapping = {}
 end
 
 --- add number.
