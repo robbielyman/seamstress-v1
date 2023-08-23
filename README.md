@@ -1,6 +1,9 @@
 # seamstress
 
-seamstress is a Lua scripting environment for monome devices and OSC communication.
+seamstress is a lua scripting environment for musical communication.
+
+write scripts that interact with monome devices, OSC, and MIDI.
+a screen is provided for you to play with.
 
 currently beta software.
 
@@ -70,8 +73,17 @@ which requires Penlight.
 with both installed, running `ldoc .` in the base directory of seamstress will
 regenerate documentation.
 
+## style
+
+lua formatting is done with [stylua](https://github.com/JohnnyMorganz/StyLua),
+while zig formatting is done with `zig fmt`.
+a `stylua.toml` is provided, so if you feel like matching seamstress's "house lua style",
+simply run `stylua .` in the root of the repo.
+similarly, you can run `zig fmt filename.zig` to format `filename.zig`.
+(this is not a requirement for contributing.)
+
 ## acknowledgments
 
 seamstress is inspired by [monome norns's](https://github.com/monome/norns) matron,
-which was written by @catfact.
-norns was initiated by @tehn.
+which was written by [@catfact](https://github.com/catfact).
+norns was initiated by [@tehn](https://github.com/tehn).
