@@ -13,16 +13,16 @@ Separator.__index = Separator
 local tSEPARATOR = 0
 
 function Separator.new(id, name)
-	local s = setmetatable({}, Separator)
-	s.name = name or (id or "separator")
-	s.id = id or s.name
-	s.t = tSEPARATOR
-	s.action = function() end
-	return s
+  local s = setmetatable({}, Separator)
+  s.name = name or (id or "separator")
+  s.id = id or s.name
+  s.t = tSEPARATOR
+  s.action = function() end
+  return s
 end
 
 function Separator:get()
-	return ""
+  return ""
 end
 
 function Separator:set(v) end
@@ -31,7 +31,7 @@ function Separator:set_default() end
 function Separator:bang() end
 
 function Separator:string()
-	return self.name
+  return self.name
 end
 
 return Separator

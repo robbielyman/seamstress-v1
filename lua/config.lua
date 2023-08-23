@@ -18,9 +18,9 @@ package.path = sys .. core .. lib .. luafiles .. seamstressfiles .. package.path
 
 --- path object
 path = {
-	home = home, -- user home directory
-	pwd = pwd, -- directory from which seamstress was run
-	seamstress = seamstress_home, -- defined to be `home .. '/seamstress'`
+  home = home, -- user home directory
+  pwd = pwd, -- directory from which seamstress was run
+  seamstress = seamstress_home, -- defined to be `home .. '/seamstress'`
 }
 
 _old_print = print
@@ -28,17 +28,17 @@ _old_print = print
 --- include
 function include(file)
   -- local dirs = {norns.state.path, _path.code, _path.extn}
-  local dirs = {seamstress.state.path, path.pwd, path.seamstress}
+  local dirs = { seamstress.state.path, path.pwd, path.seamstress }
   for _, dir in ipairs(dirs) do
-    local p = dir..'/'..file..'.lua'
+    local p = dir .. "/" .. file .. ".lua"
     -- if util.file_exists(p) then
     if util.exists(p) then
-      print("including "..p)
+      print("including " .. p)
       return dofile(p)
     end
   end
 
   -- didn't find anything
-  print("### MISSING INCLUDE: "..file)
-  error("MISSING INCLUDE: "..file,2)
+  print("### MISSING INCLUDE: " .. file)
+  error("MISSING INCLUDE: " .. file, 2)
 end

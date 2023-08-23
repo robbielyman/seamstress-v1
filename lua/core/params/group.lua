@@ -13,17 +13,17 @@ Group.__index = Group
 local tGROUP = 1
 
 function Group.new(id, name, n)
-	local g = setmetatable({}, Group)
-	g.name = type(name) ~= "number" and name or (id or "group")
-	g.id = id or g.name
-	g.n = type(name) == "number" and name or (n or 1)
-	g.t = tGROUP
-	g.action = function() end
-	return g
+  local g = setmetatable({}, Group)
+  g.name = type(name) ~= "number" and name or (id or "group")
+  g.id = id or g.name
+  g.n = type(name) == "number" and name or (n or 1)
+  g.t = tGROUP
+  g.action = function() end
+  return g
 end
 
 function Group:get()
-	return self.n
+  return self.n
 end
 
 function Group:set(v) end
@@ -32,7 +32,7 @@ function Group:set_default() end
 function Group:bang() end
 
 function Group:string()
-	return self.name
+  return self.name
 end
 
 return Group

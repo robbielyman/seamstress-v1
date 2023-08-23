@@ -11,51 +11,51 @@ local util = require("lib/util")
 
 local LinearWarp = {}
 function LinearWarp.map(spec, value)
-	return util.linlin(0, 1, spec.minval, spec.maxval, value)
+  return util.linlin(0, 1, spec.minval, spec.maxval, value)
 end
 
 function LinearWarp.unmap(spec, value)
-	return util.linlin(spec.minval, spec.maxval, 0, 1, value)
+  return util.linlin(spec.minval, spec.maxval, 0, 1, value)
 end
 
 local ExponentialWarp = {}
 function ExponentialWarp.map(spec, value)
-	return util.linexp(0, 1, spec.minval, spec.maxval, value)
+  return util.linexp(0, 1, spec.minval, spec.maxval, value)
 end
 
 function ExponentialWarp.unmap(spec, value)
-	return util.explin(spec.minval, spec.maxval, 0, 1, value)
+  return util.explin(spec.minval, spec.maxval, 0, 1, value)
 end
 
 local function ampdb(amp)
-	return math.log10(amp) * 20.0
+  return math.log10(amp) * 20.0
 end
 
 local function dbamp(db)
-	return 10.0 ^ (db * 0.05)
+  return 10.0 ^ (db * 0.05)
 end
 
 local DbFaderWarp = {}
 
 function DbFaderWarp.map(spec, value)
-	local minval = spec.minval
-	local maxval = spec.maxval
-	local range = dbamp(maxval) - dbamp(minval)
-	if range >= 0 then
-		return ampdb(value * value * range + dbamp(minval))
-	else
-		return ampdb((1 - (1 - value) * (1 - value)) * range + dbamp(minval))
-	end
+  local minval = spec.minval
+  local maxval = spec.maxval
+  local range = dbamp(maxval) - dbamp(minval)
+  if range >= 0 then
+    return ampdb(value * value * range + dbamp(minval))
+  else
+    return ampdb((1 - (1 - value) * (1 - value)) * range + dbamp(minval))
+  end
 end
 
 function DbFaderWarp.unmap(spec, value)
-	local minval = spec.minval
-	local maxval = spec.maxval
-	if spec:range() >= 0 then
-		return math.sqrt((dbamp(value) - dbamp(minval)) / (dbamp(maxval) - dbamp(minval)))
-	else
-		return 1 - math.sqrt(1 - ((dbamp(value) - dbamp(minval)) / (dbamp(maxval) - dbamp(minval))))
-	end
+  local minval = spec.minval
+  local maxval = spec.maxval
+  if spec:range() >= 0 then
+    return math.sqrt((dbamp(value) - dbamp(minval)) / (dbamp(maxval) - dbamp(minval)))
+  else
+    return 1 - math.sqrt(1 - ((dbamp(value) - dbamp(minval)) / (dbamp(maxval) - dbamp(minval))))
+  end
 end
 
 local ControlSpec = {}
@@ -72,101 +72,101 @@ ControlSpec.__index = ControlSpec
 -- @tparam boolean wrap true to wrap around on overflow rather than clamping
 -- @treturn ControlSpec
 function ControlSpec.new(min, max, warp, step, default, units, quantum, wrap)
-	local s = setmetatable({}, ControlSpec)
-	s.minval = min or 0
-	s.maxval = max or 1
-	if type(warp) == "string" then
-		if warp == "exp" then
-			s.warp = ExponentialWarp
-		elseif warp == "db" then
-			s.warp = DbFaderWarp
-		else
-			s.warp = LinearWarp
-		end
-	else
-		s.warp = LinearWarp
-	end
-	s.step = step or 0
-	s.default = default or minval
-	s.units = units or ""
-	s.quantum = quantum or 0.01
-	s.wrap = wrap or false
-	return s
+  local s = setmetatable({}, ControlSpec)
+  s.minval = min or 0
+  s.maxval = max or 1
+  if type(warp) == "string" then
+    if warp == "exp" then
+      s.warp = ExponentialWarp
+    elseif warp == "db" then
+      s.warp = DbFaderWarp
+    else
+      s.warp = LinearWarp
+    end
+  else
+    s.warp = LinearWarp
+  end
+  s.step = step or 0
+  s.default = default or minval
+  s.units = units or ""
+  s.quantum = quantum or 0.01
+  s.wrap = wrap or false
+  return s
 end
 
 --- create generic controlspec
 -- helper function to create controlspec using a table of parameters
 function ControlSpec.def(args)
-	return ControlSpec.new(args.min, args.max, args.warp, args.step, args.default, args.units, args.quantum, args.wrap)
+  return ControlSpec.new(args.min, args.max, args.warp, args.step, args.default, args.units, args.quantum, args.wrap)
 end
 
 function ControlSpec:cliphi()
-	return math.max(self.minval, self.maxval)
+  return math.max(self.minval, self.maxval)
 end
 
 function ControlSpec:cliplo()
-	return math.min(self.minval, self.maxval)
+  return math.min(self.minval, self.maxval)
 end
 
 --- transform an incoming value between 0 and 1 through this ControlSpec
 -- @tparam number value the incoming value
 -- @treturn number the transformed value
 function ControlSpec:map(value)
-	local clamped = util.clamp(value, 0, 1)
-	return util.round(self.warp.map(self, clamped), self.step)
+  local clamped = util.clamp(value, 0, 1)
+  return util.round(self.warp.map(self, clamped), self.step)
 end
 
 --- untransform a transformed value into its original value
 -- @tparam number value a previously transformed value
 -- @treturn number the reverse-transformed value
 function ControlSpec:unmap(value)
-	local cliplo = self:cliplo()
-	local cliphi = self:cliphi()
-	local absrange = math.abs(self:range())
-	if self.wrap then
-		while value > cliphi do
-			value = value - absrange
-		end
-		while value < cliplo do
-			value = value + absrange
-		end
-	end
-	local clamped = util.clamp(util.round(value, self.step), cliplo, cliphi)
-	return self.warp.unmap(self, clamped)
+  local cliplo = self:cliplo()
+  local cliphi = self:cliphi()
+  local absrange = math.abs(self:range())
+  if self.wrap then
+    while value > cliphi do
+      value = value - absrange
+    end
+    while value < cliplo do
+      value = value + absrange
+    end
+  end
+  local clamped = util.clamp(util.round(value, self.step), cliplo, cliphi)
+  return self.warp.unmap(self, clamped)
 end
 
 function ControlSpec:constrain(value)
-	return util.round(util.clamp(value, self:cliplo(), self:cliphi()), self.step)
+  return util.round(util.clamp(value, self:cliplo(), self:cliphi()), self.step)
 end
 
 function ControlSpec:range()
-	return self.maxval - self.minval
+  return self.maxval - self.minval
 end
 
 function ControlSpec:ratio()
-	return self.maxval / self.minval
+  return self.maxval / self.minval
 end
 
 --- copy this ControlSpec into a new one
 -- @treturn ControlSpec a new ControlSpec
 function ControlSpec:copy()
-	local s = setmetatable({}, ControlSpec)
-	s.minval = self.minval
-	s.maxval = self.maxval
-	s.warp = self.warp
-	s.step = self.step
-	s.default = self.default
-	s.units = self.units
-	s.quantum = self.quantum
-	return s
+  local s = setmetatable({}, ControlSpec)
+  s.minval = self.minval
+  s.maxval = self.maxval
+  s.warp = self.warp
+  s.step = self.step
+  s.default = self.default
+  s.units = self.units
+  s.quantum = self.quantum
+  return s
 end
 
 --- print out the configuration of this ControlSpec
 function ControlSpec:print()
-	for k, v in pairs(self) do
-		print("ControlSpec:")
-		print(">> ", k, v)
-	end
+  for k, v in pairs(self) do
+    print("ControlSpec:")
+    print(">> ", k, v)
+  end
 end
 
 --- Presets

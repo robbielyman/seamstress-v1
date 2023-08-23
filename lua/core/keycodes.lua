@@ -3,19 +3,19 @@
 
 local key = {}
 key.__index = function(t, index)
-	if t == key then
-		if type(index) == "number" then
-			if index >= 0 and index <= 255 then
-				return string.char(index)
-			end
-		end
-		return nil
-	end
+  if t == key then
+    if type(index) == "number" then
+      if index >= 0 and index <= 255 then
+        return string.char(index)
+      end
+    end
+    return nil
+  end
 end
 setmetatable(key, key)
 
 local function n(name)
-	return { name = name }
+  return { name = name }
 end
 
 key[8] = n("backspace")
@@ -49,26 +49,26 @@ key[0x400000e6] = n("ralt")
 key[0x400000e7] = n("rsuper")
 
 function key.modifier(mask)
-	local ret = {}
-	if mask & 3 > 0 then
-		table.insert(ret, "shift")
-	end
-	if mask & (3 << 6) > 0 then
-		table.insert(ret, "ctrl")
-	end
-	if mask & (3 << 8) > 0 then
-		table.insert(ret, "alt")
-	end
-	if mask & (3 << 10) > 0 then
-		table.insert(ret, "super")
-	end
-	if mask & (1 << 13) > 0 then
-		table.insert(ret, "capslock")
-	end
-	if mask & (1 << 14) > 0 then
-		table.insert(ret, "altgr")
-	end
-	return ret
+  local ret = {}
+  if mask & 3 > 0 then
+    table.insert(ret, "shift")
+  end
+  if mask & (3 << 6) > 0 then
+    table.insert(ret, "ctrl")
+  end
+  if mask & (3 << 8) > 0 then
+    table.insert(ret, "alt")
+  end
+  if mask & (3 << 10) > 0 then
+    table.insert(ret, "super")
+  end
+  if mask & (1 << 13) > 0 then
+    table.insert(ret, "capslock")
+  end
+  if mask & (1 << 14) > 0 then
+    table.insert(ret, "altgr")
+  end
+  return ret
 end
 
 return key

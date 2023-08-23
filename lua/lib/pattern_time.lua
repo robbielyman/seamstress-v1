@@ -21,9 +21,13 @@ function pattern.new()
   i.step = 0
   i.time_factor = 1
 
-  i.metro = metro.init(function() i:next_event() end,1,1)
+  i.metro = metro.init(function()
+    i:next_event()
+  end, 1, 1)
 
-  i.process = function(_) print("event") end
+  i.process = function(_)
+    print("event")
+  end
 
   return i
 end
@@ -66,8 +70,9 @@ function pattern:rec_stop()
       --tab.print(self.time)
     else
       print("pattern_time: no events recorded")
-    end 
-  else print("pattern_time: not recording")
+    end
+  else
+    print("pattern_time: not recording")
   end
 end
 
@@ -88,7 +93,7 @@ function pattern:rec_event(e)
   else
     local t = self.prev_time
     self.prev_time = util.time()
-    self.time[c-1] = self.prev_time - t
+    self.time[c - 1] = self.prev_time - t
   end
   self.count = c
   self.event[c] = e
@@ -99,9 +104,9 @@ function pattern:overdub_event(e)
   local c = self.step + 1
   local t = self.prev_time
   self.prev_time = util.time()
-  local a = self.time[c-1]
-  self.time[c-1] = self.prev_time - t
-  table.insert(self.time, c, a - self.time[c-1])
+  local a = self.time[c - 1]
+  self.time[c - 1] = self.prev_time - t
+  table.insert(self.time, c, a - self.time[c - 1])
   table.insert(self.event, c, e)
   self.step = self.step + 1
   self.count = self.count + 1
@@ -123,8 +128,11 @@ end
 --- process next event
 function pattern:next_event()
   self.prev_time = util.time()
-  if self.step == self.count then self.step = 1
-  else self.step = self.step + 1 end
+  if self.step == self.count then
+    self.step = 1
+  else
+    self.step = self.step + 1
+  end
   --print("next step "..self.step)
   --event_exec(self.event[self.step])
   self.process(self.event[self.step])
@@ -139,12 +147,14 @@ function pattern:stop()
     self.play = 0
     self.overdub = 0
     self.metro:stop()
-  else print("pattern_time: not playing") end
+  else
+    print("pattern_time: not playing")
+  end
 end
 
 --- set overdub
 function pattern:set_overdub(s)
-  if s==1 and self.play == 1 and self.rec == 0 then
+  if s == 1 and self.play == 1 and self.rec == 0 then
     self.overdub = 1
   else
     self.overdub = 0
