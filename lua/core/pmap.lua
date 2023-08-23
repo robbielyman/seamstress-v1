@@ -30,11 +30,13 @@ end
 function pmap.remove(id)
   local p = params:lookup_param(id)
   if p.midi_mapping.dev ~= nil then
-    local to_remove = tab.key(pmap.rev[p.midi_mapping.dev][p.midi_mapping.ch][p.midi_mapping.cc], id)
+    local to_remove = tab.key(pmap.rev[p.midi_mapping.dev][p.midi_mapping.ch][p.midi_mapping.cc], p.id)
     table.remove(pmap.rev[p.midi_mapping.dev][p.midi_mapping.ch][p.midi_mapping.cc], to_remove)
+    pmap.data[p.id] = nil
     p.midi_mapping.dev = nil
     p.midi_mapping.ch = nil
     p.midi_mapping.cc = nil
+    pmap.write()
   end
 end
 
