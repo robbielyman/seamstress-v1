@@ -100,8 +100,7 @@ pub const Monome = struct {
                 },
                 .Arc => _ = c.lo_message_add_int32(message, @intCast(idx)),
             }
-            var j: usize = 0;
-            while (j < 64) : (j += 1) _ = c.lo_message_add_int32(message, self.data[idx][j]);
+            inline for (0..64) |j| _ = c.lo_message_add_int32(message, self.data[idx][j]);
             switch (self.m_type) {
                 .Grid => _ = c.lo_send_message(self.addr, "/monome/grid/led/level/map", message),
                 .Arc => _ = c.lo_send_message(self.addr, "/monome/ring/map", message),
@@ -158,10 +157,9 @@ pub fn add(name: []const u8, dev_type: []const u8, port: i32) void {
         }
     }
     if (free) |device| {
-        var name_copy = allocator.alloc(u8, name.len) catch unreachable;
-        std.mem.copyForwards(u8, name_copy, name);
+        var name_copy = allocator.dupeZ(u8, name) catch @panic("OOM!");
         device.name = name_copy;
-        const port_str = std.fmt.allocPrint(allocator, "{d}\x00", .{port}) catch unreachable;
+        const port_str = std.fmt.allocPrintZ(allocator, "{d}", .{port}) catch unreachable;
         device.to_port = port_str;
         const addr = c.lo_address_new("localhost", port_str.ptr);
         device.addr = addr;
@@ -213,11 +211,11 @@ pub fn handle_add(
     _ = msg;
     _ = argc;
     _ = types;
-    const id = unwrap_string(&argv[0].*.s);
-    const dev_t = unwrap_string(&argv[1].*.s);
+    const id = std.mem.span(@as([*:0]const u8, @ptrCast(&argv[0].*.s)));
+    const dev_t = std.mem.span(@as([*:0]const u8, @ptrCast(&argv[1].*.s)));
     const port = argv[2].*.i;
     add(id, dev_t, port);
-    const unwound_path = unwrap_string(path);
+    const unwound_path = std.mem.span(path);
     if (std.mem.eql(u8, "/serialosc/add", unwound_path[0..14])) osc.send_notify();
     return 0;
 }
@@ -235,17 +233,10 @@ pub fn handle_remove(
     _ = argc;
     _ = types;
     _ = path;
-    const id = unwrap_string(&argv[0].*.s);
+    const id = std.mem.span(@as([*:0]const u8, @ptrCast(&argv[0].*.s)));
     remove(id);
     osc.send_notify();
     return 0;
-}
-
-inline fn unwrap_string(str: [*c]const u8) []const u8 {
-    var slice: [*]const u8 = @ptrCast(str);
-    var len: usize = 0;
-    while (slice[len] != 0) : (len += 1) {}
-    return slice[0..len];
 }
 
 inline fn quad_index(x: u8, y: u8) u8 {
