@@ -6,8 +6,29 @@
   reimagined for seamstress by @dndrks June 26, 2023
 ]]
 
+local keycode = require("keycodes")
+
 local mEDIT = 1
 local mMAP = 2
+local mTEXT = 3
+
+local textentry = {}
+
+textentry.enter = function(callback, default, heading, check)
+  textentry.txt = default or ""
+  textentry.heading = heading or ""
+  textentry.callback = callback
+  textentry.check = check
+  textentry.warn = check ~= nil and check(textentry.txt) or nil
+end
+
+textentry.exit = function()
+  if textentry.txt then
+    textentry.callback(textentry.txt)
+  else
+    textentry.callback(nil)
+  end
+end
 
 local m = {
   pos = 0,
@@ -137,6 +158,14 @@ m.key = function(char, modifiers, is_repeat, state)
             end
           until params:t(page[n]) == params.tSEPARATOR
           m.pos = n - 1
+        -- enter text
+        elseif t == params.tTEXT then
+          if params:lookup_param(i).locked == false then
+            if m.mode == mEDIT then
+              m.mode = mTEXT
+              textentry.enter(m.newtext, params:get(i), "PARAM: " .. params:get_name(i), params:lookup_param(i).check)
+            end
+          end
         -- midi learn
         elseif m.mode == mMAP and params:get_allow_pmap(i) then
           local n = params:get_id(i)
@@ -171,6 +200,27 @@ m.key = function(char, modifiers, is_repeat, state)
         end
       end
     end
+  elseif m.mode == mTEXT then
+    if char.name == "escape" and state == 1 then
+      m.mode = mEDIT
+    elseif char.name == "backspace" and state == 1 then
+      textentry.txt = string.sub(textentry.txt, 0, -2)
+      if textentry.check then
+        textentry.warn = textentry.check(textentry.txt)
+      end
+    elseif char.name == "return" and state == 1 then
+      textentry.exit()
+      m.mode = mEDIT
+    elseif type(char) == "string" and state == 1 then
+      if tab.contains(modifiers, "shift") then
+        textentry.txt = textentry.txt .. keycode.shifted[char]
+      else
+        textentry.txt = textentry.txt .. char
+      end
+      if textentry.check then
+        textentry.warn = textentry.check(textentry.txt)
+      end
+    end
   end
   m.redraw()
 end
@@ -180,6 +230,40 @@ m.newtext = function(txt)
     params:set(page[m.pos + 1], txt)
     m.redraw()
   end
+end
+
+local function draw_separator(param_name)
+  if screen.get_text_size(param_name) > 180 then
+    param_name = util.trim_string_to_width(param_name, 180)
+  end
+  screen.text(param_name)
+  screen.move_rel(0, 8)
+  screen.line_rel(180, 0)
+  screen.move_rel(0, -8)
+end
+
+local function draw_text(param_name, val)
+  if screen.get_text_size(param_name) > 100 then
+    param_name = util.trim_string_to_width(param_name, 100)
+  end
+  screen.text(param_name)
+  screen.move_rel(127, 0)
+  local val_spacing = screen.get_text_size(val)
+  if val_spacing > 90 then
+    val = util.trim_string_to_width(val, 93)
+  end
+  screen.text(val)
+  screen.move_rel(-127, 0)
+end
+
+local function draw_param(param_name, val)
+  if screen.get_text_size(param_name) > 100 then
+    param_name = util.trim_string_to_width(param_name, 100)
+  end
+  screen.text(param_name)
+  screen.move_rel(127, 0)
+  screen.text(val)
+  screen.move_rel(-127, 0)
 end
 
 m.redraw = function()
@@ -204,19 +288,16 @@ m.redraw = function()
         end
         local p = page[i + m.pos - 1]
         local t = params:t(p)
+        local param_name = params:get_name(p)
         screen.move_rel(0, 10)
         if t == params.tSEPARATOR then
-          screen.text(params:get_name(p))
-          screen.move_rel(0, 8)
-          screen.line_rel(127, 0)
-          screen.move_rel(0, -8)
+          draw_separator(param_name)
         elseif t == params.tGROUP then
-          screen.text(params:get_name(p) .. " >")
+          screen.text(param_name .. " >")
+        elseif t == params.tTEXT then
+          draw_text(param_name, params:string(p))
         else
-          screen.text(params:get_name(p))
-          screen.move_rel(127, 0)
-          screen.text_right(params:string(p, params:is_number(p) and 1 or 0.001))
-          screen.move_rel(-127, 0)
+          draw_param(param_name, params:string(p, params:is_number(p) and 1 or 0.001))
         end
       end
     end
@@ -242,28 +323,45 @@ m.redraw = function()
         local id = params:get_id(p)
         screen.move_rel(0, 10)
         if t == params.tSEPARATOR then
-          screen.text(n)
-          screen.move_rel(0, 8)
-          screen.line_rel(127, 0)
-          screen.move_rel(0, -8)
+          draw_separator(n)
         elseif t == params.tGROUP then
           screen.text(n .. " >")
+        elseif t == params.tTEXT then
+          draw_text(id, params:string(p))
         else
           screen.text(id)
           screen.move_rel(127, 0)
           if params:get_allow_pmap(id) then
             local pm = params:lookup_param(id).midi_mapping
             if pm.dev then
-              screen.text_right("CC:" .. pm.cc .. " | CH:" .. pm.ch .. " | DEV:" .. pm.dev)
+              screen.text("CC:" .. pm.cc .. " | CH:" .. pm.ch .. " | DEV:" .. pm.dev)
             elseif m.midi_learn.state and i == 2 then
-              screen.text_right("[learning]")
+              screen.text("[learning]")
             else
-              screen.text_right("-")
+              screen.text("-")
             end
           end
           screen.move_rel(-127, 0)
         end
       end
+    end
+  elseif m.mode == mTEXT then
+    screen.color(3, 138, 255)
+    screen.move(10, 100)
+    screen.text("escape: cancel")
+    screen.move(10, 110)
+    screen.text("enter: commit")
+    screen.move(10, 10)
+    screen.color(130, 140, 140)
+    screen.text(textentry.heading)
+    screen.move(10, 32)
+    screen.text(textentry.txt)
+    screen.move_rel(screen.get_text_size(textentry.txt) + 1, 3)
+    screen.color(m.highlightColors.r, m.highlightColors.g, m.highlightColors.b)
+    screen.text_center("_")
+    if textentry.warn ~= nil then
+      screen.move(250, 90)
+      screen.text_right(textentry.warn)
     end
   end
 

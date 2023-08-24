@@ -10,3 +10,4 @@ config.log
 zig-cache/
 zig-out/
 lua/core/.DS_Store
+lua/.DS_Store

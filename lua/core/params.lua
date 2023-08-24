@@ -11,6 +11,7 @@ local control = require("core/params/control")
 local group = require("core/params/group")
 local binary = require("core/params/binary")
 local separator = require("core/params/separator")
+local text = require("core/params/text")
 local controlspec = require("core/controlspec")
 
 local ParamSet = {
@@ -18,6 +19,7 @@ local ParamSet = {
   tGROUP = 1,
   tCONTROL = 2,
   tBINARY = 3,
+  tTEXT = 4,
   sets = {},
 }
 
@@ -75,6 +77,8 @@ function ParamSet:add(args)
       self:add_separator(id, name)
     elseif args.type == "group" then
       self:add_group(id, name, args.n)
+    elseif args.type == "text" then
+      self:add_text(id, name, args.text, args.locked, args.check)
     else
       print("paramset.add() error: unknown type")
       return nil
@@ -173,6 +177,16 @@ end
 -- @param formatter
 function ParamSet:add_control(id, name, controlspec, formatter)
   self:add { param = control.new(id, name, controlspec, formatter) }
+end
+
+--- add text.
+-- @tparam string id (no spaces)
+-- @tparam string name (can contain spaces)
+-- @tparam string txt (can contain spaces)
+-- @tparam boolean locked (true = txt cannot be modified in params menu)
+-- @tparam function check optional function displays a message of warning or success based on txt
+function ParamSet:add_text(id, name, txt, locked, check)
+  self:add { param = text.new(id, name, txt, locked, check) }
 end
 
 --- add separator.
