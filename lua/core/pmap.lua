@@ -75,10 +75,12 @@ function pmap.clear()
 end
 
 function pmap.write()
+  local filepath = path.seamstress .. "/data/" .. seamstress.state.name
+  util.make_dir(filepath)
   local function quote(s)
     return '"' .. s:gsub('"', '\\"') .. '"'
   end
-  local filename = seamstress.state.path .. "/" .. seamstress.state.name .. ".pmap"
+  local filename = filepath .. "/" .. seamstress.state.name .. ".pmap"
   print(">> saving PMAP " .. filename)
   local fd = io.open(filename, "w+")
   io.output(fd)
@@ -99,9 +101,10 @@ function pmap.read()
   local function unquote(s)
     return s:gsub('^"', ""):gsub('"$', ""):gsub('\\"', '"')
   end
-  local filename = seamstress.state.path .. "/" .. seamstress.state.name .. ".pmap"
+  local filepath = path.seamstress .. "/data/" .. seamstress.state.name
+  local filename = filepath .. "/" .. seamstress.state.name .. ".pmap"
   local fd = io.open(filename, "r")
-  print(">> loading MIDI mapping: " .. filename)
+  print(">> searching for MIDI mapping: " .. filename)
   if fd then
     io.close(fd)
     for line in io.lines(filename) do
@@ -112,7 +115,7 @@ function pmap.read()
       end
     end
     pmap.refresh()
-    print(">> MIDI mapping loaded!")
+    print(">> MIDI mapping file found, loaded!")
   else
     print(">> MIDI mapping file not present, using defaults")
   end
