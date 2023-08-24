@@ -6,6 +6,8 @@
   reimagined for seamstress by @dndrks June 26, 2023
 ]]
 
+local keycode = require'keycodes'
+
 local mEDIT = 1
 local mMAP = 2
 local mTEXT = 3
@@ -210,7 +212,11 @@ m.key = function(char, modifiers, is_repeat, state)
       textentry.exit()
       m.mode = mEDIT
     elseif type(char) == "string" and state == 1 then
-      textentry.txt = textentry.txt .. char
+      if tab.contains(modifiers, "shift") then
+        textentry.txt = textentry.txt .. keycode.shifted[char]
+      else
+        textentry.txt = textentry.txt .. char
+      end
       if textentry.check then
         textentry.warn = textentry.check(textentry.txt)
       end
