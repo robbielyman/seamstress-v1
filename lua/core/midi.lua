@@ -480,6 +480,7 @@ _seamstress.midi = {
         if Midi.vinports[d.port].event then
           Midi.vinports[d.port].event(timestamp, bytes)
         end
+        paramsMenu.menu_midi_event(Midi.to_msg(bytes), d.port)
       end
     else
       error("no entry for midi " .. id)

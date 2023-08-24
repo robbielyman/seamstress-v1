@@ -18,6 +18,7 @@ clock = require("core/clock")
 controlspec = require("core/controlspec")
 paramset = require("core/params")
 paramsMenu = require("core/menu/params-menu")
+pmap = require("core/pmap")
 params = paramset.new()
 print = _seamstress.print
 
@@ -72,9 +73,13 @@ _startup = function(script_file)
     require(script_file)
   end
 
+  params:clear()
+  pmap.clear()
+
   clock.add_params()
   init()
   paramsMenu.init()
+  pmap.read()
   return seamstress.state.path
 end
 
