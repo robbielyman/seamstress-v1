@@ -184,7 +184,7 @@ end
 -- @tparam string name (can contain spaces)
 -- @tparam string txt (can contain spaces)
 -- @tparam boolean locked (true = txt cannot be modified in params menu)
--- @param formatter
+-- @tparam function check optional function displays a message of warning or success based on txt
 function ParamSet:add_text(id, name, txt, locked, check)
   self:add { param = text.new(id, name, txt, locked, check) }
 end

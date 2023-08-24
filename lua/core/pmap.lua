@@ -51,10 +51,12 @@ end
 
 function pmap.refresh()
   for k, v in pairs(pmap.data) do
-    table.insert(pmap.rev[v.dev][v.ch][v.cc], k)
-    local p = params:lookup_param(k)
-    for item, val in pairs(v) do
-      p.midi_mapping[item] = val
+    if params.params[k] ~= nil then
+      table.insert(pmap.rev[v.dev][v.ch][v.cc], k)
+      local p = params:lookup_param(k)
+      for item, val in pairs(v) do
+        p.midi_mapping[item] = val
+      end
     end
   end
 end
