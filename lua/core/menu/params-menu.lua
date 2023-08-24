@@ -9,8 +9,6 @@
 local mEDIT = 1
 local mMAP = 2
 
-local paramsWindow = 2
-
 local m = {
   pos = 0,
   oldpos = 0,
@@ -185,7 +183,7 @@ m.newtext = function(txt)
 end
 
 m.redraw = function()
-  screen.set(paramsWindow)
+  _seamstress.screen_set(2)
   screen.clear()
 
   if m.mode == mEDIT then
@@ -270,7 +268,7 @@ m.redraw = function()
   end
 
   screen.refresh()
-  screen.reset()
+  _seamstress.screen_set(1)
 end
 
 m.menu_midi_event = function(data, dev)

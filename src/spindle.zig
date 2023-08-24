@@ -959,7 +959,6 @@ fn screen_clear(l: *Lua) i32 {
 }
 
 /// sets which screen to draw to.
-// users should use `screen.set` instead
 // @see screen.set
 // @function screen_set
 fn screen_set(l: *Lua) i32 {
