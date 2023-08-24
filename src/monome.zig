@@ -100,8 +100,7 @@ pub const Monome = struct {
                 },
                 .Arc => _ = c.lo_message_add_int32(message, @intCast(idx)),
             }
-            var j: usize = 0;
-            while (j < 64) : (j += 1) _ = c.lo_message_add_int32(message, self.data[idx][j]);
+            inline for (0..64) |j| _ = c.lo_message_add_int32(message, self.data[idx][j]);
             switch (self.m_type) {
                 .Grid => _ = c.lo_send_message(self.addr, "/monome/grid/led/level/map", message),
                 .Arc => _ = c.lo_send_message(self.addr, "/monome/ring/map", message),
