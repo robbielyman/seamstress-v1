@@ -256,17 +256,17 @@ _seamstress.screen = {
       screen.width = x
       screen.height = y
       clock.run(function()
-          clock.sleep(0.125)
-          if screen.resized ~= nil then
-            screen.resized()
-          end
+        clock.sleep(0.125)
+        if screen.resized ~= nil then
+          screen.resized()
+        end
       end)
     else
       screen.params_width = x
       screen.params_height = y
       clock.run(function()
-          clock.sleep(0.125)
-          paramsMenu.redraw()
+        clock.sleep(0.125)
+        paramsMenu.redraw()
       end)
     end
   end,
