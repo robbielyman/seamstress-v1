@@ -68,29 +68,11 @@ pub fn send_notify() void {
     c.lo_message_free(message);
 }
 
-pub const Lo_Arg_t = enum {
-    Lo_Int32,
-    Lo_Float,
-    Lo_String,
-    Lo_Blob,
-    Lo_Int64,
-    Lo_Double,
-    Lo_Symbol,
-    Lo_Midi,
-    Lo_True,
-    Lo_False,
-    Lo_Nil,
-    Lo_Infinitum,
-    // lo_msg arg types
-};
-
-pub const Lo_Blob_t = struct { dataptr: ?*anyopaque, datasize: i32 };
-
-pub const Lo_Arg = union(Lo_Arg_t) {
+pub const Lo_Arg = union(enum) {
     Lo_Int32: i32,
     Lo_Float: f32,
     Lo_String: [:0]const u8,
-    Lo_Blob: Lo_Blob_t,
+    Lo_Blob: []const u8,
     Lo_Int64: i64,
     Lo_Double: f64,
     Lo_Symbol: [:0]const u8,
@@ -99,7 +81,6 @@ pub const Lo_Arg = union(Lo_Arg_t) {
     Lo_False: bool,
     Lo_Nil: bool,
     Lo_Infinitum: bool,
-    // Lo_Arg union
 };
 
 fn osc_receive(
@@ -114,8 +95,7 @@ fn osc_receive(
     const arg_size = @as(usize, @intCast(argc));
     var message: []Lo_Arg = allocator.alloc(Lo_Arg, arg_size) catch @panic("OOM!");
 
-    var i: usize = 0;
-    while (i < argc) : (i += 1) {
+    for (0..@intCast(argc)) |i| {
         switch (types[i]) {
             c.LO_INT32 => {
                 message[i] = Lo_Arg{ .Lo_Int32 = argv[i].*.i };
@@ -124,17 +104,19 @@ fn osc_receive(
                 message[i] = Lo_Arg{ .Lo_Float = argv[i].*.f };
             },
             c.LO_STRING => {
-                var slice = @as([*]u8, @ptrCast(&argv[i].*.s));
-                var len: usize = 0;
-                while (slice[len] != 0) : (len += 1) {}
-                message[i] = Lo_Arg{ .Lo_String = slice[0..len :0] };
+                const slice: [*:0]const u8 = @ptrCast(&argv[i].*.s);
+                const slice_copy = allocator.dupeZ(u8, std.mem.span(slice)) catch @panic("OOM!");
+                message[i] = Lo_Arg{ .Lo_String = slice_copy };
             },
             c.LO_BLOB => {
-                const arg = argv[i];
-                message[i] = Lo_Arg{ .Lo_Blob = Lo_Blob_t{
-                    .dataptr = c.lo_blob_dataptr(@as(c.lo_blob, @ptrCast(arg))),
-                    .datasize = @as(i32, @intCast(c.lo_blob_datasize(@as(c.lo_blob, @ptrCast(arg))))),
-                } };
+                const arg: c.lo_blob = @ptrCast(argv[i]);
+                const len: usize = @intCast(c.lo_blob_datasize(arg));
+                const ptr: [*]const u8 = @ptrCast(c.lo_blob_dataptr(arg));
+                var blobby = allocator.alloc(u8, len) catch @panic("OOM!");
+                @memcpy(blobby, ptr);
+                message[i] = Lo_Arg{
+                    .Lo_Blob = blobby,
+                };
             },
             c.LO_INT64 => {
                 message[i] = Lo_Arg{ .Lo_Int64 = argv[i].*.h };
@@ -143,10 +125,9 @@ fn osc_receive(
                 message[i] = Lo_Arg{ .Lo_Double = argv[i].*.d };
             },
             c.LO_SYMBOL => {
-                var slice = @as([*]u8, @ptrCast(&argv[i].*.S));
-                var len: usize = 0;
-                while (slice[len] != 0) : (len += 1) {}
-                message[i] = Lo_Arg{ .Lo_Symbol = slice[0..len :0] };
+                const slice: [*:0]const u8 = @ptrCast(&argv[i].*.S);
+                const slice_copy = allocator.dupeZ(u8, std.mem.span(slice)) catch @panic("OOM!");
+                message[i] = Lo_Arg{ .Lo_Symbol = slice_copy };
             },
             c.LO_MIDI => {
                 message[i] = Lo_Arg{ .Lo_Midi = argv[i].*.m };
@@ -169,16 +150,12 @@ fn osc_receive(
             },
         }
     }
-    const path_slice = std.mem.span(path);
-    var path_copy = allocator.allocSentinel(u8, path_slice.len, 0) catch @panic("OOM!");
-    std.mem.copyForwards(u8, path_copy, path_slice);
+    const path_copy = allocator.dupeZ(u8, std.mem.span(path)) catch @panic("OOM!");
     const source = c.lo_message_get_source(msg);
     const host = std.mem.span(c.lo_address_get_hostname(source));
-    var host_copy = allocator.allocSentinel(u8, host.len, 0) catch @panic("OOM!");
-    std.mem.copyForwards(u8, host_copy, host);
+    var host_copy = allocator.dupeZ(u8, host) catch @panic("OOM!");
     const port = std.mem.span(c.lo_address_get_port(source));
-    var port_copy = allocator.allocSentinel(u8, port.len, 0) catch @panic("OOM!");
-    std.mem.copyForwards(u8, port_copy, port);
+    var port_copy = allocator.dupeZ(u8, port) catch @panic("OOM!");
 
     const event = .{ .OSC = .{
         .msg = message,
@@ -205,21 +182,21 @@ pub fn send(
     var i: usize = 0;
     while (i < msg.len) : (i += 1) {
         switch (msg[i]) {
-            Lo_Arg_t.Lo_Int32 => |a| _ = c.lo_message_add_int32(message, a),
-            Lo_Arg_t.Lo_Float => |a| _ = c.lo_message_add_float(message, a),
-            Lo_Arg_t.Lo_String => |a| _ = c.lo_message_add_string(message, a),
-            Lo_Arg_t.Lo_Blob => |a| {
-                const blob = c.lo_blob_new(a.datasize, a.dataptr);
+            .Lo_Int32 => |a| _ = c.lo_message_add_int32(message, a),
+            .Lo_Float => |a| _ = c.lo_message_add_float(message, a),
+            .Lo_String => |a| _ = c.lo_message_add_string(message, a),
+            .Lo_Blob => |a| {
+                const blob = c.lo_blob_new(@intCast(a.len), a.ptr);
                 _ = c.lo_message_add_blob(message, blob);
             },
-            Lo_Arg_t.Lo_Int64 => |a| _ = c.lo_message_add_int64(message, a),
-            Lo_Arg_t.Lo_Double => |a| _ = c.lo_message_add_double(message, a),
-            Lo_Arg_t.Lo_Symbol => |a| _ = c.lo_message_add_symbol(message, a),
-            Lo_Arg_t.Lo_Midi => |a| _ = c.lo_message_add_midi(message, @as([*c]u8, @ptrCast(@constCast(a[0..4])))),
-            Lo_Arg_t.Lo_True => _ = c.lo_message_add_true(message),
-            Lo_Arg_t.Lo_False => _ = c.lo_message_add_false(message),
-            Lo_Arg_t.Lo_Nil => _ = c.lo_message_add_nil(message),
-            Lo_Arg_t.Lo_Infinitum => _ = c.lo_message_add_infinitum(message),
+            .Lo_Int64 => |a| _ = c.lo_message_add_int64(message, a),
+            .Lo_Double => |a| _ = c.lo_message_add_double(message, a),
+            .Lo_Symbol => |a| _ = c.lo_message_add_symbol(message, a),
+            .Lo_Midi => |a| _ = c.lo_message_add_midi(message, @as([*c]u8, @ptrCast(@constCast(a[0..4])))),
+            .Lo_True => _ = c.lo_message_add_true(message),
+            .Lo_False => _ = c.lo_message_add_false(message),
+            .Lo_Nil => _ = c.lo_message_add_nil(message),
+            .Lo_Infinitum => _ = c.lo_message_add_infinitum(message),
         }
     }
     _ = c.lo_send_message(address, path, message);

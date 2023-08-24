@@ -1285,22 +1285,24 @@ pub fn osc_event(
     defer allocator.free(path_copy);
     _ = lvm.pushString(path_copy);
     lvm.createTable(@intCast(msg.len), 0);
-    var i: usize = 0;
-    while (i < msg.len) : (i += 1) {
+    for (0..msg.len) |i| {
         switch (msg[i]) {
             .Lo_Int32 => |a| lvm.pushInteger(a),
             .Lo_Float => |a| lvm.pushNumber(a),
             .Lo_String => |a| {
                 _ = lvm.pushString(a);
+                allocator.free(a);
             },
             .Lo_Blob => |a| {
-                var ptr: [*]u8 = @ptrCast(a.dataptr.?);
-                var len: usize = 0;
-                _ = lvm.pushBytes(ptr[0..len]);
+                _ = lvm.pushBytes(a);
+                allocator.free(a);
             },
             .Lo_Int64 => |a| lvm.pushInteger(a),
             .Lo_Double => |a| lvm.pushNumber(a),
-            .Lo_Symbol => |a| _ = lvm.pushString(a),
+            .Lo_Symbol => |a| {
+                _ = lvm.pushString(a);
+                allocator.free(a);
+            },
             .Lo_Midi => |a| _ = lvm.pushBytes(&a),
             .Lo_True => |a| {
                 _ = a;
@@ -1343,9 +1345,8 @@ pub fn monome_add(dev: *monome.Monome) !void {
     };
     try push_lua_func("monome", "add");
     lvm.pushInteger(@intCast(id + 1));
-    var port_copy = try allocator.allocSentinel(u8, port.len, 0);
+    const port_copy = allocator.dupeZ(u8, port) catch @panic("OOM!");
     defer allocator.free(port_copy);
-    std.mem.copyForwards(u8, port_copy, port);
     _ = lvm.pushString(port_copy);
     _ = lvm.pushString(name);
     lvm.pushLightUserdata(dev);
@@ -1518,41 +1519,38 @@ fn dostring(l: *Lua, str: []const u8, name: [:0]const u8) !void {
 
 var save_buf: ?[]u8 = null;
 
-fn save_statement_buffer(buf: []u8) !void {
-    if (save_buf != null) {
-        allocator.free(save_buf.?);
+fn save_statement_buffer(buf: []u8) void {
+    if (save_buf) |b| {
+        allocator.free(b);
     }
-    save_buf = try allocator.alloc(u8, buf.len);
-    std.mem.copyForwards(u8, save_buf.?, buf);
+    save_buf = allocator.dupe(u8, buf) catch @panic("OOM!");
 }
 
 fn clear_statement_buffer() void {
-    if (save_buf == null) {
-        return;
+    if (save_buf) |b| {
+        allocator.free(b);
+        save_buf = null;
     }
-    allocator.free(save_buf.?);
-    save_buf = null;
-}
-fn slice_from_ptr(ptr: [*:0]const u8) [:0]const u8 {
-    var len: usize = 0;
-    while (ptr[len] != 0) : (len += 1) {}
-    return ptr[0..len :0];
 }
 
 fn message_handler(l: *Lua) i32 {
-    var allocated = false;
-    const msg = l.toString(1) catch blk: {
-        l.callMeta(1, "__tostring") catch {
-            const fmted = std.fmt.allocPrintZ(allocator, "(error object is a {s} value)", .{l.typeName(l.typeOf((1)))}) catch unreachable;
-            allocated = true;
-            break :blk fmted.ptr;
-        };
-        break :blk l.toString(1) catch unreachable;
-    };
-    const message = slice_from_ptr(msg);
-    defer if (allocated) allocator.free(message);
-    l.pop(1);
-    l.traceback(l, message, 4);
+    const t = l.typeOf(1);
+    switch (t) {
+        .string => {
+            const msg = l.toString(1) catch unreachable;
+            l.pop(1);
+            l.traceback(l, std.mem.span(msg), 6);
+        },
+        else => {
+            const msg = std.fmt.allocPrintZ(
+                allocator,
+                "(error object is a {s} value)",
+                .{l.typeName(t)},
+            ) catch @panic("OOM!");
+            l.pop(1);
+            l.traceback(l, msg, 6);
+        },
+    }
     return 1;
 }
 
@@ -1628,7 +1626,7 @@ fn statement(l: *Lua) !bool {
         const eofmark = "<eof>";
         if ((msg.len >= eofmark.len) and std.mem.eql(u8, eofmark, msg[(msg.len - eofmark.len)..msg.len])) {
             l.pop(1);
-            try save_statement_buffer(buf);
+            save_statement_buffer(buf);
             return true;
         } else {
             clear_statement_buffer();
