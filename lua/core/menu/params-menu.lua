@@ -6,7 +6,7 @@
   reimagined for seamstress by @dndrks June 26, 2023
 ]]
 
-local keycode = require'keycodes'
+local keycode = require("keycodes")
 
 local mEDIT = 1
 local mMAP = 2
