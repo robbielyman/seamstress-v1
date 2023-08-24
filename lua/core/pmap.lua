@@ -51,7 +51,7 @@ end
 
 function pmap.refresh()
   for k, v in pairs(pmap.data) do
-    if params.params[k] ~= nil then
+    if params.lookup[k] ~= nil then
       table.insert(pmap.rev[v.dev][v.ch][v.cc], k)
       local p = params:lookup_param(k)
       for item, val in pairs(v) do
