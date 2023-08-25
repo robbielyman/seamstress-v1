@@ -532,8 +532,8 @@ function LFO:add_params(id, separator, group)
         self:set("offset", x / 100)
       end)
 
-      params:add_text("lfo_scaled_" .. id, "	scaled value", "")
-      params:add_text("lfo_raw_" .. id, "	raw value", "")
+      params:add_text("lfo_scaled_" .. id, " scaled value", "")
+      params:add_text("lfo_raw_" .. id, " raw value", "")
 
       build_lfo_spec(self, id, "min")
       build_lfo_spec(self, id, "max")
