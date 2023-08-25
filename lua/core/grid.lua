@@ -165,7 +165,7 @@ _seamstress.grid = {
     local g = Grid.new(id, serial, name, dev)
     Grid.devices[id] = g
     Grid.update_devices()
-    if Grid.add ~= nill then
+    if Grid.add ~= nil then
       Grid.add(g)
     end
   end,
