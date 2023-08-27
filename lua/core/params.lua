@@ -466,12 +466,16 @@ end
 -- @tparam string filename either an absolute path, number (to read [scriptname]-[number].pset from local data folder) or nil (to read pset number specified by pset-last.txt in the data folder)
 -- @tparam boolean silent if true, do not trigger parameter actions
 function ParamSet:read(filename, silent)
-  filename = filename or seamstress.state.pset_last
+  if filename == nil then
+    paramsMenu.ps_last = seamstress.state.pset_last
+    filename = seamstress.state.pset_last
+  end
   local pset_number
   if type(filename) == "number" then
     local n = filename
     pset_number = string.format("%02d", n)
     filename = seamstress.state.data .. seamstress.state.name .. "-" .. pset_number .. ".pset"
+    paramsMenu.ps_last = n
   end
   print("pset >> read: " .. filename)
   local fd = io.open(filename, "r")
