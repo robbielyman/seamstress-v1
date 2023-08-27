@@ -23,6 +23,7 @@ textentry.enter = function(callback, default, heading, check)
   textentry.callback = callback
   textentry.check = check
   textentry.warn = check ~= nil and check(textentry.txt) or nil
+  textentry.active = true
 end
 
 textentry.exit = function()
@@ -31,6 +32,7 @@ textentry.exit = function()
   else
     textentry.callback(nil)
   end
+  textentry.active = false
 end
 
 local m = {
@@ -144,20 +146,25 @@ end
 
 m.key = function(char, modifiers, is_repeat, state)
   -- encapsulates both encoder + key interactions from norns...
-  if #modifiers == 1 and modifiers[1] == "shift" then
-    if char == "m" and state == 1 then
-      m.mode = m.mode == mEDIT and mMAP or mEDIT
-      if m.group then
-        build_sub(m.groupid)
-      else
-        build_page()
+
+  -- hotkey UI flips:
+  if not textentry.active then
+    if #modifiers == 1 and modifiers[1] == "shift" then
+      if char == "m" and state == 1 then
+        m.mode = m.mode == mEDIT and mMAP or mEDIT
+        if m.group then
+          build_sub(m.groupid)
+        else
+          build_page()
+        end
+      elseif char == "p" and state == 1 then
+        m.mode = m.mode == mEDIT and mPSET or mEDIT
+        init_pset()
       end
-    elseif char == "p" and state == 1 then
-      m.mode = m.mode == mEDIT and mPSET or mEDIT
-      init_pset()
     end
   end
 
+  -- navigation:
   if m.mode == mEDIT or m.mode == mMAP then
     local i = page[m.pos + 1]
     local t = params:t(i)
