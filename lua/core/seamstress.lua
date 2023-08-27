@@ -63,12 +63,15 @@ _startup = function(script_file)
 
   if filename then
     filename = filename .. ".lua"
+    local ps = path.seamstress
     local path, scriptname = filename:match("^(.*)/([^.]*).*$")
 
     seamstress.state.script = filename
     seamstress.state.path = path
     seamstress.state.name = scriptname
     seamstress.state.shortname = seamstress.state.name:match("([^/]+)$")
+    seamstress.state.data = ps .. "/data/" .. scriptname .. "/"
+    util.make_dir(seamstress.state.data)
 
     require(script_file)
   end
