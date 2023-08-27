@@ -431,34 +431,39 @@ function ParamSet:clear()
 end
 
 --- write to disk.
--- @tparam string name
+-- @tparam number PSET number
+-- @tparam string UI name
 function ParamSet:write(number, name)
-  local filepath = path.seamstress .. "/data/" .. seamstress.state.name
-  util.make_dir(filepath)
-  number = string.format("%02d", number)
-  local filename = filepath .. "/" .. seamstress.state.name .. "-" .. number .. ".pset"
-  local fd = io.open(filename, "w+")
-  if fd and name then
-    print("pset >> write: " .. filename)
-    io.output(fd)
-    io.write("-- " .. name .. "\n")
-    for _, param in ipairs(self.params) do
-      if
-        param.id
-        and param.save
-        and param.t ~= self.tTRIGGER
-        and param.t ~= self.tSEPARATOR
-        and param.t ~= self.tGROUP
-      then
-        io.write(string.format("%s: %s\n", quote(param.id), param:get()))
+  if number ~= nil then
+    local filepath = path.seamstress .. "/data/" .. seamstress.state.name
+    util.make_dir(filepath)
+    number = string.format("%02d", number)
+    local filename = filepath .. "/" .. seamstress.state.name .. "-" .. number .. ".pset"
+    local fd = io.open(filename, "w+")
+    if fd and name then
+      print("pset >> write: " .. filename)
+      io.output(fd)
+      io.write("-- " .. name .. "\n")
+      for _, param in ipairs(self.params) do
+        if
+          param.id
+          and param.save
+          and param.t ~= self.tTRIGGER
+          and param.t ~= self.tSEPARATOR
+          and param.t ~= self.tGROUP
+        then
+          io.write(string.format("%s: %s\n", quote(param.id), param:get()))
+        end
       end
-    end
-    io.close(fd)
-    if self.action_write ~= nil then
-      self.action_write(filename, name)
+      io.close(fd)
+      if self.action_write ~= nil then
+        self.action_write(filename, name, number)
+      end
+    else
+      print("pset: BAD FILENAME")
     end
   else
-    print("pset: BAD FILENAME")
+    print("pset: NUMBER AND NAME REQUIRED")
   end
 end
 
@@ -470,7 +475,7 @@ function ParamSet:read(filename, silent)
     paramsMenu.ps_last = seamstress.state.pset_last
     filename = seamstress.state.pset_last
   end
-  local pset_number
+  local pset_number = seamstress.state.pset_last
   if type(filename) == "number" then
     local n = filename
     pset_number = string.format("%02d", n)
@@ -508,7 +513,7 @@ function ParamSet:read(filename, silent)
       end
     end
     if self.action_read ~= nil then
-      self.action_read(filename, silent)
+      self.action_read(filename, params.name, pset_number, silent)
     end
   else
     print("pset :: " .. filename .. " not read.")
