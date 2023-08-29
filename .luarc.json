@@ -1,0 +1,4 @@
+{
+    "diagnostics.globals": ["_seamstress"],
+    "diagnostics.disable": ["lowercase-global"]
+}
