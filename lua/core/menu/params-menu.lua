@@ -11,6 +11,9 @@ local keycode = require("keycodes")
 local mEDIT = 1
 local mMAP = 2
 local mTEXT = 3
+local mPSET = 4
+local mPSETSAVE = 5
+local mPSETEDIT = 6
 
 local textentry = {}
 
@@ -20,6 +23,7 @@ textentry.enter = function(callback, default, heading, check)
   textentry.callback = callback
   textentry.check = check
   textentry.warn = check ~= nil and check(textentry.txt) or nil
+  textentry.active = true
 end
 
 textentry.exit = function()
@@ -28,6 +32,7 @@ textentry.exit = function()
   else
     textentry.callback(nil)
   end
+  textentry.active = false
 end
 
 local m = {
@@ -90,17 +95,76 @@ local function build_sub(sub)
   end
 end
 
+function init_pset()
+  print("scanning PSETs...")
+  local psets = io.popen("ls -1 " .. seamstress.state.data .. "*.pset | sort")
+  pset = {}
+  m.ps_n = 0
+  for filename in psets:lines() do
+    local n = tonumber(filename:match("(%d+).pset$"))
+    if not n then
+      n = 1
+    end
+    local name = seamstress.state.name
+    local f = io.open(filename, "r")
+    io.input(filename)
+    local line = io.read("*line")
+    if util.string_starts(line, "-- ") then
+      name = string.sub(line, 4, -1)
+    end
+    io.close(f)
+    pset[n] = { file = filename, name = name }
+    m.ps_n = math.max(n, m.ps_n)
+  end
+  psets:close()
+  m.ps_n = m.ps_n + 1
+  m.redraw()
+end
+
+local function write_pset_last(x)
+  local file = seamstress.state.data .. "pset-last.txt"
+  local f = io.open(file, "w")
+  io.output(f)
+  io.write(x)
+  io.close(f)
+  seamstress.state.pset_last = x
+end
+
+local function write_pset(name)
+  if name then
+    local i = m.ps_pos + 1
+    if name == "" then
+      name = params.name
+    end
+    params:write(i, name)
+    m.ps_last = i
+    write_pset_last(i) -- save last pset loaded
+    init_pset()
+    pmap.write() -- write parameter map too
+  end
+end
+
 m.key = function(char, modifiers, is_repeat, state)
   -- encapsulates both encoder + key interactions from norns...
-  if #modifiers == 1 and modifiers[1] == "shift" and char == "m" and state == 1 then
-    m.mode = m.mode == mEDIT and mMAP or mEDIT
-    if m.group then
-      build_sub(m.groupid)
-    else
-      build_page()
+
+  -- hotkey UI flips:
+  if not textentry.active then
+    if #modifiers == 1 and modifiers[1] == "shift" then
+      if char == "m" and state == 1 then
+        m.mode = m.mode == mEDIT and mMAP or mEDIT
+        if m.group then
+          build_sub(m.groupid)
+        else
+          build_page()
+        end
+      elseif char == "p" and state == 1 then
+        m.mode = m.mode == mEDIT and mPSET or mEDIT
+        init_pset()
+      end
     end
   end
 
+  -- navigation:
   if m.mode == mEDIT or m.mode == mMAP then
     local i = page[m.pos + 1]
     local t = params:t(i)
@@ -200,9 +264,9 @@ m.key = function(char, modifiers, is_repeat, state)
         end
       end
     end
-  elseif m.mode == mTEXT then
+  elseif m.mode == mTEXT or m.mode == mPSETSAVE then
     if char.name == "escape" and state == 1 then
-      m.mode = mEDIT
+      m.mode = m.mode == mTEXT and mEDIT or mPSET
     elseif char.name == "backspace" and state == 1 then
       textentry.txt = string.sub(textentry.txt, 0, -2)
       if textentry.check then
@@ -210,7 +274,7 @@ m.key = function(char, modifiers, is_repeat, state)
       end
     elseif char.name == "return" and state == 1 then
       textentry.exit()
-      m.mode = mEDIT
+      m.mode = m.mode == mTEXT and mEDIT or mPSET
     elseif type(char) == "string" and state == 1 then
       if tab.contains(modifiers, "shift") then
         textentry.txt = textentry.txt .. keycode.shifted[char]
@@ -220,6 +284,41 @@ m.key = function(char, modifiers, is_repeat, state)
       if textentry.check then
         textentry.warn = textentry.check(textentry.txt)
       end
+    end
+  elseif m.mode == mPSET then
+    if (char.name == "up" or char.name == "down") and state == 1 then
+      if tab.contains(modifiers, "alt") then
+        m.ps_pos = util.clamp(m.ps_pos + (char.name == "up" and -8 or 8), 0, 98)
+      else
+        m.ps_pos = util.clamp(m.ps_pos + (char.name == "up" and -1 or 1), 0, 98)
+      end
+    elseif (char.name == "left" or char.name == "right") and state == 1 then
+      m.ps_action = util.clamp(m.ps_action + (char.name == "left" and -1 or 1), 1, 3)
+    elseif char.name == "return" and state == 1 then
+      if m.ps_action == 1 then
+        m.mode = mPSETSAVE
+        local name = pset[m.ps_pos + 1] and pset[m.ps_pos + 1].name or (seamstress.state.name .. m.ps_pos + 1)
+        textentry.enter(write_pset, name, "PSET NAME: " .. (m.ps_pos + 1))
+      elseif m.ps_action == 3 then
+        if pset[m.ps_pos + 1] then
+          m.mode = mPSETEDIT
+        end
+      else
+        local i = m.ps_pos + 1
+        if pset[i] then
+          params:read(i)
+          m.ps_last = i
+          write_pset_last(i) -- save last pset loaded
+        end
+      end
+    end
+  elseif m.mode == mPSETEDIT then
+    if char.name == "return" and state == 1 then
+      m.mode = mPSET
+      params:delete(pset[m.ps_pos + 1].file, pset[m.ps_pos + 1].name, string.format("%02d", m.ps_pos + 1))
+      init_pset()
+    elseif (char.name == "escape" or char.name == "backspace") and state == 1 then
+      m.mode = mPSET
     end
   end
   m.redraw()
@@ -363,6 +462,69 @@ m.redraw = function()
       screen.move(250, 90)
       screen.text_right(textentry.warn)
     end
+  elseif m.mode == mPSET then
+    screen.color(130, 140, 140)
+    screen.move(10, 10)
+    screen.text("PARAMETERS: PSET")
+    screen.move(10, 28)
+    screen.color(m.highlightColors.r, m.highlightColors.g, m.highlightColors.b)
+    if m.ps_action ~= 1 then
+      screen.color(130, 140, 140, 100)
+    end
+    screen.text("SAVE")
+    screen.move(50, 28)
+    screen.color(m.highlightColors.r, m.highlightColors.g, m.highlightColors.b)
+    if m.ps_action ~= 2 then
+      screen.color(130, 140, 140, 100)
+    end
+    screen.text("LOAD")
+    screen.move(90, 28)
+    screen.color(m.highlightColors.r, m.highlightColors.g, m.highlightColors.b)
+    if m.ps_action ~= 3 then
+      screen.color(130, 140, 140, 100)
+    end
+    screen.text("DELETE")
+
+    for i = 1, 8 do
+      local n = i + m.ps_pos
+      local line = "-"
+      if pset[n] then
+        line = pset[n].name
+      end
+      if i == 1 then
+        screen.color(m.highlightColors.r, m.highlightColors.g, m.highlightColors.b)
+      else
+        screen.color(130, 140, 140)
+      end
+      screen.move(10, (10 * i) + 35)
+      if n < 100 then
+        local num = (n == m.ps_last) and "*" .. n or n
+        screen.text(num)
+        screen.move(30, (10 * i) + 35)
+        screen.text(line)
+      end
+    end
+  elseif m.mode == mPSETSAVE then
+    screen.move(10, 10)
+    screen.color(130, 140, 140)
+    screen.text(textentry.heading)
+    screen.move(10, 32)
+    screen.text(textentry.txt)
+    screen.move_rel(screen.get_text_size(textentry.txt) + 1, 3)
+    screen.color(m.highlightColors.r, m.highlightColors.g, m.highlightColors.b)
+    screen.text_center("_")
+    screen.color(3, 138, 255)
+    screen.move(10, 100)
+    screen.text("escape: cancel")
+    screen.move(10, 110)
+    screen.text("enter: commit")
+  elseif m.mode == mPSETEDIT then
+    screen.move(128, 54)
+    screen.color(237, 185, 94)
+    screen.text_center("ENTER: DELETE PSET '" .. pset[m.ps_pos + 1].name .. "'")
+    screen.move(128, 64)
+    screen.color(m.highlightColors.r, m.highlightColors.g, m.highlightColors.b)
+    screen.text_center("BACKSPACE / ESCAPE: CANCEL")
   end
 
   screen.refresh()

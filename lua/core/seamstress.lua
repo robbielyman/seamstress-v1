@@ -63,12 +63,34 @@ _startup = function(script_file)
 
   if filename then
     filename = filename .. ".lua"
+    local ps = path.seamstress
     local path, scriptname = filename:match("^(.*)/([^.]*).*$")
 
     seamstress.state.script = filename
     seamstress.state.path = path
     seamstress.state.name = scriptname
     seamstress.state.shortname = seamstress.state.name:match("([^/]+)$")
+    seamstress.state.data = ps .. "/data/" .. scriptname .. "/"
+    if util.file_exists(seamstress.state.data) == false then
+      print("### initializing data folder at " .. seamstress.state.data)
+      util.make_dir(seamstress.state.data)
+      if util.file_exists(seamstress.state.path .. "/data") then
+        os.execute("cp " .. seamstress.state.path .. "/data/*.pset " .. seamstress.state.data)
+        print("### copied default PSETs")
+      end
+    end
+
+    local file = seamstress.state.data .. "pset-last.txt"
+    if util.file_exists(file) then
+      local f = io.open(file, "r")
+      io.input(f)
+      local i = io.read("*line")
+      io.close(f)
+      if i then
+        print("### PSET last used: " .. i)
+        seamstress.state.pset_last = tonumber(i)
+      end
+    end
 
     require(script_file)
   end

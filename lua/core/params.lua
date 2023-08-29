@@ -430,4 +430,110 @@ function ParamSet:clear()
   self.lookup = {}
 end
 
+--- write to disk.
+-- @tparam number PSET number
+-- @tparam string UI name
+function ParamSet:write(number, name)
+  if number ~= nil then
+    local filepath = path.seamstress .. "/data/" .. seamstress.state.name
+    util.make_dir(filepath)
+    number = string.format("%02d", number)
+    local filename = filepath .. "/" .. seamstress.state.name .. "-" .. number .. ".pset"
+    local fd = io.open(filename, "w+")
+    if fd and name then
+      print("pset >> write: " .. filename)
+      io.output(fd)
+      io.write("-- " .. name .. "\n")
+      for _, param in ipairs(self.params) do
+        if
+          param.id
+          and param.save
+          and param.t ~= self.tTRIGGER
+          and param.t ~= self.tSEPARATOR
+          and param.t ~= self.tGROUP
+        then
+          io.write(string.format("%s: %s\n", quote(param.id), param:get()))
+        end
+      end
+      io.close(fd)
+      if self.action_write ~= nil then
+        self.action_write(filename, name, number)
+      end
+    else
+      print("pset: BAD FILENAME")
+    end
+  else
+    print("pset: NUMBER AND NAME REQUIRED")
+  end
+end
+
+--- read from disk.
+-- @tparam string filename either an absolute path, number (to read [scriptname]-[number].pset from local data folder) or nil (to read pset number specified by pset-last.txt in the data folder)
+-- @tparam boolean silent if true, do not trigger parameter actions
+function ParamSet:read(filename, silent)
+  if filename == nil then
+    paramsMenu.ps_last = seamstress.state.pset_last
+    filename = seamstress.state.pset_last
+  end
+  local pset_number = seamstress.state.pset_last
+  if type(filename) == "number" then
+    local n = filename
+    pset_number = string.format("%02d", n)
+    filename = seamstress.state.data .. seamstress.state.name .. "-" .. pset_number .. ".pset"
+    paramsMenu.ps_last = n
+  end
+  print("pset >> read: " .. filename)
+  local fd = io.open(filename, "r")
+  if fd then
+    io.close(fd)
+    local param_already_set = {}
+    for line in io.lines(filename) do
+      if util.string_starts(line, "--") then
+        params.name = string.sub(line, 4, -1)
+      else
+        local id, value = string.match(line, '(".-")%s*:%s*(.*)')
+
+        if id and value then
+          id = unquote(id)
+          local index = self.lookup[id]
+
+          if index and self.params[index] and not param_already_set[index] then
+            if tonumber(value) ~= nil then
+              self.params[index]:set(tonumber(value), silent)
+            elseif value == "-inf" then
+              self.params[index]:set(-math.huge, silent)
+            elseif value == "inf" then
+              self.params[index]:set(math.huge, silent)
+            elseif value then
+              self.params[index]:set(value, silent)
+            end
+            param_already_set[index] = true
+          end
+        end
+      end
+    end
+    if self.action_read ~= nil then
+      self.action_read(filename, params.name, pset_number, silent)
+    end
+  else
+    print("pset :: " .. filename .. " not read.")
+  end
+end
+
+--- delete from disk.
+-- @param filename either an absolute path, a number (for [scriptname]-[number].pset in local data folder) or nil (for default [scriptname].pset in local data folder)
+-- @tparam string name
+function ParamSet:delete(filename, name, pset_number)
+  if type(filename) == "number" then
+    local n = filename
+    pset_number = string.format("%02d", n)
+    filename = seamstress.state.data .. seamstress.state.name .. "-" .. pset_number .. ".pset"
+  end
+  print("pset >> delete: " .. filename, name, pset_number)
+  os.execute("rm " .. filename)
+  if self.action_delete ~= nil then
+    self.action_delete(filename, name, pset_number)
+  end
+end
+
 return ParamSet
