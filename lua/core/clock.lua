@@ -107,6 +107,8 @@ function clock.get_sec_per_beat()
   return 60 / bpm
 end
 
+--- sets the clock source
+-- @tparam string source "internal" or "midi"
 clock.set_source = function(source)
   if type(source) == "number" then
     _seamstress.clock_set_source(source - 1)
