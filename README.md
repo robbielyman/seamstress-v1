@@ -21,6 +21,9 @@ as well as `aarch64` (Apple silicon) macOS.
 download the appropriate file, unzip it and 
 (technically optionally) add it to your PATH.
 
+if you'd like to use [monome](https://monome.org) devices with seamstress,
+you'll need to install [serialosc](https://github.com/monome/serialosc).
+
 NB: `seamstress` expects the file structure found inside the zipped folder
 and will not work as expected if you move only the binary to a different folder.
 
@@ -67,7 +70,7 @@ this behavior can be overridden, see `seamstress -h` for details.
 
 ## docs
 
-the lua API is documented [here](https://ryleealanza.org/assets/doc/index.html).
+the lua API is documented [here](https://ryleealanza.org/assets/docs/index.html).
 to regenerate docs, you'll need [LDoc](https://github.com/lunarmodules/ldoc),
 which requires Penlight.
 with both installed, running `ldoc .` in the base directory of seamstress will
