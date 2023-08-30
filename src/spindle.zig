@@ -115,6 +115,13 @@ pub fn init(prefix: []const u8, config: []const u8, time: std.time.Timer, alloc_
 
     lvm.setGlobal("_seamstress");
 
+    const cwd = std.process.getCwdAlloc(allocator) catch @panic("OOM!");
+    defer allocator.free(cwd);
+    const lua_cwd = allocator.dupeZ(u8, cwd) catch @panic("OOM!");
+    defer allocator.free(lua_cwd);
+    _ = lvm.pushString(lua_cwd);
+    lvm.setGlobal("_pwd");
+
     const cmd = try std.fmt.allocPrint(allocator, "dofile(\"{s}\")\n", .{config});
     defer allocator.free(cmd);
     try run_code(cmd);

@@ -8,22 +8,34 @@ pub var width: [:0]const u8 = "256";
 pub var height: [:0]const u8 = "128";
 pub var watch = false;
 
-pub fn parse() !void {
+pub const CreateOptions = enum { script, project, norns_project };
+
+pub fn parse() !?CreateOptions {
     var double_dip = false;
     var args = std.process.args();
+    defer args.deinit();
     var i: u8 = 0;
-    while (args.next()) |*arg| : (i += 1) {
+    while (args.next()) |arg| : (i += 1) {
         if (i == 0) {
             continue;
         }
-        if ((arg.len != 2) or (arg.*[0] != '-')) {
+        if (i == 1) {
+            if (std.mem.eql(u8, arg, "create-script")) {
+                return .script;
+            } else if (std.mem.eql(u8, arg, "create-project")) {
+                return .project;
+            } else if (std.mem.eql(u8, arg, "create-norns-project")) {
+                return .norns_project;
+            }
+        }
+        if ((arg.len != 2) or (arg[0] != '-')) {
             if (!double_dip) {
-                script_file = arg.*;
+                script_file = arg;
                 double_dip = true;
                 continue;
             } else break;
         }
-        switch (arg.*[1]) {
+        switch (arg[1]) {
             'b' => {
                 if (args.next()) |next| {
                     remote_port = next;
@@ -70,7 +82,6 @@ pub fn parse() !void {
         }
         break;
     } else {
-        args.deinit();
         const suffix = ".lua";
         if (script_file.len >= suffix.len and
             std.mem.eql(
@@ -78,9 +89,8 @@ pub fn parse() !void {
             suffix,
             script_file[(script_file.len - suffix.len)..script_file.len],
         )) script_file = script_file[0..(script_file.len - suffix.len)];
-        return;
+        return null;
     }
-    args.deinit();
     try print_usage();
     std.process.exit(1);
 }
@@ -91,7 +101,7 @@ fn print_usage() !void {
     const stdout = bw.writer();
     try stdout.print("USAGE: seamstress [script] [args]\n\n", .{});
     try stdout.print("[script] (optional) should be the name of a lua file in CWD or ~/seamstress\n", .{});
-    try stdout.print("[args]   (optional) should be one of the following\n", .{});
+    try stdout.print("[args]   (optional) should be one or more of the following\n", .{});
     try stdout.print("-s       override user script [current {s}]\n", .{script_file});
     try stdout.print("-l       override OSC listen port [current {s}]\n", .{local_port});
     try stdout.print("-b       override OSC broadcast port [current {s}]\n", .{remote_port});

@@ -24,12 +24,12 @@ pub fn build(b: *std.Build) void {
         .install_dir = .{ .custom = "share/seamstress" },
         .install_subdir = "lua",
     });
-    const install_font = b.addInstallFileWithDir(
-        std.Build.LazyPath.relative("resources/04b03.ttf"),
-        .{ .custom = "share/seamstress" },
-        "resources/04b03.ttf",
-    );
-    b.getInstallStep().dependOn(&install_font.step);
+    const install_resources = b.addInstallDirectory(.{
+        .source_dir = .{ .path = "resources" },
+        .install_dir = .{ .custom = "share/seamstress" },
+        .install_subdir = "resources",
+    });
+    b.getInstallStep().dependOn(&install_resources.step);
     b.getInstallStep().dependOn(&install_lua_files.step);
 
     const zig_sdl = b.dependency("SDL", .{

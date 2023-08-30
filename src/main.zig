@@ -11,6 +11,7 @@ const screen = @import("screen.zig");
 const midi = @import("midi.zig");
 const socket = @import("socket.zig");
 const watcher = @import("watcher.zig");
+const create = @import("create.zig");
 
 const VERSION = .{ .major = 0, .minor = 19, .patch = 0 };
 
@@ -27,15 +28,17 @@ var allocator: std.mem.Allocator = undefined;
 pub fn main() !void {
     var go_again = true;
     timer = try std.time.Timer.start();
+    const option = try args.parse();
     var loc_buf = [_]u8{0} ** std.fs.MAX_PATH_BYTES;
     const location = try std.fs.selfExeDirPath(&loc_buf);
     const logger = std.log.scoped(.main);
-    try args.parse();
-    logfile = try std.fs.createFileAbsolute("/tmp/seamstress.log", .{});
-    defer logfile.close();
     var general_allocator = std.heap.GeneralPurposeAllocator(.{}){};
     allocator = general_allocator.allocator();
+    logfile = try std.fs.createFileAbsolute("/tmp/seamstress.log", .{});
+    defer logfile.close();
     defer _ = general_allocator.deinit();
+    if (option) |opt| try create.init(opt, allocator, location);
+    defer if (option) |_| create.deinit();
     while (go_again) {
         try print_version();
 
