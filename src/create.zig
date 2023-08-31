@@ -211,7 +211,7 @@ fn project(is_norns: bool) !void {
         defer file.close();
         const lua_files = std.fs.path.join(allocator, &.{ location, "..", "share", "seamstress", "lua" }) catch break :blk;
         defer allocator.free(lua_files);
-        const real_lua_files = std.fs.realpathAlloc(allocator, lua_files);
+        const real_lua_files = std.fs.realpathAlloc(allocator, lua_files) catch @panic("OOM!");
         defer allocator.free(real_lua_files);
         std.json.stringify(.{
             .diagnostics = .{
