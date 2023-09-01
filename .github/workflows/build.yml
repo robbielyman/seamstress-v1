@@ -12,8 +12,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-        with:
-          submodules: 'true'
       - name: build seamstress
         run: |
           bash ci/ubuntu.sh
