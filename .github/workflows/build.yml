@@ -12,9 +12,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+      - name: restore zig-cache
+        id: cache-zig-restore
+        uses: actions/cache/restore@v3
+        with:
+          path: |
+            zig-cache
+          key: ${{ runner.os }}-zig-cache
       - name: build seamstress
         run: |
           bash ci/ubuntu.sh
+      - name: save zig-cache
+        id: cache-zig-save
+        uses: actions/cache/save@v3
+        with:
+          path: |
+            zig-cache
+          key: ${{ runner.os }}-zig-cache
       - name: zip artifact
         run: |
           cd zig-out/ && tar -czvf ../seamstress-linux-x86_64-${{ github.ref_name }}.tar.gz .
@@ -28,9 +42,23 @@ jobs:
     steps:
       - uses: actions/checkout@v2
       - uses: Homebrew/actions/setup-homebrew@master
+      - name: restore zig-cache
+        id: cache-zig-restore
+        uses: actions/cache/restore@v3
+        with:
+          path: |
+            zig-cache
+          key: ${{ runner.os }}-zig-cache
       - name: build seamstress
         run: |
           bash ci/macos-11.sh
+      - name: save zig-cache
+        id: cache-zig-save
+        uses: actions/cache/save@v3
+        with:
+          path: |
+            zig-cache
+          key: ${{ runner.os }}-zig-cache
       - name: zip artifact
         run: |
           cd zig-out/ && zip -r9 ../seamstress-macos-x86_64-${{ github.ref_name }}.zip .
