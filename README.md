@@ -36,22 +36,10 @@ seamstress follows releases of zig.
 to build seamstress, install the dependencies listed above (as well as `pkg-config`) and invoke
 
 ```bash
-git submodule update --init --recursive
 zig build
 ```
 
-if you get an error about `lua.h` not being found or `SDL2_image` fails to build, try these
-```bash
-pushd lib/SDL
-zig build
-popd
-pushd lib/ziglua
-zig build
-popd
-```
-and then retry the `zig build` step above.
-
-NB: these commands build `seamstress` in Debug mode.
+NB: this command builds `seamstress` in Debug mode.
 you can change this 
 by passing `-Doptimize=ReleaseFast` or `-Doptimize=ReleaseSafe` to the build command.
 
