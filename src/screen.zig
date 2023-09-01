@@ -3,11 +3,7 @@ const events = @import("events.zig");
 const c = @cImport({
     @cInclude("SDL2/SDL.h");
     @cInclude("SDL2/SDL_ttf.h");
-    @cInclude("SDL2/SDL_error.h");
-    @cInclude("SDL2/SDL_render.h");
-    @cInclude("SDL2/SDL_surface.h");
-    @cInclude("SDL2/SDL_video.h");
-    @cInclude("SDL2_image/SDL_image.h");
+    @cInclude("SDL2/SDL_image.h");
 });
 
 var allocator: std.mem.Allocator = undefined;

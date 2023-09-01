@@ -10,14 +10,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    const t = exe.target_info.target;
-    _ = t;
     b.installArtifact(exe);
-    exe.addIncludePath(std.Build.LazyPath.relative("lib/ziglua/zig-out/include/lua"));
-    exe.addIncludePath(std.Build.LazyPath.relative("lib/SDL/zig-out/include/SDL2"));
-    exe.addIncludePath(std.Build.LazyPath.relative("lib/readline/zig-out/include/readline"));
-    exe.addIncludePath(std.Build.LazyPath.relative("lib/readline/zig-out/include"));
-    exe.addIncludePath(std.Build.LazyPath.relative("lib/liblo/zig-out/include"));
 
     const install_lua_files = b.addInstallDirectory(.{
         .source_dir = .{ .path = "lua" },
@@ -38,12 +31,7 @@ pub fn build(b: *std.Build) void {
     });
     exe.linkLibrary(zig_sdl.artifact("SDL2"));
     exe.linkLibrary(zig_sdl.artifact("SDL2_ttf"));
-
-    const zig_sdl_img = b.dependency("IMG", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    exe.linkLibrary(zig_sdl_img.artifact("SDL2_image"));
+    exe.linkLibrary(zig_sdl.artifact("SDL_image"));
 
     const zig_lua = b.dependency("Lua", .{
         .target = target,

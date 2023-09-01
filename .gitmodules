@@ -4,9 +4,6 @@
 [submodule "lib/readline"]
 	path = lib/readline
 	url = https://github.com/ryleelyman/readline
-[submodule "lib/SDL"]
-	path = lib/SDL
-	url = https://github.com/ryleelyman/SDL
 [submodule "lib/rtmidi"]
 	path = lib/rtmidi
 	url = https://github.com/ryleelyman/rtmidi
@@ -16,6 +13,6 @@
 [submodule "lib/liblo"]
 	path = lib/liblo
 	url = https://github.com/ryleelyman/liblo
-[submodule "lib/SDL_image"]
-	path = lib/SDL_image
-	url = https://github.com/ryleelyman/SDL_image
+[submodule "lib/SDL-libs"]
+	path = lib/SDL-libs
+	url = https://github.com/ryleelyman/SDL-libs

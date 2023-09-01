@@ -29,8 +29,7 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v2
-        with:
-          submodules: 'true'
+      - uses: Homebrew/actions/setup-homebrew@master
       - name: build seamstress
         run: |
           bash ci/macos-11.sh
