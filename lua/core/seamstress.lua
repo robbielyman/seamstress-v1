@@ -92,7 +92,7 @@ _startup = function(script_file)
       end
     end
 
-    require(script_file)
+    dofile(filename)
   end
 
   params:clear()
