@@ -25,12 +25,16 @@ path = {
 _old_print = print
 
 --- include
+-- inspired by norns' version
+-- norns does the lookup in the following dirs: norns.state.path, _path.code, _path.extn
 function include(file)
-  -- local dirs = {norns.state.path, _path.code, _path.extn}
   local dirs = { seamstress.state.path, path.pwd, path.seamstress }
+  -- case prefixed w/ script folder's name (equivalent to norns' _path.code)
+  if string.match(file, "^(%w+)/") == string.match(seamstress.state.path, "/(%w+)$") then
+    table.insert(dirs, 2, seamstress.state.path.."/..")
+  end
   for _, dir in ipairs(dirs) do
     local p = dir .. "/" .. file .. ".lua"
-    -- if util.file_exists(p) then
     if util.exists(p) then
       print("including " .. p)
       return dofile(p)
