@@ -18,7 +18,9 @@ jobs:
         with:
           path: |
             zig-cache
-          key: ${{ runner.os }}-zig-cache
+          key: ${{ runner.os }}-zig-cache-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-zig-cache
       - name: build seamstress
         run: |
           bash ci/ubuntu.sh
@@ -28,7 +30,7 @@ jobs:
         with:
           path: |
             zig-cache
-          key: ${{ runner.os }}-zig-cache
+          key: ${{ runner.os }}-zig-cache-${{ github.run_id }}
       - name: zip artifact
         run: |
           cd zig-out/ && tar -czvf ../seamstress-linux-x86_64-${{ github.ref_name }}.tar.gz .
@@ -48,7 +50,9 @@ jobs:
         with:
           path: |
             zig-cache
-          key: ${{ runner.os }}-zig-cache
+          key: ${{ runner.os }}-zig-cache-${{ github.run_id }}
+          restore-keys: |
+            ${{ runner.os }}-zig-cache
       - name: build seamstress
         run: |
           bash ci/macos-11.sh
@@ -58,7 +62,7 @@ jobs:
         with:
           path: |
             zig-cache
-          key: ${{ runner.os }}-zig-cache
+          key: ${{ runner.os }}-zig-cache-${{ github.run_id }}
       - name: zip artifact
         run: |
           cd zig-out/ && zip -r9 ../seamstress-macos-x86_64-${{ github.ref_name }}.zip .
