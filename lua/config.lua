@@ -31,7 +31,7 @@ function include(file)
   local dirs = { seamstress.state.path, path.pwd, path.seamstress }
   -- case prefixed w/ script folder's name (equivalent to norns' _path.code)
   if string.match(file, "^(%w+)/") == string.match(seamstress.state.path, "/(%w+)$") then
-    table.insert(dirs, 2, seamstress.state.path.."/..")
+    table.insert(dirs, 2, seamstress.state.path .. "/..")
   end
   for _, dir in ipairs(dirs) do
     local p = dir .. "/" .. file .. ".lua"
