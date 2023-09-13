@@ -68,7 +68,6 @@ function UI.Pages:redraw()
   local dot_height = util.clamp(util.round(64 / self.num_pages - 2), 1, 4)
   local dot_gap = util.round(util.linlin(1, 4, 1, 2, dot_height))
   local dots_y = util.round((64 - self.num_pages * dot_height - (self.num_pages - 1) * dot_gap) * 0.5)
-  screen.set(self.window)
   for i = 1, self.num_pages do
     if i == self.index then
       screen.color(table.unpack(self.active_color))
@@ -79,7 +78,6 @@ function UI.Pages:redraw()
     screen.rect(1, dot_height)
     dots_y = dots_y + dot_height + dot_gap
   end
-  screen.reset()
 end
 
 -------- Tabs --------
@@ -140,7 +138,6 @@ function UI.Tabs:redraw()
   local GUTTER = 14
   local WIDTH = self.window == 1 and screen.width or screen.params_width
   local col_width = (WIDTH - (MARGIN * 2) - GUTTER * (#self.titles - 1)) / #self.titles
-  screen.set(self.window)
   for i = 1, #self.titles do
     if i == self.index then
       screen.color(table.unpack(self.active_color))
@@ -151,7 +148,6 @@ function UI.Tabs:redraw()
     local str = util.trim_string_to_width(self.titles[i], col_width)
     screen.text_center(str)
   end
-  screen.reset()
 end
 
 --- Use to process tabs clicks; responds on mouse release
@@ -240,7 +236,6 @@ end
 --- Redraw List.
 -- Call when changed.
 function UI.List:redraw()
-  screen.set(self.window)
   for i = 1, #self.entries do
     if self.active and i == self.index then
       screen.color(table.unpack(self.active_color))
@@ -257,7 +252,6 @@ function UI.List:redraw()
       screen.text(entry)
     end
   end
-  screen.reset()
 end
 
 -------- ScrollingList --------
@@ -331,7 +325,6 @@ function UI.ScrollingList:redraw()
   local scroll_offset = self.index - 1 - math.max(self.index - (num_entries - 2), 0)
   scroll_offset = scroll_offset
     - util.linlin(num_entries - self.num_above_selected, num_entries, self.num_above_selected, 0, self.index - 1) -- For end of list
-  screen.set(self.window)
   for i = 1, self.num_visible do
     if self.active and self.index == i + scroll_offset then
       screen.color(table.unpack(self.active_color))
@@ -348,7 +341,6 @@ function UI.ScrollingList:redraw()
       screen.text(entry)
     end
   end
-  screen.reset()
 end
 
 -------- Message --------
@@ -388,7 +380,6 @@ end
 function UI.Message:redraw()
   local LINE_HEIGHT = 11
   local y = util.round(34 - LINE_HEIGHT * (#self.text - 1) * 0.5)
-  screen.set(self.window)
   for i = 1, #self.text do
     if self.active then
       screen.color(table.unpack(self.active_color))
@@ -399,7 +390,6 @@ function UI.Message:redraw()
     screen.text_center(self.text[i])
     y = y + 11
   end
-  screen.reset()
 end
 
 -------- Slider --------
@@ -477,7 +467,6 @@ end
 --- Redraw Slider.
 -- Call when changed.
 function UI.Slider:redraw()
-  screen.set(self.window)
   screen.move(self.x + 0.5, self.y + 0.5)
   screen.color(table.unpack(self.background_color))
 
@@ -529,7 +518,6 @@ function UI.Slider:redraw()
     screen.rect(filled_amount, self.height)
   end
 
-  screen.reset()
 end
 
 -------- Dial --------
@@ -643,7 +631,6 @@ end
 --- Redraw Dial.
 -- Call when changed.
 function UI.Dial:redraw()
-  screen.set(self.window)
   local radius = self.size * 0.5
 
   local fill_start_angle =
@@ -737,7 +724,6 @@ end
 --- Redraw PlaybackIcon.
 -- Call when changed.
 function UI.PlaybackIcon:redraw()
-  screen.set(self.window)
   if self.active then
     screen.color(table.unpack(self.active_color))
   else
