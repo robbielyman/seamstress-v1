@@ -159,7 +159,7 @@ end
 -- @param y y-coordinate
 -- @param state 1 for a press, 0 for a release
 -- @param button bitmask for which button was pressed
-function UI.tabs:click(x, y, state, button)
+function UI.Tabs:click(x, y, state, button)
   if button ~= 1 or state ~= 0 then
     return
   end
