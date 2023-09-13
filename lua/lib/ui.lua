@@ -26,13 +26,11 @@ setmetatable(UI.Pages, { __index = UI })
 -- @tparam number num_pages Total number of pages, defaults to 3.
 -- @param active_color `{r, g, b}`, defaults to `{100, 100, 100}`.
 -- @param inactive_color `{r, g, b}`, defaults to `{20, 20, 20}`.
--- @tparam integer window 1 for main window, 2 for params, defaults to 1.
 -- @treturn Pages Instance of Pages.
-function UI.Pages.new(index, num_pages, active_color, inactive_color, window)
+function UI.Pages.new(index, num_pages, active_color, inactive_color)
   local pages = {
     index = index or 1,
     num_pages = num_pages or 3,
-    window = window or 1,
     active_color = active_color or { 100, 100, 100 },
     inactive_color = inactive_color or { 20, 20, 20 },
   }
@@ -74,7 +72,7 @@ function UI.Pages:redraw()
     else
       screen.color(table.unpack(self.inactive_color))
     end
-    screen.move(self.window == 1 and screen.width - 1 or screen.params_width - 1, dots_y)
+    screen.move(screen.width - 1, dots_y)
     screen.rect(1, dot_height)
     dots_y = dots_y + dot_height + dot_gap
   end
@@ -93,13 +91,11 @@ UI.Tabs.__index = UI.Tabs
 -- @tparam {string,...} titles Table of strings for tab titles.
 -- @param active_color {r, g, b}, defaults to {255, 255, 255}.
 -- @param inactive_color {r, g, b}, defaults to {80, 80, 80}.
--- @tparam integer window 1 for main window, 2 for params, defaults to 1.
 -- @treturn Tabs Instance of Tabs.
-function UI.Tabs.new(index, titles, active_color, inactive_color, window)
+function UI.Tabs.new(index, titles, active_color, inactive_color)
   local tabs = {
     index = index or 1,
     titles = titles or {},
-    window = window or 1,
     active_color = active_color or { 255, 255, 255 },
     inactive_color = inactive_color or { 80, 80, 80 },
   }
@@ -136,7 +132,7 @@ end
 function UI.Tabs:redraw()
   local MARGIN = 8
   local GUTTER = 14
-  local WIDTH = self.window == 1 and screen.width or screen.params_width
+  local WIDTH = screen.width
   local col_width = (WIDTH - (MARGIN * 2) - GUTTER * (#self.titles - 1)) / #self.titles
   for i = 1, #self.titles do
     if i == self.index then
@@ -160,7 +156,7 @@ function UI.Tabs:click(x, y, state, button)
     return
   end
   local MARGIN = 8
-  local WIDTH = self.window == 1 and screen.width or screen.params_width
+  local WIDTH = screen.width
   if y > 14 then
     return
   end
@@ -185,9 +181,8 @@ UI.List.__index = UI.List
 -- @tparam {string,...} entries Table of strings for list entries.
 -- @param active_color {r, g, b}, defaults to {255, 255, 255}
 -- @param inactive_color {r, g, b}, defaults to {80, 80, 80}
--- @tparam integer window 1 for main window, 2 for params, defaults to 1.
 -- @treturn List Instance of List.
-function UI.List.new(x, y, index, entries, active_color, inactive_color, window)
+function UI.List.new(x, y, index, entries, active_color, inactive_color)
   local list = {
     x = x or 0,
     y = y or 0,
@@ -195,7 +190,6 @@ function UI.List.new(x, y, index, entries, active_color, inactive_color, window)
     entries = entries or {},
     text_align = "left",
     active = true,
-    window = window or 1,
     active_color = { 255, 255, 255 },
     inactive_color = { 80, 80, 80 },
   }
@@ -268,9 +262,8 @@ UI.ScrollingList.__index = UI.ScrollingList
 -- @tparam {string,...} entries Table of strings for list entries.
 -- @param active_color {r, g, b}, defaults to {255, 255, 255}.
 -- @param inactive_color {r, g, b}, defaults to {80, 80, 80}.
--- @tparam integer window 1 for main window, 2 for params, defaults to 1.
 -- @treturn ScrollingList Instance of ScrollingList.
-function UI.ScrollingList.new(x, y, index, entries, active_color, inactive_color, window)
+function UI.ScrollingList.new(x, y, index, entries, active_color, inactive_color)
   local list = {
     x = x or 0,
     y = y or 0,
@@ -280,7 +273,6 @@ function UI.ScrollingList.new(x, y, index, entries, active_color, inactive_color
     num_above_selected = 1,
     text_align = "left",
     active = true,
-    window = window or 1,
     active_color = active_color or { 255, 255, 255 },
     inactive_color = inactive_color or { 80, 80, 80 },
   }
@@ -354,15 +346,13 @@ UI.Message.__index = UI.Message
 -- @tparam [string,...] text_array Array of lines of text.
 -- @param active_color {r, g, b}, defaults to {255, 255, 255}.
 -- @param inactive_color {r, g, b}, defaults to {80, 80, 80}.
--- @tparam integer window 1 for the main window, 2 for the params window.
 -- @treturn Message Instance of Message.
-function UI.Message.new(text_array, active_color, inactive_color, window)
+function UI.Message.new(text_array, active_color, inactive_color)
   local message = {
     text = text_array or {},
     active = true,
     active_color = active_color or { 255, 255, 255 },
     inactive_color = inactive_color or { 80, 80, 80 },
-    window = window or 1,
   }
   setmetatable(UI.Message, { __index = UI })
   setmetatable(message, UI.Message)
@@ -386,7 +376,7 @@ function UI.Message:redraw()
     else
       screen.color(table.unpack(self.inactive_color))
     end
-    screen.move(self.window == 1 and screen.width / 2 or screen.params_width / 2, y)
+    screen.move(screen.width / 2, y)
     screen.text_center(self.text[i])
     y = y + 11
   end
@@ -410,9 +400,8 @@ UI.Slider.__index = UI.Slider
 -- @tparam table markers Array of marker positions.
 -- @tparam string direction the direction of the slider "up" (defult), down, left, right
 -- @param colors table of background_color, inactive_color and active_color, all {r, g, b}
--- @tparam integer window 1 for the main window, 2 for the params window.
 -- @treturn Slider Instance of Slider.
-function UI.Slider.new(x, y, width, height, value, min_value, max_value, markers, direction, colors, window)
+function UI.Slider.new(x, y, width, height, value, min_value, max_value, markers, direction, colors)
   local slider = {
     x = x or 0,
     y = y or 0,
@@ -427,7 +416,6 @@ function UI.Slider.new(x, y, width, height, value, min_value, max_value, markers
     background_color = colors.background_color or { 50, 50, 50 },
     inactive_color = colors.inactive_color or { 80, 80, 80 },
     active_color = colors.active_color or { 255, 255, 255 },
-    window = window or 1,
   }
   local acceptableDirections = { "up", "down", "left", "right" }
 
@@ -540,7 +528,6 @@ UI.Dial.__index = UI.Dial
 -- @tparam string units String to display after value text.
 -- @tparam string title String to be displayed instead of value text.
 -- @param colors table of background_color, inactive_color, and active_color, all {r, g, b}
--- @tparam integer window 1 for main window, 2 for params, defaults to 1.
 -- @treturn Dial Instance of Dial.
 function UI.Dial.new(
   x,
@@ -554,8 +541,7 @@ function UI.Dial.new(
   markers,
   units,
   title,
-  colors,
-  window
+  colors
 )
   local markers_table = markers or {}
   min_value = min_value or 0
@@ -574,7 +560,6 @@ function UI.Dial.new(
     background_color = colors.background_color or { 50, 50, 50 },
     inactive_color = colors.inactive_color or { 80, 80, 80 },
     active_color = colors.active_color or { 255, 255, 255 },
-    window = window or 1,
     _start_angle = math.pi * 0.7,
     _end_angle = math.pi * 2.3,
     _markers = {},
@@ -691,9 +676,8 @@ UI.PlaybackIcon.__index = UI.PlaybackIcon
 -- @tparam number status Status number. 1 = Play, 2 = Reverse Play, 3 = Pause, 4 = Stop. Defaults to 1.
 -- @param active_color {r, g, b}, defaults to {255, 255, 255},
 -- @param inactive_color {r, g, b}, defaults to {80, 80, 80},
--- @tparam integer window 1 for the main window, 2 for the params window
 -- @treturn PlaybackIcon Instance of PlaybackIcon.
-function UI.PlaybackIcon.new(x, y, size, status, active_color, inactive_color, window)
+function UI.PlaybackIcon.new(x, y, size, status, active_color, inactive_color)
   local playback_icon = {
     x = x or 0,
     y = y or 0,
@@ -702,7 +686,6 @@ function UI.PlaybackIcon.new(x, y, size, status, active_color, inactive_color, w
     active = true,
     active_color = active_color or { 255, 255, 255 },
     inactive_color = inactive_color or { 80, 80, 80 },
-    window = window or 1,
   }
   setmetatable(UI.PlaybackIcon, { __index = UI })
   setmetatable(playback_icon, UI.PlaybackIcon)
