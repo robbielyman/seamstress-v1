@@ -26,7 +26,6 @@ setmetatable(UI.Pages, { __index = UI })
 -- @tparam number num_pages Total number of pages, defaults to 3.
 -- @param active_color `{r, g, b}`, defaults to `{100, 100, 100}`.
 -- @param inactive_color `{r, g, b}`, defaults to `{20, 20, 20}`.
--- @tparam integer window 1 for main window, 2 for params, defaults to 1.
 -- @treturn Pages Instance of Pages.
 function UI.Pages.new(index, num_pages, active_color, inactive_color, window)
   local pages = {
@@ -68,7 +67,7 @@ function UI.Pages:redraw()
   local dot_height = util.clamp(util.round(64 / self.num_pages - 2), 1, 4)
   local dot_gap = util.round(util.linlin(1, 4, 1, 2, dot_height))
   local dots_y = util.round((64 - self.num_pages * dot_height - (self.num_pages - 1) * dot_gap) * 0.5)
-  screen.set(self.window)
+  _seamstress.screen_set(self.window)
   for i = 1, self.num_pages do
     if i == self.index then
       screen.color(table.unpack(self.active_color))
@@ -79,7 +78,7 @@ function UI.Pages:redraw()
     screen.rect(1, dot_height)
     dots_y = dots_y + dot_height + dot_gap
   end
-  screen.reset()
+  _seamstress.screen_set(1)
 end
 
 -------- Tabs --------
@@ -95,7 +94,6 @@ UI.Tabs.__index = UI.Tabs
 -- @tparam {string,...} titles Table of strings for tab titles.
 -- @param active_color {r, g, b}, defaults to {255, 255, 255}.
 -- @param inactive_color {r, g, b}, defaults to {80, 80, 80}.
--- @tparam integer window 1 for main window, 2 for params, defaults to 1.
 -- @treturn Tabs Instance of Tabs.
 function UI.Tabs.new(index, titles, active_color, inactive_color, window)
   local tabs = {
@@ -140,7 +138,7 @@ function UI.Tabs:redraw()
   local GUTTER = 14
   local WIDTH = self.window == 1 and screen.width or screen.params_width
   local col_width = (WIDTH - (MARGIN * 2) - GUTTER * (#self.titles - 1)) / #self.titles
-  screen.set(self.window)
+  _seamstress.screen_set(self.window)
   for i = 1, #self.titles do
     if i == self.index then
       screen.color(table.unpack(self.active_color))
@@ -151,7 +149,7 @@ function UI.Tabs:redraw()
     local str = util.trim_string_to_width(self.titles[i], col_width)
     screen.text_center(str)
   end
-  screen.reset()
+  _seamstress.screen_set(1)
 end
 
 --- Use to process tabs clicks; responds on mouse release
@@ -159,7 +157,7 @@ end
 -- @param y y-coordinate
 -- @param state 1 for a press, 0 for a release
 -- @param button bitmask for which button was pressed
-function UI.tabs:click(x, y, state, button)
+function UI.Tabs:click(x, y, state, button)
   if button ~= 1 or state ~= 0 then
     return
   end
@@ -189,7 +187,6 @@ UI.List.__index = UI.List
 -- @tparam {string,...} entries Table of strings for list entries.
 -- @param active_color {r, g, b}, defaults to {255, 255, 255}
 -- @param inactive_color {r, g, b}, defaults to {80, 80, 80}
--- @tparam integer window 1 for main window, 2 for params, defaults to 1.
 -- @treturn List Instance of List.
 function UI.List.new(x, y, index, entries, active_color, inactive_color, window)
   local list = {
@@ -240,7 +237,7 @@ end
 --- Redraw List.
 -- Call when changed.
 function UI.List:redraw()
-  screen.set(self.window)
+  _seamstress.screen_set(self.window)
   for i = 1, #self.entries do
     if self.active and i == self.index then
       screen.color(table.unpack(self.active_color))
@@ -257,7 +254,7 @@ function UI.List:redraw()
       screen.text(entry)
     end
   end
-  screen.reset()
+  _seamstress.screen_set(1)
 end
 
 -------- ScrollingList --------
@@ -274,7 +271,6 @@ UI.ScrollingList.__index = UI.ScrollingList
 -- @tparam {string,...} entries Table of strings for list entries.
 -- @param active_color {r, g, b}, defaults to {255, 255, 255}.
 -- @param inactive_color {r, g, b}, defaults to {80, 80, 80}.
--- @tparam integer window 1 for main window, 2 for params, defaults to 1.
 -- @treturn ScrollingList Instance of ScrollingList.
 function UI.ScrollingList.new(x, y, index, entries, active_color, inactive_color, window)
   local list = {
@@ -331,7 +327,7 @@ function UI.ScrollingList:redraw()
   local scroll_offset = self.index - 1 - math.max(self.index - (num_entries - 2), 0)
   scroll_offset = scroll_offset
     - util.linlin(num_entries - self.num_above_selected, num_entries, self.num_above_selected, 0, self.index - 1) -- For end of list
-  screen.set(self.window)
+  _seamstress.screen_set(self.window)
   for i = 1, self.num_visible do
     if self.active and self.index == i + scroll_offset then
       screen.color(table.unpack(self.active_color))
@@ -348,7 +344,7 @@ function UI.ScrollingList:redraw()
       screen.text(entry)
     end
   end
-  screen.reset()
+  _seamstress.screen_set(1)
 end
 
 -------- Message --------
@@ -362,7 +358,6 @@ UI.Message.__index = UI.Message
 -- @tparam [string,...] text_array Array of lines of text.
 -- @param active_color {r, g, b}, defaults to {255, 255, 255}.
 -- @param inactive_color {r, g, b}, defaults to {80, 80, 80}.
--- @tparam integer window 1 for the main window, 2 for the params window.
 -- @treturn Message Instance of Message.
 function UI.Message.new(text_array, active_color, inactive_color, window)
   local message = {
@@ -388,7 +383,7 @@ end
 function UI.Message:redraw()
   local LINE_HEIGHT = 11
   local y = util.round(34 - LINE_HEIGHT * (#self.text - 1) * 0.5)
-  screen.set(self.window)
+  _seamstress.screen_set(self.window)
   for i = 1, #self.text do
     if self.active then
       screen.color(table.unpack(self.active_color))
@@ -399,7 +394,7 @@ function UI.Message:redraw()
     screen.text_center(self.text[i])
     y = y + 11
   end
-  screen.reset()
+  _seamstress.screen_set(1)
 end
 
 -------- Slider --------
@@ -420,7 +415,6 @@ UI.Slider.__index = UI.Slider
 -- @tparam table markers Array of marker positions.
 -- @tparam string direction the direction of the slider "up" (defult), down, left, right
 -- @param colors table of background_color, inactive_color and active_color, all {r, g, b}
--- @tparam integer window 1 for the main window, 2 for the params window.
 -- @treturn Slider Instance of Slider.
 function UI.Slider.new(x, y, width, height, value, min_value, max_value, markers, direction, colors, window)
   local slider = {
@@ -477,7 +471,7 @@ end
 --- Redraw Slider.
 -- Call when changed.
 function UI.Slider:redraw()
-  screen.set(self.window)
+  _seamstress.screen_set(self.window)
   screen.move(self.x + 0.5, self.y + 0.5)
   screen.color(table.unpack(self.background_color))
 
@@ -529,7 +523,7 @@ function UI.Slider:redraw()
     screen.rect(filled_amount, self.height)
   end
 
-  screen.reset()
+  _seamstress.screen_set(1)
 end
 
 -------- Dial --------
@@ -552,7 +546,6 @@ UI.Dial.__index = UI.Dial
 -- @tparam string units String to display after value text.
 -- @tparam string title String to be displayed instead of value text.
 -- @param colors table of background_color, inactive_color, and active_color, all {r, g, b}
--- @tparam integer window 1 for main window, 2 for params, defaults to 1.
 -- @treturn Dial Instance of Dial.
 function UI.Dial.new(
   x,
@@ -643,7 +636,7 @@ end
 --- Redraw Dial.
 -- Call when changed.
 function UI.Dial:redraw()
-  screen.set(self.window)
+  _seamstress.screen_set(self.window)
   local radius = self.size * 0.5
 
   local fill_start_angle =
@@ -687,7 +680,7 @@ function UI.Dial:redraw()
   end
   screen.move(self.x + radius, self.y + self.size + 6)
   screen.text_center(title)
-  screen.reset()
+  _seamstress.screen_set(1)
 end
 
 -------- PlaybackIcon --------
@@ -704,7 +697,6 @@ UI.PlaybackIcon.__index = UI.PlaybackIcon
 -- @tparam number status Status number. 1 = Play, 2 = Reverse Play, 3 = Pause, 4 = Stop. Defaults to 1.
 -- @param active_color {r, g, b}, defaults to {255, 255, 255},
 -- @param inactive_color {r, g, b}, defaults to {80, 80, 80},
--- @tparam integer window 1 for the main window, 2 for the params window
 -- @treturn PlaybackIcon Instance of PlaybackIcon.
 function UI.PlaybackIcon.new(x, y, size, status, active_color, inactive_color, window)
   local playback_icon = {
@@ -737,7 +729,7 @@ end
 --- Redraw PlaybackIcon.
 -- Call when changed.
 function UI.PlaybackIcon:redraw()
-  screen.set(self.window)
+  _seamstress.screen_set(self.window)
   if self.active then
     screen.color(table.unpack(self.active_color))
   else
@@ -767,7 +759,7 @@ function UI.PlaybackIcon:redraw()
     screen.move(self.x, self.y)
     screen.rect(self.size, self.size)
   end
-  screen.reset()
+  _seamstress.screen_set(1)
 end
 
 return UI
