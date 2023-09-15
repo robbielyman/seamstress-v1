@@ -149,83 +149,78 @@ pub fn init(alloc_pointer: std.mem.Allocator) !void {
     };
     events.post(event_again);
 
+    midi_in_counter = c.rtmidi_in_create_default();
+    midi_out_counter = c.rtmidi_out_create_default();
+    try add_devices();
     thread = try std.Thread.spawn(.{}, main_loop, .{});
 }
 
-// NB: on Linux, RtMidi keeps on reanouncing registered devices
-// w/ the added `RtMidiPrefix`
-// this function allows detecting if a device name has this prefix
-// (and thus is already registered)
-fn is_prefixed(src: []const u8) bool {
-    const prefix = RtMidiPrefix ++ ":";
-    if (src.len > prefix.len and std.mem.eql(u8, prefix, src[0..prefix.len])) {
-        return true;
+fn add_devices() !void {
+    var is_active: [32]bool = undefined;
+    var i: c_uint = 0;
+    while (i < 32) : (i += 1) is_active[i] = false;
+
+    const in_count = c.rtmidi_get_port_count(midi_in_counter);
+    i = 0;
+    while (i < in_count) : (i += 1) {
+        var len: c_int = 256;
+        _ = c.rtmidi_get_port_name(midi_in_counter, i, null, &len);
+        var buf = try allocator.allocSentinel(u8, @intCast(len), 0);
+        defer allocator.free(buf);
+        _ = c.rtmidi_get_port_name(midi_in_counter, i, buf.ptr, &len);
+        const spanned = std.mem.span(buf.ptr);
+        // NB: on Linux, RtMidi keeps on reanouncing registered devices
+        // w/ the added `RtMidiPrefix`
+        // this function allows detecting if a device name has this prefix
+        // (and thus is already registered)
+        if (!std.mem.startsWith(u8, spanned, RtMidiPrefix ++ ":")) {
+            if (find(.Input, spanned)) |id| {
+                is_active[id] = true;
+            } else {
+                if (try add(.Input, i, spanned)) |id| is_active[id] = true;
+            }
+        }
     }
-    return false;
+
+    const out_count = c.rtmidi_get_port_count(midi_out_counter);
+    i = 0;
+    while (i < out_count) : (i += 1) {
+        var len: c_int = 256;
+        _ = c.rtmidi_get_port_name(midi_out_counter, i, null, &len);
+        var buf = try allocator.allocSentinel(u8, @intCast(len), 0);
+        defer allocator.free(buf);
+        _ = c.rtmidi_get_port_name(midi_out_counter, i, buf.ptr, &len);
+        const spanned = std.mem.span(buf.ptr);
+        if (!std.mem.startsWith(u8, spanned, RtMidiPrefix ++ ":")) {
+            if (find(.Output, spanned)) |id| {
+                is_active[id] = true;
+            } else {
+                if (try add(.Output, i, spanned)) |id| is_active[id] = true;
+            }
+        }
+    }
+    i = 0;
+    while (i < 32) : (i += 1) {
+        if (devices[i].connected == is_active[i]) continue;
+        if (!devices[i].connected and is_active[i]) {
+            devices[i].connected = true;
+            const event = .{
+                .MIDI_Add = .{ .dev = &devices[i] },
+            };
+            events.post(event);
+            switch (devices[i].guts) {
+                .Output => {},
+                .Input => |*g| g.thread = try std.Thread.spawn(.{}, Device.Guts.input.loop, .{&devices[i]}),
+            }
+        }
+        if (devices[i].connected and !is_active[i]) remove(i);
+    }
 }
 
 fn main_loop() !void {
-    midi_in_counter = c.rtmidi_in_create_default();
-    midi_out_counter = c.rtmidi_out_create_default();
     while (!quit) {
         std.time.sleep(std.time.ns_per_s);
-        var is_active: [32]bool = undefined;
-        var i: c_uint = 0;
-        while (i < 32) : (i += 1) is_active[i] = false;
-
-        const in_count = c.rtmidi_get_port_count(midi_in_counter);
-        i = 0;
-        while (i < in_count) : (i += 1) {
-            var len: c_int = 256;
-            _ = c.rtmidi_get_port_name(midi_in_counter, i, null, &len);
-            const usize_len = @as(usize, @intCast(len));
-            var buf = try allocator.allocSentinel(u8, usize_len, 0);
-            defer allocator.free(buf);
-            _ = c.rtmidi_get_port_name(midi_in_counter, i, buf.ptr, &len);
-            const spanned = std.mem.span(buf.ptr);
-            if (!is_prefixed(spanned)) {
-                if (find(.Input, spanned)) |id| {
-                    is_active[id] = true;
-                } else {
-                    if (try add(.Input, i, spanned)) |id| is_active[id] = true;
-                }
-            }
-        }
-
-        const out_count = c.rtmidi_get_port_count(midi_out_counter);
-        i = 0;
-        while (i < out_count) : (i += 1) {
-            var len: c_int = 256;
-            _ = c.rtmidi_get_port_name(midi_out_counter, i, null, &len);
-            const usize_len = @as(usize, @intCast(len));
-            var buf = try allocator.allocSentinel(u8, usize_len, 0);
-            defer allocator.free(buf);
-            _ = c.rtmidi_get_port_name(midi_out_counter, i, buf.ptr, &len);
-            const spanned = std.mem.span(buf.ptr);
-            if (!is_prefixed(spanned)) {
-                if (find(.Output, spanned)) |id| {
-                    is_active[id] = true;
-                } else {
-                    if (try add(.Output, i, spanned)) |id| is_active[id] = true;
-                }
-            }
-        }
-        i = 0;
-        while (i < 32) : (i += 1) {
-            if (devices[i].connected == is_active[i]) continue;
-            if (!devices[i].connected and is_active[i]) {
-                devices[i].connected = true;
-                const event = .{
-                    .MIDI_Add = .{ .dev = &devices[i] },
-                };
-                events.post(event);
-                switch (devices[i].guts) {
-                    .Output => {},
-                    .Input => |*g| g.thread = try std.Thread.spawn(.{}, Device.Guts.input.loop, .{&devices[i]}),
-                }
-            }
-            if (devices[i].connected and !is_active[i]) remove(i);
-        }
+        try add_devices();
     }
 }
 
