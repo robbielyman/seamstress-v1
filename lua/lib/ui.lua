@@ -417,6 +417,13 @@ UI.Slider.__index = UI.Slider
 -- @param colors table of background_color, inactive_color and active_color, all {r, g, b}
 -- @treturn Slider Instance of Slider.
 function UI.Slider.new(x, y, width, height, value, min_value, max_value, markers, direction, colors, window)
+  if colors == nil then
+    colors = {
+      background_color = nil,
+      inactive_color = nil,
+      active_color = nil,
+    }
+  end
   local slider = {
     x = x or 0,
     y = y or 0,
@@ -564,6 +571,13 @@ function UI.Dial.new(
 )
   local markers_table = markers or {}
   min_value = min_value or 0
+  if colors == nil then
+    colors = {
+      background_color = nil,
+      inactive_color = nil,
+      active_color = nil,
+    }
+  end
   local dial = {
     x = x or 0,
     y = y or 0,
