@@ -18,6 +18,7 @@ clock = require("core/clock")
 controlspec = require("core/controlspec")
 paramset = require("core/params")
 paramsMenu = require("core/menu/params-menu")
+_menu = paramsMenu
 pmap = require("core/pmap")
 params = paramset.new()
 print = _seamstress.print
