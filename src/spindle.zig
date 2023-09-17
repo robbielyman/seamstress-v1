@@ -55,6 +55,7 @@ pub fn init(prefix: []const u8, config: []const u8, time: std.time.Timer, alloc_
     register_seamstress("screen_pixel_rel", ziglua.wrap(screen_pixel_rel));
     register_seamstress("screen_line", ziglua.wrap(screen_line));
     register_seamstress("screen_line_rel", ziglua.wrap(screen_line_rel));
+    register_seamstress("screen_curve", ziglua.wrap(screen_curve));
     register_seamstress("screen_rect", ziglua.wrap(screen_rect));
     register_seamstress("screen_rect_fill", ziglua.wrap(screen_rect_fill));
     register_seamstress("screen_text", ziglua.wrap(screen_text));
@@ -532,6 +533,29 @@ fn screen_line_rel(l: *Lua) i32 {
     return 0;
 }
 
+/// draws a curve (cubic Bézier spline).
+// users should use `screen.curve` instead
+// @param x1 1rst handle x
+// @param y1 1rst handle y
+// @param x2 2nd handle x
+// @param y2 2nd handle y
+// @param x3 3rd destination x
+// @param y3 3rd destination y
+// @see screen.curve_to
+// @function screen_curve
+fn screen_curve(l: *Lua) i32 {
+    check_num_args(l, 6);
+    const x1 = l.checkNumber(1);
+    const y1 = l.checkNumber(2);
+    const x2 = l.checkNumber(3);
+    const y2 = l.checkNumber(4);
+    const x3 = l.checkNumber(5);
+    const y3 = l.checkNumber(6);
+    screen.curve(x1, y1, x2, y2, x3, y3);
+    l.setTop(0);
+    return 0;
+}
+
 /// draws a rectangle.
 // users should use `screen.rect` instead
 // @param w width in pixels
@@ -643,6 +667,7 @@ fn screen_circle_fill(l: *Lua) i32 {
     l.setTop(0);
     return 0;
 }
+
 
 /// draws a filled-in triangle.
 // users should use `screen.triangle` instead

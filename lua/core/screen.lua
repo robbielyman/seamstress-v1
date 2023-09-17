@@ -84,6 +84,18 @@ function screen.line_rel(bx, by)
   _seamstress.screen_line_rel(bx, by)
 end
 
+--- draws a (cubic) bezier curve.
+-- @tparam number x1 1rst handle x
+-- @tparam number y1 1rst handle y
+-- @tparam number x2 2nd handle x
+-- @tparam number y2 2nd handle y
+-- @tparam number x3 3rd destination x
+-- @tparam number y3 3rd destination y
+-- @function screen.curve
+function screen.curve(x1, y1, x2, y2, x3, y3)
+  _seamstress.screen_curve(x1, y1, x2, y2, x3, y3)
+end
+
 --- draws a rectangle.
 -- @tparam integer w width in pixels
 -- @tparam integer h height in pixels

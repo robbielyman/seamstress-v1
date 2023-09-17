@@ -371,6 +371,30 @@ pub fn line_rel(bx: c_int, by: c_int) void {
     );
 }
 
+pub fn curve(x1: f64, y1: f64, x2: f64, y2: f64, x3: f64, y3: f64) void {
+    const gui = windows[current];
+    const nb_points: usize = 1000;
+    var points = std.ArrayList(c.SDL_Point).initCapacity(allocator, nb_points) catch @panic("OOM!");
+    defer points.deinit();
+
+    const step: f64 = 1.0 / @as(f64, @floatFromInt(nb_points));
+
+    for (0..nb_points) |i| {
+        const u: f64 = step * @as(f64, @floatFromInt(i));
+        const x: i32 = @intFromFloat(std.math.pow(f64, 1 - u, 3) * @as(f64, @floatFromInt(gui.x)) + 3 * u * std.math.pow(f64, 1 - u, 2) * x1 + 3 * std.math.pow(f64, u, 2) * (1 - u) * x2 + std.math.pow(f64, u, 3) * x3);
+        const y: i32 = @intFromFloat(std.math.pow(f64, 1 - u, 3) * @as(f64, @floatFromInt(gui.y)) + 3 * u * std.math.pow(f64, 1 - u, 2) * y1 + 3 * std.math.pow(f64, u, 2) * (1 - u) * y2 + std.math.pow(f64, u, 3) * y3);
+
+        const point = c.SDL_Point{ .x = x, .y = y };
+        points.appendAssumeCapacity(point);
+    }
+
+    const slice = points.items;
+    sdl_call(
+        c.SDL_RenderDrawLines(gui.render, slice.ptr, @intCast(slice.len)),
+        "screen.curve()",
+    );
+}
+
 pub fn rect(w: i32, h: i32) void {
     const gui = windows[current];
     var r = c.SDL_Rect{ .x = gui.x, .y = gui.y, .w = w, .h = h };
