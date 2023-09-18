@@ -373,24 +373,23 @@ pub fn line_rel(bx: c_int, by: c_int) void {
 
 pub fn curve(x1: f64, y1: f64, x2: f64, y2: f64, x3: f64, y3: f64) void {
     const gui = windows[current];
-    const nb_points: usize = 1000;
-    var points = std.ArrayList(c.SDL_Point).initCapacity(allocator, nb_points) catch @panic("OOM!");
-    defer points.deinit();
+    var points = allocator.alloc(c.SDL_Point, 1000) catch @panic("OOM!");
+    defer allocator.free(points);
+    const x0: f64 = @floatFromInt(gui.x);
+    const y0: f64 = @floatFromInt(gui.y);
 
-    const step: f64 = 1.0 / @as(f64, @floatFromInt(nb_points));
+    const step: f64 = 1 / 1000;
 
-    for (0..nb_points) |i| {
+    for (0..1000) |i| {
         const u: f64 = step * @as(f64, @floatFromInt(i));
-        const x: i32 = @intFromFloat(std.math.pow(f64, 1 - u, 3) * @as(f64, @floatFromInt(gui.x)) + 3 * u * std.math.pow(f64, 1 - u, 2) * x1 + 3 * std.math.pow(f64, u, 2) * (1 - u) * x2 + std.math.pow(f64, u, 3) * x3);
-        const y: i32 = @intFromFloat(std.math.pow(f64, 1 - u, 3) * @as(f64, @floatFromInt(gui.y)) + 3 * u * std.math.pow(f64, 1 - u, 2) * y1 + 3 * std.math.pow(f64, u, 2) * (1 - u) * y2 + std.math.pow(f64, u, 3) * y3);
+        const x: i32 = @truncate((1 - u) ^ 3 * x0 + 3 * u * (1 - u) ^ 2 * x1 + 3 * u ^ 2 * (1 - u) * x2 + u ^ 3 * x3);
+        const y: i32 = @truncate((1 - u) ^ 3 * y0 + 3 * u * (1 - u) ^ 2 * y1 + 3 * u ^ 2 * (1 - u) * y2 + u ^ 3 * y3);
 
-        const point = c.SDL_Point{ .x = x, .y = y };
-        points.appendAssumeCapacity(point);
+        points[i] = .{ .x = x, .y = y };
     }
 
-    const slice = points.items;
     sdl_call(
-        c.SDL_RenderDrawLines(gui.render, slice.ptr, @intCast(slice.len)),
+        c.SDL_RenderDrawLines(gui.render, points.ptr, @intCast(points.len)),
         "screen.curve()",
     );
 }
