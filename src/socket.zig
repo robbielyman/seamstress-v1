@@ -19,7 +19,7 @@ pub fn init(alloc_pointer: std.mem.Allocator, port: u16) !void {
 pub fn deinit() void {
     listener.deinit();
     quit = true;
-    pid.join();
+    pid.detach();
 }
 
 const ReceiveError = error{
