@@ -378,12 +378,12 @@ pub fn curve(x1: f64, y1: f64, x2: f64, y2: f64, x3: f64, y3: f64) void {
     const x0: f64 = @floatFromInt(gui.x);
     const y0: f64 = @floatFromInt(gui.y);
 
-    const step: f64 = 1 / 1000;
+    const step: f64 = 1.0 / 1000.0;
 
     for (0..1000) |i| {
         const u: f64 = step * @as(f64, @floatFromInt(i));
-        const x: i32 = @truncate((1 - u) ^ 3 * x0 + 3 * u * (1 - u) ^ 2 * x1 + 3 * u ^ 2 * (1 - u) * x2 + u ^ 3 * x3);
-        const y: i32 = @truncate((1 - u) ^ 3 * y0 + 3 * u * (1 - u) ^ 2 * y1 + 3 * u ^ 2 * (1 - u) * y2 + u ^ 3 * y3);
+        const x: i32 = @intFromFloat((1 - u) * (1 - u) * (1 - u) * x0 + 3 * u * (1 - u) * (1 - u) * x1 + 3 * u * u * (1 - u) * x2 + u * u * u * x3);
+        const y: i32 = @intFromFloat((1 - u) * (1 - u) * (1 - u) * y0 + 3 * u * (1 - u) * (1 - u) * y1 + 3 * u * u * (1 - u) * y2 + u * u * u * y3);
 
         points[i] = .{ .x = x, .y = y };
     }
