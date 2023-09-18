@@ -517,7 +517,7 @@ pub fn arc(radius: i32, theta_1: f64, theta_2: f64) void {
 }
 
 pub fn circle(radius: i32) void {
-    const perimeter_estimate: usize = @intFromFloat(2 * std.math.tau * @as(f64, @floatFromInt(radius)));
+    const perimeter_estimate: usize = @intFromFloat(2 * std.math.tau * @as(f64, @floatFromInt(radius)) + 8);
     const gui = windows[current];
     var points = std.ArrayList(c.SDL_Point).initCapacity(allocator, perimeter_estimate) catch @panic("OOM!");
     defer points.deinit();
