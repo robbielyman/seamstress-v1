@@ -100,6 +100,7 @@ function pmap.write()
 end
 
 function pmap.read()
+  if not seamstress.state.name then return end
   local function unquote(s)
     return s:gsub('^"', ""):gsub('"$', ""):gsub('\\"', '"')
   end
