@@ -58,7 +58,7 @@ this behavior can be overridden, see `seamstress -h` for details.
 
 ## docs
 
-the lua API is documented [here](https://ryleealanza.org/assets/docs/index.html).
+the lua API is documented [here](https://ryleealanza.org/docs/index.html).
 to regenerate docs, you'll need [LDoc](https://github.com/lunarmodules/ldoc),
 which requires Penlight.
 with both installed, running `ldoc .` in the base directory of seamstress will
