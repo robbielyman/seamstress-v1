@@ -103,7 +103,9 @@ _startup = function(script_file)
   init()
   paramsMenu.init()
   pmap.read()
-  return seamstress.state.path .. "/" .. script_file .. ".lua"
+  if seamstress.state.path then
+    return seamstress.state.path .. "/" .. script_file .. ".lua"
+  end
 end
 
 _seamstress.cleanup = function()
