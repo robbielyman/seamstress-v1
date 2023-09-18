@@ -371,6 +371,29 @@ pub fn line_rel(bx: c_int, by: c_int) void {
     );
 }
 
+pub fn curve(x1: f64, y1: f64, x2: f64, y2: f64, x3: f64, y3: f64) void {
+    const gui = windows[current];
+    var points = allocator.alloc(c.SDL_Point, 1000) catch @panic("OOM!");
+    defer allocator.free(points);
+    const x0: f64 = @floatFromInt(gui.x);
+    const y0: f64 = @floatFromInt(gui.y);
+
+    const step: f64 = 1.0 / 1000.0;
+
+    for (0..1000) |i| {
+        const u: f64 = step * @as(f64, @floatFromInt(i));
+        const x: i32 = @intFromFloat((1 - u) * (1 - u) * (1 - u) * x0 + 3 * u * (1 - u) * (1 - u) * x1 + 3 * u * u * (1 - u) * x2 + u * u * u * x3);
+        const y: i32 = @intFromFloat((1 - u) * (1 - u) * (1 - u) * y0 + 3 * u * (1 - u) * (1 - u) * y1 + 3 * u * u * (1 - u) * y2 + u * u * u * y3);
+
+        points[i] = .{ .x = x, .y = y };
+    }
+
+    sdl_call(
+        c.SDL_RenderDrawLines(gui.render, points.ptr, @intCast(points.len)),
+        "screen.curve()",
+    );
+}
+
 pub fn rect(w: i32, h: i32) void {
     const gui = windows[current];
     var r = c.SDL_Rect{ .x = gui.x, .y = gui.y, .w = w, .h = h };
