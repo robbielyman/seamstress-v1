@@ -13,7 +13,7 @@ const socket = @import("socket.zig");
 const watcher = @import("watcher.zig");
 const create = @import("create.zig");
 
-const VERSION = .{ .major = 0, .minor = 21, .patch = 0 };
+const VERSION = .{ .major = 0, .minor = 21, .patch = 1 };
 
 pub const std_options = struct {
     pub const log_level = .info;
