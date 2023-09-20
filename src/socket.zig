@@ -17,9 +17,9 @@ pub fn init(alloc_pointer: std.mem.Allocator, port: u16) !void {
 }
 
 pub fn deinit() void {
-    listener.deinit();
     quit = true;
-    pid.detach();
+    pid.join();
+    listener.deinit();
 }
 
 const ReceiveError = error{
@@ -51,6 +51,15 @@ fn receive(stream: *std.net.Stream) ![:0]const u8 {
 
 pub fn loop() !void {
     while (!quit) {
+        var fds: [1]std.os.pollfd = .{
+            .{
+                .fd = listener.sockfd.?,
+                .events = std.os.POLL.IN,
+                .revents = 0,
+            },
+        };
+        const ready = try std.os.poll(&fds, 1000);
+        if (ready == 0) continue;
         const connection = listener.accept() catch |err| {
             logger.err("connection error: {}", .{err});
             continue;

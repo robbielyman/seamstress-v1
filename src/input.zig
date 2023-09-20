@@ -21,7 +21,7 @@ pub fn init(allocator_pointer: std.mem.Allocator) !void {
         readline = false;
         pid = try std.Thread.spawn(.{}, bare_input_run, .{});
     } else {
-        pid = try std.Thread.spawn(.{}, input_run, .{});
+        try input_run();
     }
 }
 
@@ -29,8 +29,19 @@ pub fn deinit() void {
     quit = true;
     const newstdin = std.os.dup(std.io.getStdIn().handle) catch unreachable;
     std.io.getStdIn().close();
-    pid.join();
+    pid.detach();
+    if (readline) write_history();
     std.os.dup2(newstdin, 0) catch unreachable;
+}
+
+fn write_history() void {
+    const home = std.process.getEnvVarOwned(allocator, "HOME") catch null;
+    if (home) |h| {
+        const history_file = std.fs.path.joinZ(allocator, &.{ h, "seamstress_history" }) catch return;
+        _ = c.write_history(history_file.ptr);
+        _ = c.history_truncate_file(history_file.ptr, 500);
+        allocator.free(history_file);
+    }
 }
 
 fn input_run() !void {
@@ -39,21 +50,22 @@ fn input_run() !void {
     defer _ = c.rl_reset_terminal(null);
     c.using_history();
     c.stifle_history(500);
-    const home = std.os.getenv("HOME");
+    const home = std.process.getEnvVarOwned(allocator, "HOME") catch home: {
+        logger.warn("unable to capture $HOME, history will not be saved!", .{});
+        break :home null;
+    };
     var history_file: [:0]u8 = undefined;
     if (home) |h| {
         history_file = try std.fs.path.joinZ(allocator, &.{ h, "seamstress_history" });
         const file = try std.fs.createFileAbsolute(history_file, .{ .read = true, .truncate = false });
         file.close();
         _ = c.read_history(history_file.ptr);
-    } else {
-        logger.warn("unable to capture $HOME, history will not be saved!", .{});
     }
-    defer if (home) |_| {
-        _ = c.write_history(history_file.ptr);
-        _ = c.history_truncate_file(history_file.ptr, 500);
-        allocator.free(history_file);
-    };
+    allocator.free(history_file);
+    pid = try std.Thread.spawn(.{}, inner, .{});
+}
+
+fn inner() !void {
     while (!quit) {
         var c_line = c.readline("> ") orelse {
             quit = true;
