@@ -211,28 +211,29 @@ m.key = function(char, modifiers, is_repeat, state)
       if params.count > 0 then
         local d = char.name == "left" and -1 or 1
         if t == params.tBINARY then
-          params:delta(i, 1)
           if params:lookup_param(i).behavior == "trigger" then
             if is_repeat == false then
+              params:delta(i, 1)
               m.triggered[i] = 2
             end
+          elseif params:lookup_param(i).behavior == "toggle" then
+            if is_repeat == false then
+              params:delta(i, 1)
+              m.on[i] = params:get(i)
+            end
           else
+            params:delta(i, 1)
             m.on[i] = params:get(i)
           end
-        elseif t == params.tTRIGGER then
-          params:set(i)
-          m.triggered[i] = 2
         else
           local dx = m.fine and (d / 20) or (m.coarse and d * 10 or d)
           params:delta(i, dx)
         end
       end
     elseif (char.name == "right" or char.name == "left") and state == 0 then
-      if t == params.tBINARY then
+      if t == params.tBINARY and params:lookup_param(i).behavior == "momentary" then
         params:delta(i, 0)
-        if params:lookup_param(i).behavior ~= "trigger" then
-          m.on[i] = params:get(i)
-        end
+        m.on[i] = params:get(i)
       end
     elseif char.name == "return" then
       if state == 1 then
@@ -482,18 +483,6 @@ local function draw_binary(param_name, p)
   screen.move_rel(127, 2)
   local fill = m.on[p] or m.triggered[p]
   if fill and fill > 0 then
-    screen.rect_fill(3, 3)
-  end
-  screen.move_rel(-127, -2)
-end
-
-local function draw_trigger(param_name, p)
-  if screen.get_text_size(param_name) > 100 then
-    param_name = util.trim_string_to_width(param_name, 100)
-  end
-  screen.text(param_name)
-  screen.move_rel(127, 2)
-  if m.triggered[p] and m.triggered[p] > 0 then
     screen.rect_fill(3, 3)
   end
   screen.move_rel(-127, -2)
