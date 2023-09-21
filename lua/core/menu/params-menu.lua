@@ -10,10 +10,11 @@ local keycode = require("keycodes")
 
 local mEDIT = 1
 local mMAP = 2
-local mTEXT = 3
-local mPSET = 4
-local mPSETSAVE = 5
-local mPSETEDIT = 6
+local mMAPEDIT = 3
+local mTEXT = 4
+local mPSET = 5
+local mPSETSAVE = 6
+local mPSETEDIT = 7
 
 local textentry = {}
 
@@ -44,6 +45,7 @@ local m = {
   mode = mEDIT,
   mode_pos = 1,
   map = false,
+  map_pos = 1,
   midi_learn = { pos = 0, state = false },
   dev = 1,
   ch = 1,
@@ -151,6 +153,9 @@ m.key = function(char, modifiers, is_repeat, state)
   if not textentry.active then
     if #modifiers == 1 and modifiers[1] == "shift" then
       if char == "m" and state == 1 then
+        if m.mode == mMAPEDIT then
+          pmap.write()
+        end
         m.mode = m.mode == mEDIT and mMAP or mEDIT
         if m.group then
           build_sub(m.groupid)
@@ -161,6 +166,14 @@ m.key = function(char, modifiers, is_repeat, state)
         m.mode = m.mode == mEDIT and mPSET or mEDIT
         init_pset()
       end
+    end
+  end
+
+  local function nav_mapping(p)
+    if params:lookup_param(p).midi_mapping.dev ~= nil and params:get_allow_pmap(p) then
+      return true
+    else
+      return false
     end
   end
 
@@ -183,13 +196,11 @@ m.key = function(char, modifiers, is_repeat, state)
           end
         until params:t(page[i]) == params.tSEPARATOR or i == 1
         m.pos = i - 1
-        m.midi_learn.pos = m.pos
       else
         -- delta 1
         local d = char.name == "up" and -1 or 1
         local prev = m.pos
         m.pos = util.clamp(m.pos + d, 0, #page - 1)
-        m.midi_learn.pos = m.pos
         m.midi_learn.state = false
         if m.pos ~= prev then
           m.redraw()
@@ -235,15 +246,18 @@ m.key = function(char, modifiers, is_repeat, state)
           local n = params:get_id(i)
           local pm = params:lookup_param(n).midi_mapping
 
-          m.midi_learn.pos = m.pos
           if pm.dev == nil then
             m.midi_learn.state = not m.midi_learn.state
             if m.midi_learn.state then
               pmap.new(n)
               pm = params:lookup_param(n).midi_mapping
+            else
+              -- don't save mapping if no device is actually assigned:
+              pmap.data[n] = nil
             end
           else
             m.midi_learn.state = false
+            m.mode = mMAPEDIT
           end
         end
       end
@@ -263,6 +277,90 @@ m.key = function(char, modifiers, is_repeat, state)
           m.pos = m.oldpos
         end
       end
+    end
+  elseif m.mode == mMAPEDIT then
+    local p = page[m.pos + 1]
+    if char.name == "backspace" then
+      m.mode = mMAP
+      pmap.write()
+    elseif (char.name == "left" or char.name == "right") and state == 1 and nav_mapping(p) then
+      local d = char.name == "left" and -1 or 1
+      m.map_pos = util.wrap(m.map_pos + d, 1, 9)
+      m.redraw()
+    elseif (char.name == "up" or char.name == "down") and state == 1 and nav_mapping(p) then
+      local d = char.name == "up" and 1 or -1
+      local n = params:get_id(p)
+      local name = params:get_name(p)
+      local t = params:t(p)
+      local pm = params:lookup_param(n).midi_mapping
+
+      d = m.fine and (d / 20) or (m.coarse and d * 10 or d)
+
+      if m.map_pos == 1 then
+        pm.cc = util.clamp(pm.cc + d, 0, 127)
+        pmap.data[n].cc = pm.cc
+      elseif m.map_pos == 2 then
+        pm.ch = util.clamp(pm.ch + d, 1, 16)
+        pmap.data[n].ch = pm.ch
+      elseif m.map_pos == 3 then
+        pm.dev = util.clamp(pm.dev + d, 1, #midi.vinports)
+        pmap.data[n].dev = pm.dev
+      elseif m.map_pos == 4 or m.map_pos == 5 then
+        local param = params:lookup_param(n)
+        local min = 0
+        local max = 1
+        if t == params.tCONTROL or t == params.tTAPER then
+          d = d * param:get_delta()
+          if m.fine then
+            d = d / 20
+          end
+        elseif t == params.tNUMBER or t == params.tOPTION or t == params.tBINARY then
+          local r = param:get_range()
+          min = r[1]
+          max = r[2]
+        end
+        if m.map_pos == 4 then
+          pm.out_lo = util.clamp(pm.out_lo + d, min, max)
+          pmap.data[n].out_lo = pm.out_lo
+        elseif m.map_pos == 5 then
+          pm.out_hi = util.clamp(pm.out_hi + d, min, max)
+          pmap.data[n].out_hi = pm.out_hi
+        end
+      elseif m.map_pos == 6 then
+        pm.in_lo = util.clamp(pm.in_lo + d, 0, pm.in_hi)
+        pm.value = util.clamp(pm.value, pm.in_lo, pm.in_hi)
+        pmap.data[n].in_lo = pm.in_lo
+        pmap.data[n].value = pm.value
+      elseif m.map_pos == 7 then
+        pm.in_hi = util.clamp(pm.in_hi + d, pm.in_lo, 127)
+        pm.value = util.clamp(pm.value, pm.in_lo, pm.in_hi)
+        pmap.data[n].in_hi = pm.in_hi
+        pmap.data[n].value = pm.value
+      elseif m.map_pos == 8 then
+        if d > 0 then
+          pm.accum = true
+        else
+          pm.accum = false
+        end
+        pmap.data[n].accum = pm.accum
+      elseif m.map_pos == 9 then
+        if d > 0 then
+          pm.echo = true
+        else
+          pm.echo = false
+        end
+        pmap.data[n].echo = pm.echo
+      end
+    elseif char.name == "rshift" then
+      m.fine = state == 1
+    elseif char.name == "ralt" then
+      m.coarse = state == 1
+    elseif char.name == "tab" and state == 1 then
+      local delta = 1
+      if tab.contains(modifiers, "shift") then
+        delta = -1
+      end
+      m.pos = util.clamp(m.pos + delta, 0, #page - 1)
     end
   elseif m.mode == mTEXT or m.mode == mPSETSAVE then
     if char.name == "escape" and state == 1 then
@@ -444,6 +542,113 @@ m.redraw = function()
         end
       end
     end
+  elseif m.mode == mMAPEDIT then
+    screen.move(10, 10)
+    screen.color(130, 140, 140, 255)
+    screen.text("PARAMETERS: MAPPING EDIT")
+
+    local p = page[m.pos + 1]
+    local n = params:get_id(p)
+    local name = params:get_name(p)
+    local t = params:t(p)
+    local pm = params:lookup_param(n).midi_mapping
+
+    if params:get_allow_pmap(p) and pm.dev ~= nil then
+      local out_lo = pm.out_lo
+      local out_hi = pm.out_hi
+
+      if t == params.tCONTROL or t == params.tTAPER then
+        local param = params:lookup_param(n)
+        out_lo = util.round(param:map_value(pm.out_lo), 0.01)
+        out_hi = util.round(param:map_value(pm.out_hi), 0.01)
+      end
+
+      local function hl(x)
+        if m.map_pos == x then
+          screen.color(3, 138, 255)
+        else
+          screen.color(130, 140, 140)
+        end
+      end
+      screen.move(10, 25)
+      screen.text("target: '" .. name .. "' / " .. n)
+      screen.move(10, 35)
+      screen.text("current value: " .. params:string(p))
+
+      screen.color(68, 68, 68)
+      screen.move(10, 52)
+      screen.text("cc")
+      screen.move_rel(28, 0)
+      hl(1)
+      screen.text_right(pm.cc)
+
+      screen.color(68, 68, 68)
+      screen.move_rel(10, 0)
+      screen.text("ch")
+      screen.move_rel(28, 0)
+      hl(2)
+      screen.text_right(pm.ch)
+
+      screen.color(68, 68, 68)
+      screen.move(104, 52)
+      screen.text("dev")
+      screen.move(134, 52)
+      hl(3)
+
+      local long_name = midi.vinports[pm.dev].name
+      local short_name = string.len(long_name) > 35 and util.acronym(long_name) or long_name
+
+      screen.text(tostring(pm.dev) .. ": " .. short_name)
+
+      screen.color(68, 68, 68)
+      screen.move(10, 62)
+      screen.text("out")
+
+      screen.move(60, 62)
+      hl(4)
+      screen.text_right(out_lo)
+      screen.move_rel(40, 0)
+      hl(5)
+      screen.text_right(out_hi)
+
+      screen.color(68, 68, 68)
+      screen.move(111, 62)
+      screen.text("in")
+
+      screen.move(141, 62)
+      hl(6)
+      screen.text_right(pm.in_lo)
+
+      screen.color(68, 68, 68)
+      screen.move(163, 62)
+      hl(7)
+      screen.text_right(pm.in_hi)
+
+      screen.color(68, 68, 68)
+      screen.move(10, 72)
+      screen.text("accum")
+      screen.move_rel(50, 0)
+      hl(8)
+      screen.text_right(pm.accum and "yes" or "no")
+
+      screen.color(68, 68, 68)
+      screen.move_rel(40, 0)
+      screen.text("echo")
+      screen.move_rel(50, 0)
+      hl(9)
+      screen.text_right(pm.echo and "yes" or "no")
+    elseif not params:get_allow_pmap(p) then
+      screen.move(10, 25)
+      screen.color(182, 66, 38)
+      screen.text("'" .. name .. "' is not MIDI-mappable")
+    elseif pm.dev == nil then
+      screen.move(10, 25)
+      screen.color(237, 185, 94)
+      screen.text("'" .. name .. "' is not mapped")
+    end
+    screen.move(10, 120)
+    screen.color(m.highlightColors.r, m.highlightColors.g, m.highlightColors.b)
+    screen.text("[TAB]: next param / [SHIFT + TAB]: previous param")
   elseif m.mode == mTEXT then
     screen.color(3, 138, 255)
     screen.move(10, 100)

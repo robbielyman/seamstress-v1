@@ -395,6 +395,7 @@ function Midi.update_connected_state()
       Midi.vports[i].connected = false
     end
   end
+  pmap.refresh()
 end
 
 _seamstress.midi = {

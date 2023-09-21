@@ -145,13 +145,14 @@ end
 -- @tparam string name (can contain spaces)
 -- @param options
 -- @param default
-function ParamSet:add_option(id, name, options, default)
+-- @param allow_pmap
+function ParamSet:add_option(id, name, options, default, allow_pmap)
   -- self:add { param=option.new(id, name, options, default) }
   local cs = controlspec.new(1, #options, "lin", 1, default, units, 1 / (#options - 1))
   local frm = function(param)
     return options[(type(param) == "table" and param:get() or param)]
   end
-  self:add { param = control.new(id, name, cs, frm) }
+  self:add { param = control.new(id, name, cs, frm, allow_pmap) }
 end
 
 --- add binary.
@@ -317,6 +318,20 @@ end
 function ParamSet:delta(index, d)
   local param = self:lookup_param(index)
   param:delta(d)
+  if pmap.data[param.id] ~= nil then
+    local midi_prm = pmap.data[param.id]
+    local val
+    if param.t == self.tCONTROL then
+      val = param:get_raw()
+    else
+      val = param:get()
+    end
+    midi_prm.value = util.round(util.linlin(midi_prm.out_lo, midi_prm.out_hi, midi_prm.in_lo, midi_prm.in_hi, val))
+    if midi_prm.echo then
+      local port = pmap.data[param.id].dev
+      midi.voutports[port]:cc(midi_prm.cc, midi_prm.value, midi_prm.ch)
+    end
+  end
 end
 
 --- set action.

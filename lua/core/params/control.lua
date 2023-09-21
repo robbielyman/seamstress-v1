@@ -94,6 +94,14 @@ function Control:set_raw(value, silent)
       self:bang()
     end
   end
+  if pmap.data[self.id] ~= nil then
+    local midi_prm = pmap.data[self.id]
+    midi_prm.value = util.round(util.linlin(midi_prm.out_lo, midi_prm.out_hi, midi_prm.in_lo, midi_prm.in_hi, self.raw))
+    if midi_prm.echo then
+      local port = pmap.data[self.id].dev
+      midi.voutports[port]:cc(midi_prm.cc, midi_prm.value, midi_prm.ch)
+    end
+  end
 end
 
 --- get_delta.
