@@ -17,13 +17,12 @@ const Fabric = struct {
     lock: std.Thread.Mutex,
     tick: u64,
     ticks_since_start: u64,
-    quit: bool = false,
+    quit: bool,
     fn init(self: *Fabric) !void {
+        self.ticks_since_start = 0;
+        self.quit = false;
         self.threads = try allocator.alloc(Clock, 100);
-        var i: u8 = 0;
-        while (i < 100) : (i += 1) {
-            self.threads[i] = .{};
-        }
+        @memset(self.threads, .{});
         set_tempo(120);
         self.lock = .{};
         self.clock = try std.Thread.spawn(.{}, loop, .{self});
@@ -42,16 +41,14 @@ const Fabric = struct {
         }
     }
     fn do_tick(self: *Fabric) void {
-        var i: u8 = 0;
         self.lock.lock();
-        while (i < 100) : (i += 1) {
-            if (!self.threads[i].inactive) {
-                self.threads[i].delta -= self.tick;
-                if (self.threads[i].delta <= 0) {
-                    self.threads[i].delta = 0;
-                    self.threads[i].inactive = true;
-                    events.post(.{ .Clock_Resume = .{ .id = i } });
-                }
+        for (self.threads, 0..) |thread, i| {
+            if (thread.inactive) continue;
+            thread.delta -= self.tick;
+            if (thread.delta) {
+                thread.delta = 0;
+                thread.inactive = true;
+                events.post(.{ .Clock_Resume = .{ .id = i, }});
             }
         }
         self.lock.unlock();
@@ -70,6 +67,7 @@ pub fn init(alloc_pointer: std.mem.Allocator) !void {
 
 pub fn deinit() void {
     fabric.deinit();
+    fabric.* = undefined;
 }
 
 pub fn set_tempo(bpm: f64) void {
