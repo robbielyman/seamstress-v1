@@ -14,13 +14,11 @@ Midi.__index = Midi
 
 local vport = require("vport")
 
-Midi.inputs = {}
-Midi.vinports = {}
-Midi.outputs = {}
-Midi.voutports = {}
+Midi.devices = {}
+Midi.vports = {}
 
-for i = 1, 16 do
-  Midi.voutports[i] = {
+for i = 1, 32 do
+  Midi.vports[i] = {
     name = "none",
     device = nil,
     connected = false,
@@ -44,57 +42,35 @@ for i = 1, 16 do
     song_position = vport.wrap("song_position"),
     song_select = vport.wrap("song_select"),
   }
-  Midi.vinports[i] = {
-    name = "none",
-    device = nil,
-    connected = false,
-    event = nil,
-  }
 end
 
-function Midi.new(name, is_input, id, dev)
+function Midi.new(name, id, dev)
   local d = setmetatable({}, Midi)
   d.id = id
   d.name = name
   d.remove = nil
   d.port = nil
   d.dev = dev
-  d.is_input = is_input
-  local connected = {}
-  if is_input then
-    d.event = nil
-    for i = 1, 16 do
-      if Midi.vinports[i].name == name then
-        return d
-      end
-    end
-    for i = 1, 16 do
-      if Midi.vinports[i].name == "none" then
-        Midi.vinports[i].name = name
-        break
-      end
-    end
-  else
-    for i = 1, 16 do
-      if Midi.voutports[i].name == name then
-        return d
-      end
-    end
-    for i = 1, 16 do
-      if Midi.voutports[i].name == "none" then
-        Midi.voutports[i].name = name
-        break
-      end
+  d.event = nil
+  for i = 1, 32 do
+    if Midi.vports[i].name == name then
+      return d
     end
   end
+  for i = 1, 32 do
+    if Midi.vports[i].name == "none" then
+      Midi.vports[i].name = d.name
+      break
+    end
+  end
+
   return d
 end
 
 --- callback executed when midi device is added
 -- @tparam dev midi midi device
--- @tparam bool is_input true if input, false if output
 -- @function midi.add
-function Midi.add(dev, is_input) end
+function Midi.add(dev) end
 
 --- callback executed when midi device is removed
 -- @tparam dev midi midi device
@@ -106,10 +82,6 @@ function Midi.remove(dev) end
 -- @tparam table data to send
 -- @function midi:send
 function Midi:send(data)
-  if self.is_input then
-    error("cannot send from input!")
-    return
-  end
   if data.type then
     local d = Midi.to_data(data)
     _seamstress.midi_write(self.dev, d)
@@ -397,27 +369,17 @@ end
 -- update devices.
 function Midi.update_devices()
   -- reset vports for existing devices
-  for _, device in pairs(Midi.inputs) do
-    device.port = nil
-  end
-  for _, device in pairs(Midi.outputs) do
+  for _, device in pairs(Midi.devices) do
     device.port = nil
   end
 
   -- connect available devices to vports
-  for i = 1, 16 do
-    Midi.vinports[i].device = nil
-    Midi.voutports[i].device = nil
+  for i = 1, 32 do
+    Midi.vports[i].device = nil
 
-    for _, device in pairs(Midi.inputs) do
-      if device.name == Midi.vinports[i].name then
-        Midi.vinports[i].device = device
-        device.port = i
-      end
-    end
-    for _, device in pairs(Midi.outputs) do
-      if device.name == Midi.voutports[i].name then
-        Midi.voutports[i].device = device
+    for _, device in pairs(Midi.devices) do
+      if device.name == Midi.vports[i].name then
+        Midi.vports[i].device = device
         device.port = i
       end
     end
@@ -426,63 +388,46 @@ function Midi.update_devices()
 end
 
 function Midi.update_connected_state()
-  for i = 1, 16 do
-    if Midi.vinports[i].device ~= nil then
-      Midi.vinports[i].connected = true
+  for i = 1, 32 do
+    if Midi.vports[i].device ~= nil then
+      Midi.vports[i].connected = true
     else
-      Midi.vinports[i].connected = false
-    end
-    if Midi.voutports[i].device ~= nil then
-      Midi.voutports[i].connected = true
-    else
-      Midi.voutports[i].connected = false
+      Midi.vports[i].connected = false
     end
   end
 end
 
 _seamstress.midi = {
-  add = function(name, is_input, id, dev)
-    local d = Midi.new(name, is_input, id, dev)
-    if is_input == true then
-      Midi.inputs[id] = d
-    else
-      Midi.outputs[id] = d
-    end
+  add = function(name, id, dev)
+    local d = Midi.new(name, id, dev)
+    Midi.devices[id] = d
     Midi.update_devices()
     if Midi.add ~= nil then
-      Midi.add(d, is_input)
+      Midi.add(d)
     end
   end,
-  remove = function(is_input, id)
-    if is_input == true then
-      if Midi.inputs[id] then
-        Midi.remove(Midi.inputs[id])
-        if Midi.inputs[id].remove then
-          Midi.inputs[id]:remove()
-        end
-      end
-    else
-      if Midi.outputs[id] then
-        Midi.remove(Midi.outputs[id])
-        if Midi.outputs[id].remove then
-          Midi.outputs[id]:remove()
-        end
+  remove = function(id)
+    if Midi.devices[id] then
+      Midi.remove(Midi.devices[id])
+      if Midi.devices[id].remove then
+        Midi.devices[id]:remove()
       end
     end
   end,
-  event = function(id, timestamp, bytes)
-    local d = Midi.inputs[id]
+  event = function(id, bytes, timestamp)
+    local d = Midi.devices[id]
     if d ~= nil then
       if d.event ~= nil then
-        d.event(timestamp, bytes)
+        d.event(bytes, timestamp)
       end
       if d.port then
-        if Midi.vinports[d.port].event then
-          Midi.vinports[d.port].event(timestamp, bytes)
+        if Midi.vports[d.port].event then
+          Midi.vports[d.port].event(bytes, timestamp)
         end
         paramsMenu.menu_midi_event(Midi.to_msg(bytes), d.port)
       end
-    else
+      -- hacky: prevent errors from this function before startup
+    elseif seamstress.state.path then
       error("no entry for midi " .. id)
     end
   end,

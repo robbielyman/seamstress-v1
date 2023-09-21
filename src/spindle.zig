@@ -668,7 +668,6 @@ fn screen_circle_fill(l: *Lua) i32 {
     return 0;
 }
 
-
 /// draws a filled-in triangle.
 // users should use `screen.triangle` instead
 // @param ax x-coordinate
@@ -1136,7 +1135,14 @@ fn midi_write(l: *Lua) i32 {
             return 0;
         });
     }
-    midi.Device.Guts.output.write(dev, msg);
+    dev.write(msg) catch |err| {
+        switch (err) {
+            error.NotFound => l.raiseErrorStr("no output device found for device %d", .{dev.id + 1}),
+            error.WriteError => l.raiseErrorStr("error writing to device %d", .{dev.id + 1}),
+            else => @panic("unexpected error in midi.write!"),
+        }
+        return 0;
+    };
     l.setTop(0);
     return 0;
 }
@@ -1469,37 +1475,30 @@ pub fn metro_event(id: u8, stage: i64) !void {
 }
 
 pub fn midi_add(dev: *midi.Device) !void {
+    const name = dev.name orelse return;
     try push_lua_func("midi", "add");
-    _ = lvm.pushString(dev.name.?);
-    switch (dev.guts) {
-        midi.Dev_t.Input => lvm.pushBoolean(true),
-        midi.Dev_t.Output => lvm.pushBoolean(false),
-    }
+    _ = lvm.pushString(name);
     lvm.pushInteger(dev.id + 1);
     lvm.pushLightUserdata(dev);
-    try docall(&lvm, 4, 0);
+    try docall(&lvm, 3, 0);
 }
 
-pub fn midi_remove(dev_type: midi.Dev_t, id: u32) !void {
+pub fn midi_remove(id: u32) !void {
     try push_lua_func("midi", "remove");
-    switch (dev_type) {
-        midi.Dev_t.Input => lvm.pushBoolean(true),
-        midi.Dev_t.Output => lvm.pushBoolean(false),
-    }
     lvm.pushInteger(id + 1);
-    try docall(&lvm, 2, 0);
+    try docall(&lvm, 1, 0);
 }
 
 pub fn midi_event(id: u32, timestamp: f64, bytes: []const u8) !void {
     try push_lua_func("midi", "event");
     lvm.pushInteger(id + 1);
-    lvm.pushNumber(timestamp);
     lvm.createTable(@intCast(bytes.len), 0);
     var i: usize = 0;
     while (i < bytes.len) : (i += 1) {
         lvm.pushInteger(bytes[i]);
         lvm.rawSetIndex(-2, @intCast(i + 1));
     }
+    lvm.pushNumber(timestamp);
     try docall(&lvm, 3, 0);
 }
 

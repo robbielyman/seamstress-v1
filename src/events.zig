@@ -84,7 +84,6 @@ pub const Data = union(enum) {
     },
     MIDI_Remove: struct {
         id: u32,
-        dev_type: midi.Dev_t,
     },
     MIDI: struct {
         id: u32,
@@ -247,7 +246,7 @@ fn handle(event: Data) !void {
             try spindle.metro_event(e.id, e.stage);
         },
         .MIDI_Add => |e| try spindle.midi_add(e.dev),
-        .MIDI_Remove => |e| try spindle.midi_remove(e.dev_type, e.id),
+        .MIDI_Remove => |e| try spindle.midi_remove(e.id),
         .MIDI => |e| {
             switch (e.message[0]) {
                 0xfa, 0xfb, 0xfc, 0xf8 => try clock.midi(e.message[0], e.timestamp),

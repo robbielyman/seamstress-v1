@@ -202,8 +202,8 @@ function clock.add_params()
   end)
   params:add_separator("midi_clock_out_separator", "midi clock out")
   for i = 1, 16 do
-    local short_name = string.len(midi.voutports[i].name) <= 20 and midi.voutports[i].name
-      or util.acronym(midi.voutports[i].name)
+    local short_name = string.len(midi.vports[i].name) <= 20 and midi.vports[i].name
+      or util.acronym(midi.vports[i].name)
     params:add_binary("clock_midi_out_" .. i, i .. ". " .. short_name, "toggle", seamstress.state.clock.midi_out[i])
     params:set_action("clock_midi_out_" .. i, function(x)
       if x == 1 then
@@ -217,7 +217,7 @@ function clock.add_params()
       end
       seamstress.state.clock.midi_out[i] = x
     end)
-    if short_name ~= "none" and midi.voutports[i].connected then
+    if short_name ~= "none" and midi.vports[i].connected then
       params:show("clock_midi_out_" .. i)
     else
       params:hide("clock_midi_out_" .. i)
@@ -232,7 +232,7 @@ function clock.add_params()
       clock.sync(1 / 24)
       for i = 1, #send_midi_clock do
         local port = send_midi_clock[i]
-        midi.voutports[port]:clock()
+        midi.vports[port]:clock()
       end
     end
   end)

@@ -42,13 +42,13 @@ const Fabric = struct {
     }
     fn do_tick(self: *Fabric) void {
         self.lock.lock();
-        for (self.threads, 0..) |thread, i| {
+        for (self.threads, 0..) |*thread, i| {
             if (thread.inactive) continue;
             thread.delta -= self.tick;
-            if (thread.delta) {
+            if (thread.delta <= 0) {
                 thread.delta = 0;
                 thread.inactive = true;
-                events.post(.{ .Clock_Resume = .{ .id = i, }});
+                events.post(.{ .Clock_Resume = .{ .id = @intCast(i), }});
             }
         }
         self.lock.unlock();
