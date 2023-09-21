@@ -19,7 +19,7 @@ function binary.new(id, name, behavior, default, allow_pmap)
   t.name = name
   t.default = default or 0
   t.value = t.default
-  t.behavior = behavior or "trigger"
+  t.behavior = behavior or "toggle"
   t.action = function() end
   if allow_pmap == nil then
     t.allow_pmap = true

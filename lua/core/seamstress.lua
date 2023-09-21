@@ -27,6 +27,8 @@ seamstress = {}
 
 seamstress.state = require("core/state")
 
+_menu.timer = metro[36]
+
 --- global init function to be overwritten in user scripts.
 init = function() end
 --- global cleanup function to be overwritten in user scripts.

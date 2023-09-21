@@ -210,8 +210,29 @@ m.key = function(char, modifiers, is_repeat, state)
       -- adjust value
       if params.count > 0 then
         local d = char.name == "left" and -1 or 1
-        local dx = m.fine and (d / 20) or (m.coarse and d * 10 or d)
-        params:delta(page[m.pos + 1], dx)
+        if t == params.tBINARY then
+          params:delta(i, 1)
+          if params:lookup_param(i).behavior == "trigger" then
+            if is_repeat == false then
+              m.triggered[i] = 2
+            end
+          else
+            m.on[i] = params:get(i)
+          end
+        elseif t == params.tTRIGGER then
+          params:set(i)
+          m.triggered[i] = 2
+        else
+          local dx = m.fine and (d / 20) or (m.coarse and d * 10 or d)
+          params:delta(i, dx)
+        end
+      end
+    elseif (char.name == "right" or char.name == "left") and state == 0 then
+      if t == params.tBINARY then
+        params:delta(i, 0)
+        if params:lookup_param(i).behavior ~= "trigger" then
+          m.on[i] = params:get(i)
+        end
       end
     elseif char.name == "return" then
       if state == 1 then
@@ -303,7 +324,7 @@ m.key = function(char, modifiers, is_repeat, state)
         pm.ch = util.clamp(pm.ch + d, 1, 16)
         pmap.data[n].ch = pm.ch
       elseif m.map_pos == 3 then
-        pm.dev = util.clamp(pm.dev + d, 1, #midi.vinports)
+        pm.dev = util.clamp(pm.dev + d, 1, #midi.vports)
         pmap.data[n].dev = pm.dev
       elseif m.map_pos == 4 or m.map_pos == 5 then
         local param = params:lookup_param(n)
@@ -453,6 +474,31 @@ local function draw_text(param_name, val)
   screen.move_rel(-127, 0)
 end
 
+local function draw_binary(param_name, p)
+  if screen.get_text_size(param_name) > 100 then
+    param_name = util.trim_string_to_width(param_name, 100)
+  end
+  screen.text(param_name)
+  screen.move_rel(127, 2)
+  local fill = m.on[p] or m.triggered[p]
+  if fill and fill > 0 then
+    screen.rect_fill(3, 3)
+  end
+  screen.move_rel(-127, -2)
+end
+
+local function draw_trigger(param_name, p)
+  if screen.get_text_size(param_name) > 100 then
+    param_name = util.trim_string_to_width(param_name, 100)
+  end
+  screen.text(param_name)
+  screen.move_rel(127, 2)
+  if m.triggered[p] and m.triggered[p] > 0 then
+    screen.rect_fill(3, 3)
+  end
+  screen.move_rel(-127, -2)
+end
+
 local function draw_param(param_name, val)
   if screen.get_text_size(param_name) > 100 then
     param_name = util.trim_string_to_width(param_name, 100)
@@ -493,6 +539,8 @@ m.redraw = function()
           screen.text(param_name .. " >")
         elseif t == params.tTEXT then
           draw_text(param_name, params:string(p))
+        elseif t == params.tBINARY then
+          draw_binary(param_name, p)
         else
           draw_param(param_name, params:string(p, params:is_number(p) and 1 or 0.001))
         end
@@ -595,7 +643,7 @@ m.redraw = function()
       screen.move(134, 52)
       hl(3)
 
-      local long_name = midi.vinports[pm.dev].name
+      local long_name = midi.vports[pm.dev].name
       local short_name = string.len(long_name) > 35 and util.acronym(long_name) or long_name
 
       screen.text(tostring(pm.dev) .. ": " .. short_name)
@@ -774,7 +822,9 @@ m.menu_midi_event = function(data, dev)
           for i, param in ipairs(params.params) do
             if params:lookup_param(i).behavior == params:lookup_param(prm_id).behavior then
               if params:lookup_param(i).behavior == "trigger" then
-                m.triggered[i] = 2
+                if v == d.in_hi then
+                  m.triggered[i] = 2
+                end
               else
                 m.on[i] = params:get(i)
               end
@@ -794,6 +844,28 @@ m.init = function()
   m.alt = false
   m.fine = false
   m.coarse = false
+  m.triggered = {}
+  m.on = {}
+  for i, param in ipairs(params.params) do
+    if param.t == params.tBINARY then
+      if params:lookup_param(i).behavior == "trigger" then
+        m.triggered[i] = 2
+      else
+        m.on[i] = params:get(i)
+      end
+    end
+  end
+  m.timer.event = function()
+    for k, v in pairs(m.triggered) do
+      if v > 0 then
+        m.triggered[k] = v - 1
+      end
+    end
+    m.redraw()
+  end
+  m.timer.time = 0.2
+  m.timer.count = -1
+  m.timer:start()
   m.redraw()
 end
 

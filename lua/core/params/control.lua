@@ -99,7 +99,7 @@ function Control:set_raw(value, silent)
     midi_prm.value = util.round(util.linlin(midi_prm.out_lo, midi_prm.out_hi, midi_prm.in_lo, midi_prm.in_hi, self.raw))
     if midi_prm.echo then
       local port = pmap.data[self.id].dev
-      midi.voutports[port]:cc(midi_prm.cc, midi_prm.value, midi_prm.ch)
+      midi.vports[port]:cc(midi_prm.cc, midi_prm.value, midi_prm.ch)
     end
   end
 end

@@ -71,14 +71,36 @@ function init()
   params:add {
     type = "binary",
     id = "mappable_binary",
-    behavior = "trigger",
-    name = "me too!",
+    behavior = "momentary",
+    name = "momentary!",
+    action = function(x)
+      print("hi from momentary", x)
+    end,
+  }
+
+  params:add {
+    type = "trigger",
+    id = "mappable_trigger",
+    name = "trigger!",
+    action = function()
+      print("hi from trigger")
+    end,
+  }
+
+  params:add {
+    type = "binary",
+    id = "mappable_toggle",
+    behavior = "toggle",
+    name = "toggle!",
+    action = function(x)
+      print("hi from toggle", x)
+    end,
   }
 
   params:add {
     type = "control",
     id = "mappable_control",
-    name = "map map map!",
+    name = "control!",
     controlspec = controlspec.FREQ,
   }
 
@@ -86,7 +108,7 @@ function init()
   params:add {
     type = "number",
     id = "unmappable_number",
-    name = "can't map!",
+    name = "you cannot map this!",
     min = 0,
     max = 10,
     default = 0,
