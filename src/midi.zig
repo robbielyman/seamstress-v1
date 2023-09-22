@@ -263,6 +263,7 @@ fn main_loop() !void {
 }
 
 fn find(name: []const u8) ?usize {
+    if (std.mem.eql(u8, name, "seamstress_out") or std.mem.eql(u8, name, "seamstress_in")) return 0;
     for (0..32) |i| {
         const n = devices[i].name orelse continue;
         if (std.mem.eql(u8, name, n)) return i;
