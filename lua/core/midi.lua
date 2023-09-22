@@ -189,20 +189,12 @@ function Midi:song_select(val)
   self:send { type = "song_select", val = val }
 end
 
---- connects to an input port
--- @tparam[opt] integer n (1-16)
--- @function midi.connect_input
-function Midi.connect_input(n)
+--- connects to a device
+-- @tparam[opt] integer n (1-32)
+-- @function midi.connect
+function Midi.connect(n)
   local n = n or 1
-  return Midi.vinports[n]
-end
-
---- connects to an output port
--- @tparam[opt] integer n (1-16)
--- @function midi.connect_output
-function Midi.connect_output(n)
-  local n = n or 1
-  return Midi.voutports[n]
+  return Midi.vports[n]
 end
 
 -- function table for msg-to-data conversion
