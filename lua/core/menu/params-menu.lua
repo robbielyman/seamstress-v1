@@ -875,4 +875,6 @@ m.mouse = function(x, y) end
 
 m.click = function(x, y, state, button) end
 
+m.wheel = function (x, y)	end
+
 return m

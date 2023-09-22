@@ -69,6 +69,11 @@ pub const Data = union(enum) {
         button: u8,
         window: usize,
     },
+    Screen_Mouse_Wheel: struct {
+        x: f64,
+        y: f64,
+        window: usize,
+    },
     Screen_Check: void,
     Screen_Resized: struct {
         w: i32,
@@ -237,6 +242,7 @@ fn handle(event: Data) !void {
         .Screen_Key => |e| try spindle.screen_key(e.sym, e.mod, e.repeat, e.state, e.window),
         .Screen_Mouse_Motion => |e| try spindle.screen_mouse(e.x, e.y, e.window),
         .Screen_Mouse_Click => |e| try spindle.screen_click(e.x, e.y, e.state, e.button, e.window),
+        .Screen_Mouse_Wheel => |e| try spindle.screen_wheel(e.x, e.y, e.window),
         .Screen_Check => {
             screen.check();
             screen.pending -= 1;

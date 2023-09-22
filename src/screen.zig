@@ -783,6 +783,18 @@ pub fn check() void {
                 events.post(.{ .Quit = {} });
                 quit = true;
             },
+            c.SDL_MOUSEWHEEL => {
+                const flipped = ev.wheel.direction == c.SDL_MOUSEWHEEL_FLIPPED;
+                const x: f64 = if (flipped) -ev.wheel.preciseX else ev.wheel.preciseX;
+                const y: f64 = if (flipped) -ev.wheel.preciseY else ev.wheel.preciseY;
+                events.post(.{
+                    .Screen_Mouse_Wheel = .{
+                        .x = x,
+                        .y = y,
+                        .window = ev.wheel.windowID,
+                    },
+                });
+            },
             c.SDL_MOUSEMOTION => {
                 const zoom: f64 = @floatFromInt(windows[ev.button.windowID - 1].zoom);
                 const x: f64 = @floatFromInt(ev.button.x);

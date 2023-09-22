@@ -263,6 +263,13 @@ _seamstress.screen = {
       screen.click(x, y, state, button)
     end
   end,
+  wheel = function (x, y, window)
+    if window == 2 then
+      paramsMenu.wheel(x, y)
+    elseif screen.wheel ~= nil then
+      screen.wheel(x, y)
+    end
+  end,
   resized = function(x, y, window)
     if window == 1 then
       screen.width = x
@@ -293,18 +300,24 @@ _seamstress.screen = {
 function screen.key(char, modifiers, is_repeat, state) end
 
 --- callback executed when the user moves the mouse with the gui window focused.
--- @tparam integer x x-coordinate
--- @tparam integer y y-coordinate
+-- @tparam number x x-coordinate
+-- @tparam number y y-coordinate
 -- @function screen.mouse
 function screen.mouse(x, y) end
 
 --- callback executed when the user clicks the mouse on the gui window.
--- @tparam integer x x-coordinate
--- @tparam integer y y-coordinate
+-- @tparam number x x-coordinate
+-- @tparam number y y-coordinate
 -- @tparam integer state 1 for a press, 0 for release
 -- @tparam integer button bitmask for which button was pressed
 -- @function screen.click
 function screen.click(x, y, state, button) end
+
+--- callback executed when the user scrolls with the mouse wheel on the gui window.
+-- @tparam number x amount moved in the x-direction (right positive)
+-- @tparam number y amount moved in the y-direction (away from you positive)
+-- @function screen.wheel
+function screen.wheel(x, y) end
 
 --- callback executed when the user resizes a window
 -- @function screen.resized

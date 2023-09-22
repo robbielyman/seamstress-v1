@@ -1449,6 +1449,14 @@ pub fn screen_mouse(x: f64, y: f64, window: usize) !void {
     try docall(&lvm, 3, 0);
 }
 
+pub fn screen_wheel(x: f64, y: f64, window: usize) !void {
+    try push_lua_func("screen", "wheel");
+    lvm.pushNumber(x);
+    lvm.pushNumber(y);
+    lvm.pushInteger(@intCast(window));
+    try docall(&lvm, 3, 0);
+}
+
 pub fn screen_click(x: f64, y: f64, state: bool, button: u8, window: usize) !void {
     try push_lua_func("screen", "click");
     lvm.pushNumber(x + 1);
