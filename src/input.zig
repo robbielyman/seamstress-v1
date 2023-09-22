@@ -35,33 +35,31 @@ pub fn deinit() void {
 }
 
 fn write_history() void {
-    const home = std.process.getEnvVarOwned(allocator, "HOME") catch null;
-    if (home) |h| {
-        const history_file = std.fs.path.joinZ(allocator, &.{ h, "seamstress_history" }) catch return;
-        _ = c.write_history(history_file.ptr);
-        _ = c.history_truncate_file(history_file.ptr, 500);
-        allocator.free(history_file);
-    }
+    const home = std.process.getEnvVarOwned(allocator, "HOME") catch return;
+    const history_file = std.fs.path.joinZ(allocator, &.{ home, "seamstress_history" }) catch return;
+    _ = c.write_history(history_file.ptr);
+    _ = c.history_truncate_file(history_file.ptr, 500);
+    allocator.free(history_file);
+    allocator.free(home);
 }
 
 fn input_run() !void {
     _ = c.rl_initialize();
     c.rl_prep_terminal(1);
-    defer _ = c.rl_reset_terminal(null);
     c.using_history();
     c.stifle_history(500);
     const home = std.process.getEnvVarOwned(allocator, "HOME") catch home: {
         logger.warn("unable to capture $HOME, history will not be saved!", .{});
         break :home null;
     };
-    var history_file: [:0]u8 = undefined;
     if (home) |h| {
-        history_file = try std.fs.path.joinZ(allocator, &.{ h, "seamstress_history" });
+        const history_file = try std.fs.path.joinZ(allocator, &.{ h, "seamstress_history" });
         const file = try std.fs.createFileAbsolute(history_file, .{ .read = true, .truncate = false });
         file.close();
         _ = c.read_history(history_file.ptr);
+        allocator.free(history_file);
+        allocator.free(h);
     }
-    allocator.free(history_file);
     pid = try std.Thread.spawn(.{}, inner, .{});
 }
 
