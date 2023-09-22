@@ -57,6 +57,20 @@ function pmap.refresh()
       for item, val in pairs(v) do
         p.midi_mapping[item] = val
       end
+      local midi_prm = pmap.data[k]
+      if v.echo then
+        local val
+        if p.t == params.tCONTROL then
+          val = params:get_raw(k)
+        else
+          val = params:get(k)
+        end
+        midi_prm.value = util.round(util.linlin(midi_prm.out_lo, midi_prm.out_hi, midi_prm.in_lo, midi_prm.in_hi, val))
+        if midi_prm.echo then
+          local port = pmap.data[k].dev
+          midi.vports[port]:cc(midi_prm.cc, midi_prm.value, midi_prm.ch)
+        end
+      end
     end
   end
 end
@@ -100,7 +114,6 @@ function pmap.write()
 end
 
 function pmap.read()
-  if not seamstress.state.name then return end
   local function unquote(s)
     return s:gsub('^"', ""):gsub('"$', ""):gsub('\\"', '"')
   end
@@ -117,11 +130,18 @@ function pmap.read()
         pmap.data[unquote(name)] = x()
       end
     end
-    pmap.refresh()
     print(">> MIDI mapping file found, loaded!")
+    pmap.refresh()
   else
     print(">> MIDI mapping file not present, using defaults")
   end
+end
+
+function pmap.delete()
+  local filepath = path.seamstress .. "/data/" .. seamstress.state.name
+  local filename = filepath .. "/" .. seamstress.state.name .. ".pmap"
+  os.execute("rm " .. filename)
+  print(">> MIDI mapping file deleted: " .. filename)
 end
 
 pmap.clear()

@@ -64,15 +64,15 @@ function ParamSet:add(args)
     local name = args.name or id
 
     if args.type == "number" then
-      self:add_number(id, name, args.min, args.max, args.default, args.units)
+      self:add_number(id, name, args.min, args.max, args.default, args.units, args.allow_pmap)
     elseif args.type == "option" then
-      self:add_option(id, name, args.options, args.default)
+      self:add_option(id, name, args.options, args.default, args.allow_pmap)
     elseif args.type == "control" then
-      self:add_control(id, name, args.controlspec, args.formatter)
+      self:add_control(id, name, args.controlspec, args.formatter, args.allow_pmap)
     elseif args.type == "binary" then
-      self:add_binary(id, name, args.behavior or "toggle", args.default)
+      self:add_binary(id, name, args.behavior or "toggle", args.default, args.allow_pmap)
     elseif args.type == "trigger" then
-      self:add_trigger(id, name)
+      self:add_trigger(id, name, args.allow_pmap)
     elseif args.type == "separator" then
       self:add_separator(id, name)
     elseif args.type == "group" then
@@ -134,24 +134,26 @@ end
 -- @tparam number max maximum value
 -- @tparam number default default / initial value
 -- @tparam string units
-function ParamSet:add_number(id, name, min, max, default, units)
+-- @tparam allow_pmap
+function ParamSet:add_number(id, name, min, max, default, units, allow_pmap)
   local cs = controlspec.new(min, max, "lin", 1, default, units, 1 / math.abs(max - min))
-  self:add { param = control.new(id, name, cs) }
+  self:add { param = control.new(id, name, cs, nil, allow_pmap) }
   params.params[params.lookup[id]].is_number = true
 end
 
 --- add option.
 -- @tparam string id (no spaces)
 -- @tparam string name (can contain spaces)
--- @param options
--- @param default
-function ParamSet:add_option(id, name, options, default)
+-- @tparam options
+-- @tparam default
+-- @tparam allow_pmap
+function ParamSet:add_option(id, name, options, default, allow_pmap)
   -- self:add { param=option.new(id, name, options, default) }
   local cs = controlspec.new(1, #options, "lin", 1, default, units, 1 / (#options - 1))
   local frm = function(param)
     return options[(type(param) == "table" and param:get() or param)]
   end
-  self:add { param = control.new(id, name, cs, frm) }
+  self:add { param = control.new(id, name, cs, frm, allow_pmap) }
 end
 
 --- add binary.
@@ -159,24 +161,28 @@ end
 -- @tparam string name (can contain spaces)
 -- @tparam string behavior "toggle" or "trigger" or "momentary"; defaults to "toggle"
 -- @tparam integer default 0 or 1
-function ParamSet:add_binary(id, name, behavior, default)
-  self:add { param = binary.new(id, name, behavior or "toggle", default) }
+-- @tparam allow_pmap
+function ParamSet:add_binary(id, name, behavior, default, allow_pmap)
+  print(behavior)
+  self:add { param = binary.new(id, name, behavior or "toggle", default, allow_pmap) }
 end
 
 --- add trigger.
 -- @tparam string id (no spaces)
 -- @tparam string name (can contain spaces)
-function ParamSet:add_trigger(id, name)
-  self:add { param = binary.new(id, name, "trigger") }
+-- @tparam allow_pmap
+function ParamSet:add_trigger(id, name, allow_pmap)
+  self:add { param = binary.new(id, name, "trigger", nil, allow_pmap) }
 end
 
 --- add control.
 -- @tparam string id (no spaces)
 -- @tparam string name (can contain spaces)
 -- @tparam controlspec controlspec
--- @param formatter
-function ParamSet:add_control(id, name, controlspec, formatter)
-  self:add { param = control.new(id, name, controlspec, formatter) }
+-- @tparam formatter
+-- @tparam allow_pmap
+function ParamSet:add_control(id, name, controlspec, formatter, allow_pmap)
+  self:add { param = control.new(id, name, controlspec, formatter, allow_pmap) }
 end
 
 --- add text.
@@ -317,6 +323,20 @@ end
 function ParamSet:delta(index, d)
   local param = self:lookup_param(index)
   param:delta(d)
+  if pmap.data[param.id] ~= nil then
+    local midi_prm = pmap.data[param.id]
+    local val
+    if param.t == self.tCONTROL then
+      val = param:get_raw()
+    else
+      val = param:get()
+    end
+    midi_prm.value = util.round(util.linlin(midi_prm.out_lo, midi_prm.out_hi, midi_prm.in_lo, midi_prm.in_hi, val))
+    if midi_prm.echo then
+      local port = pmap.data[param.id].dev
+      midi.vports[port]:cc(midi_prm.cc, midi_prm.value, midi_prm.ch)
+    end
+  end
 end
 
 --- set action.
