@@ -57,6 +57,7 @@ local m = {
   ps_last = 0,
   dir_prev = nil,
   highlightColors = { r = 0, g = 140, b = 140 },
+  delta = 0,
 }
 
 local page
@@ -875,6 +876,19 @@ m.mouse = function(x, y) end
 
 m.click = function(x, y, state, button) end
 
-m.wheel = function (x, y)	end
+m.wheel = function (x, y)
+  if m.mode == mEDIT or m.mode == mMAP then
+    m.delta = m.delta + y
+    if m.delta >= 20 then
+      m.pos = util.clamp(m.pos + 1, 0, #page - 1)
+      m.delta = m.delta - 20
+      m.redraw()
+    elseif m.delta <= -20 then
+      m.pos = util.clamp(m.pos - 1, 0, #page - 1)
+      m.delta = m.delta + 20
+      m.redraw()
+    end
+  end
+end
 
 return m
