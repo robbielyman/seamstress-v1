@@ -197,7 +197,7 @@ fn add_devices() !void {
         };
         // NB: on linux, rtmidi keeps on reannouncing registered devices
         // with 'RtMidiPrefix' added.
-        if (find(.Input, spanned)) |id| {
+        if (find(spanned)) |id| {
             is_active[id].input = true;
             if (devices[id].input) |in| {
                 if (in.quit) {
@@ -225,7 +225,7 @@ fn add_devices() !void {
             .linux => std.mem.sliceTo(buf.ptr, ':'),
             else => std.mem.sliceTo(buf.ptr, 0),
         };
-        if (find(.Output, spanned)) |id| {
+        if (find(spanned)) |id| {
             is_active[id].output = true;
             if (devices[id].output == null) try Device.Output.create(&devices[id], @intCast(i));
         } else {
@@ -262,22 +262,10 @@ fn main_loop() !void {
     }
 }
 
-fn find(dev_type: Device_Type, name: []const u8) ?usize {
-    if (dev_type == .Input and std.mem.eql(u8, name, "seamstress_out")) return 0;
-    if (dev_type == .Output and std.mem.eql(u8, name, "seamstress_in")) return 0;
-    for (1..32) |i| {
-        switch (dev_type) {
-            .Input => {
-                _ = devices[i].input orelse continue;
-                const n = devices[i].name orelse continue;
-                if (std.mem.eql(u8, name, n)) return i;
-            },
-            .Output => {
-                _ = devices[i].output orelse continue;
-                const n = devices[i].name orelse continue;
-                if (std.mem.eql(u8, name, n)) return i;
-            },
-        }
+fn find(name: []const u8) ?usize {
+    for (0..32) |i| {
+        const n = devices[i].name orelse continue;
+        if (std.mem.eql(u8, name, n)) return i;
     }
     return null;
 }
