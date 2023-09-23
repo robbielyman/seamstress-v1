@@ -189,20 +189,12 @@ function Midi:song_select(val)
   self:send { type = "song_select", val = val }
 end
 
---- connects to an input port
--- @tparam[opt] integer n (1-16)
--- @function midi.connect_input
-function Midi.connect_input(n)
+--- connects to a device
+-- @tparam[opt] integer n (1-32)
+-- @function midi.connect
+function Midi.connect(n)
   local n = n or 1
-  return Midi.vinports[n]
-end
-
---- connects to an output port
--- @tparam[opt] integer n (1-16)
--- @function midi.connect_output
-function Midi.connect_output(n)
-  local n = n or 1
-  return Midi.voutports[n]
+  return Midi.vports[n]
 end
 
 -- function table for msg-to-data conversion
@@ -415,15 +407,15 @@ _seamstress.midi = {
       end
     end
   end,
-  event = function(id, bytes, timestamp)
+  event = function(id, bytes)
     local d = Midi.devices[id]
     if d ~= nil then
       if d.event ~= nil then
-        d.event(bytes, timestamp)
+        d.event(bytes)
       end
       if d.port then
         if Midi.vports[d.port].event then
-          Midi.vports[d.port].event(bytes, timestamp)
+          Midi.vports[d.port].event(bytes)
         end
         paramsMenu.menu_midi_event(Midi.to_msg(bytes), d.port)
       end

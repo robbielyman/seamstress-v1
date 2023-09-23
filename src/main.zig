@@ -12,8 +12,9 @@ const midi = @import("midi.zig");
 const socket = @import("socket.zig");
 const watcher = @import("watcher.zig");
 const create = @import("create.zig");
+const pthread = @import("pthread.zig");
 
-const VERSION = .{ .major = 0, .minor = 23, .patch = 0 };
+const VERSION = .{ .major = 0, .minor = 23, .patch = 3 };
 
 pub const std_options = struct {
     pub const log_level = .info;
@@ -48,6 +49,7 @@ pub fn main() !void {
     defer if (option) |_| create.deinit();
     while (go_again) {
         try print_version();
+        pthread.set_priority(99);
 
         const path = try std.fs.path.join(allocator, &.{ location, "..", "share", "seamstress", "lua" });
         defer allocator.free(path);
@@ -70,7 +72,7 @@ pub fn main() !void {
         defer metros.deinit();
 
         logger.info("init clocks", .{});
-        try clocks.init(allocator);
+        try clocks.init(timer, allocator);
         defer clocks.deinit();
 
         logger.info("init spindle", .{});

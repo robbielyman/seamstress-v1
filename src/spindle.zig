@@ -541,7 +541,7 @@ fn screen_line_rel(l: *Lua) i32 {
 // @param y2 2nd handle y
 // @param x3 3rd destination x
 // @param y3 3rd destination y
-// @see screen.curve_to
+// @see screen.curve
 // @function screen_curve
 fn screen_curve(l: *Lua) i32 {
     check_num_args(l, 6);
@@ -990,7 +990,6 @@ fn screen_clear(l: *Lua) i32 {
 }
 
 /// sets which screen to draw to.
-// @see screen.set
 // @function screen_set
 fn screen_set(l: *Lua) i32 {
     check_num_args(l, 1);
@@ -1497,7 +1496,7 @@ pub fn midi_remove(id: u32) !void {
     try docall(&lvm, 1, 0);
 }
 
-pub fn midi_event(id: u32, timestamp: f64, bytes: []const u8) !void {
+pub fn midi_event(id: u32, bytes: []const u8) !void {
     try push_lua_func("midi", "event");
     lvm.pushInteger(id + 1);
     lvm.createTable(@intCast(bytes.len), 0);
@@ -1506,8 +1505,7 @@ pub fn midi_event(id: u32, timestamp: f64, bytes: []const u8) !void {
         lvm.pushInteger(bytes[i]);
         lvm.rawSetIndex(-2, @intCast(i + 1));
     }
-    lvm.pushNumber(timestamp);
-    try docall(&lvm, 3, 0);
+    try docall(&lvm, 2, 0);
 }
 
 pub fn resume_clock(idx: u8) !void {

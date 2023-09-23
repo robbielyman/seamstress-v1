@@ -876,6 +876,7 @@ m.mouse = function(x, y) end
 
 m.click = function(x, y, state, button) end
 
+
 m.wheel = function (x, y)
   if m.mode == mEDIT or m.mode == mMAP then
     m.delta = m.delta + y

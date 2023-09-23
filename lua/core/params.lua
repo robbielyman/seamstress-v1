@@ -134,7 +134,7 @@ end
 -- @tparam number max maximum value
 -- @tparam number default default / initial value
 -- @tparam string units
--- @tparam allow_pmap
+-- @tparam bool allow_pmap
 function ParamSet:add_number(id, name, min, max, default, units, allow_pmap)
   local cs = controlspec.new(min, max, "lin", 1, default, units, 1 / math.abs(max - min))
   self:add { param = control.new(id, name, cs, nil, allow_pmap) }
@@ -144,9 +144,9 @@ end
 --- add option.
 -- @tparam string id (no spaces)
 -- @tparam string name (can contain spaces)
--- @tparam options
--- @tparam default
--- @tparam allow_pmap
+-- @param options
+-- @param default
+-- @tparam bool allow_pmap
 function ParamSet:add_option(id, name, options, default, allow_pmap)
   -- self:add { param=option.new(id, name, options, default) }
   local cs = controlspec.new(1, #options, "lin", 1, default, units, 1 / (#options - 1))
@@ -161,16 +161,16 @@ end
 -- @tparam string name (can contain spaces)
 -- @tparam string behavior "toggle" or "trigger" or "momentary"; defaults to "toggle"
 -- @tparam integer default 0 or 1
--- @tparam allow_pmap
+-- @tparam bool allow_pmap
 function ParamSet:add_binary(id, name, behavior, default, allow_pmap)
-  print(behavior)
+  -- print(behavior)
   self:add { param = binary.new(id, name, behavior or "toggle", default, allow_pmap) }
 end
 
 --- add trigger.
 -- @tparam string id (no spaces)
 -- @tparam string name (can contain spaces)
--- @tparam allow_pmap
+-- @tparam bool allow_pmap
 function ParamSet:add_trigger(id, name, allow_pmap)
   self:add { param = binary.new(id, name, "trigger", nil, allow_pmap) }
 end
@@ -179,8 +179,8 @@ end
 -- @tparam string id (no spaces)
 -- @tparam string name (can contain spaces)
 -- @tparam controlspec controlspec
--- @tparam formatter
--- @tparam allow_pmap
+-- @param formatter
+-- @tparam bool allow_pmap
 function ParamSet:add_control(id, name, controlspec, formatter, allow_pmap)
   self:add { param = control.new(id, name, controlspec, formatter, allow_pmap) }
 end

@@ -263,7 +263,7 @@ _seamstress.screen = {
       screen.click(x, y, state, button)
     end
   end,
-  wheel = function (x, y, window)
+  wheel = function(x, y, window)
     if window == 2 then
       paramsMenu.wheel(x, y)
     elseif screen.wheel ~= nil then

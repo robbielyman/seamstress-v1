@@ -22,10 +22,8 @@ pub const Device = struct {
     output: ?Output,
 
     pub const Input = struct {
-        quit: bool,
         ptr: *c.RtMidiWrapper,
-        thread: std.Thread,
-        buf: [1024]u8 = undefined,
+        msg_num: u64 = 0,
 
         fn create(self: *Device, i: c_uint) !void {
             if (self.input) |_| return;
@@ -36,11 +34,10 @@ pub const Device = struct {
             ) orelse return error.Fail;
             const name = self.name orelse return error.Fail;
             c.rtmidi_open_port(midi_in, i, name.ptr);
+            c.rtmidi_in_set_callback(midi_in, read, self);
             c.rtmidi_in_ignore_types(midi_in, false, false, false);
             self.input = .{
-                .quit = false,
                 .ptr = midi_in,
-                .thread = try std.Thread.spawn(.{}, loop, .{self}),
             };
         }
     };
@@ -62,40 +59,6 @@ pub const Device = struct {
         }
     };
 
-    fn read(self: *Device) DeviceError!void {
-        var in = self.input orelse return error.NotFound;
-        var len: usize = 1024;
-        while (len > 0) {
-            len = 1024;
-            const timestamp = c.rtmidi_in_get_message(in.ptr, &in.buf, &len);
-            if (!in.ptr.*.ok) {
-                const err = std.mem.sliceTo(in.ptr.*.msg, 0);
-                logger.err("error in device {s}: {s}", .{ self.name.?, err });
-                return error.ReadError;
-            }
-            if (len == 0) break;
-            var line = allocator.dupe(u8, in.buf[0..len]) catch @panic("OOM!");
-            events.post(.{ .MIDI = .{
-                .message = line,
-                .timestamp = timestamp,
-                .id = self.id,
-            } });
-        }
-    }
-
-    fn loop(self: *Device) void {
-        var loop_quit = false;
-        while (!loop_quit) {
-            const in = self.input orelse return;
-            loop_quit = in.quit;
-            self.read() catch {
-                self.input.?.quit = true;
-                break;
-            };
-            std.time.sleep(std.time.ns_per_us * 3);
-        }
-    }
-
     pub fn write(self: *Device, message: []const u8) DeviceError!void {
         const out = self.output orelse return error.NotFound;
         _ = c.rtmidi_out_send_message(out.ptr, message.ptr, @intCast(message.len));
@@ -107,13 +70,26 @@ pub const Device = struct {
     }
 };
 
+fn read(timestamp: f64, message: [*c]const u8, len: usize, userdata: ?*anyopaque) callconv(.C) void {
+    _ = timestamp;
+    if (len == 0) return;
+    const ud = userdata orelse return;
+    var self: *Device = @ptrCast(@alignCast(ud));
+    var in = self.input orelse return;
+    var line = allocator.dupe(u8, message[0..len]) catch @panic("OOM!");
+    events.post(.{ .MIDI = .{
+        .message = line,
+        .msg_num = in.msg_num,
+        .id = self.id,
+        } });
+    in.msg_num += 1;
+}
+
 pub const DeviceError = error{ NotFound, ReadError, WriteError };
 pub const Device_Type = enum { Input, Output };
 
 fn remove(id: usize) void {
     if (devices[id].input) |*in| {
-        devices[id].input.?.quit = true;
-        in.thread.join();
         c.rtmidi_close_port(in.ptr);
         c.rtmidi_in_free(in.ptr);
         devices[id].input = null;
@@ -150,6 +126,7 @@ pub fn init(alloc_pointer: std.mem.Allocator) !void {
     errdefer c.rtmidi_in_free(midi_in);
     if (midi_in.*.ok == false) return error.Fail;
     c.rtmidi_open_virtual_port(midi_in, "seamstress_in");
+    c.rtmidi_in_set_callback(midi_in, read, &devices[0]);
     errdefer c.rtmidi_close_port(midi_in);
     var midi_out = c.rtmidi_out_create(
         c.RTMIDI_API_UNSPECIFIED,
@@ -164,9 +141,7 @@ pub fn init(alloc_pointer: std.mem.Allocator) !void {
         .MIDI_Add = .{ .dev = &devices[0] },
     });
     devices[0].input = .{
-        .quit = false,
         .ptr = midi_in,
-        .thread = try std.Thread.spawn(.{}, Device.loop, .{&devices[0]}),
     };
     devices[0].output = .{
         .ptr = midi_out,
@@ -199,15 +174,7 @@ fn add_devices() !void {
         // with 'RtMidiPrefix' added.
         if (find(spanned)) |id| {
             is_active[id].input = true;
-            if (devices[id].input) |in| {
-                if (in.quit) {
-                    in.thread.join();
-                    c.rtmidi_close_port(in.ptr);
-                    c.rtmidi_in_free(in.ptr);
-                    devices[id].input = null;
-                    try Device.Input.create(&devices[id], @intCast(i));
-                }
-            } else {
+            if (devices[id].input == null) {
                 try Device.Input.create(&devices[id], @intCast(i));
             }
         } else {
@@ -236,9 +203,7 @@ fn add_devices() !void {
         if (!active.input and !active.output) {
             if (devices[i].name) |_| remove(i);
         } else if (!active.input) {
-            var in = devices[i].input orelse continue;
-            in.quit = true;
-            in.thread.join();
+            _ = devices[i].input orelse continue;
             devices[i].input = null;
         } else if (!active.output) {
             const out = devices[i].output orelse continue;

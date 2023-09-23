@@ -1,5 +1,6 @@
 const std = @import("std");
 const events = @import("events.zig");
+const pthread = @import("pthread.zig");
 
 pub const Transport = enum { Start, Stop, Reset };
 
@@ -17,8 +18,10 @@ const Fabric = struct {
     lock: std.Thread.Mutex,
     tick: u64,
     ticks_since_start: u64,
+    time: u64,
     quit: bool,
     fn init(self: *Fabric) !void {
+        self.time = timer.read();
         self.ticks_since_start = 0;
         self.quit = false;
         self.threads = try allocator.alloc(Clock, 100);
@@ -34,9 +37,12 @@ const Fabric = struct {
         allocator.destroy(self);
     }
     fn loop(self: *Fabric) void {
+        pthread.set_priority(90);
         while (!self.quit) {
             self.do_tick();
-            wait(self.tick);
+            self.time += self.tick;
+            const wait_time = @as(i128, self.time) - timer.read();
+            wait(wait_time);
             self.ticks_since_start += 1;
         }
     }
@@ -46,9 +52,10 @@ const Fabric = struct {
             if (thread.inactive) continue;
             thread.delta -= self.tick;
             if (thread.delta <= 0) {
-                thread.delta = 0;
                 thread.inactive = true;
-                events.post(.{ .Clock_Resume = .{ .id = @intCast(i), }});
+                events.post(.{ .Clock_Resume = .{
+                    .id = @intCast(i),
+                } });
             }
         }
         self.lock.unlock();
@@ -57,9 +64,11 @@ const Fabric = struct {
 
 var allocator: std.mem.Allocator = undefined;
 var fabric: *Fabric = undefined;
+var timer: std.time.Timer = undefined;
 var source: Source = .Internal;
 
-pub fn init(alloc_pointer: std.mem.Allocator) !void {
+pub fn init(time: std.time.Timer, alloc_pointer: std.mem.Allocator) !void {
+    timer = time;
     allocator = alloc_pointer;
     fabric = try allocator.create(Fabric);
     try fabric.init();
@@ -73,7 +82,7 @@ pub fn deinit() void {
 pub fn set_tempo(bpm: f64) void {
     fabric.tempo = bpm;
     const beats_per_sec = bpm / 60;
-    const ticks_per_sec = beats_per_sec * 96 * 12;
+    const ticks_per_sec = beats_per_sec * 96 * 24;
     const seconds_per_tick = 1.0 / ticks_per_sec;
     const nanoseconds_per_tick = seconds_per_tick * std.time.ns_per_s;
     fabric.tick = @intFromFloat(nanoseconds_per_tick);
@@ -85,12 +94,13 @@ pub fn get_tempo() f64 {
 
 pub fn get_beats() f64 {
     const ticks: f64 = @floatFromInt(fabric.ticks_since_start);
-    return ticks / (96.0 * 12.0);
+    return ticks / (96.0 * 24.0);
 }
 
-fn wait(nanoseconds: u64) void {
-    // for now, just call sleep
-    std.time.sleep(nanoseconds);
+fn wait(nanoseconds: i128) void {
+    // for now, just call
+    if (nanoseconds < 0) return;
+    std.time.sleep(@intCast(nanoseconds));
 }
 
 pub fn cancel(id: u8) void {
@@ -103,14 +113,14 @@ pub fn schedule_sleep(id: u8, seconds: f64) void {
     fabric.lock.lock();
     const delta: u64 = @intFromFloat(seconds * std.time.ns_per_s);
     var clock = &fabric.threads[id];
-    clock.delta = delta;
+    clock.delta += delta;
     clock.inactive = false;
     fabric.lock.unlock();
 }
 
 pub fn schedule_sync(id: u8, beat: f64, offset: f64) void {
     fabric.lock.lock();
-    const tick_sync = beat * 96 * 12;
+    const tick_sync = beat * 96 * 24;
     const since_start: f64 = @floatFromInt(fabric.ticks_since_start);
     const ticks_elapsed = std.math.mod(f64, since_start, tick_sync) catch unreachable;
     const next_tick = tick_sync - ticks_elapsed + offset;
@@ -147,7 +157,7 @@ pub fn start() !void {
 }
 
 pub fn reset(beat: u64) void {
-    const num_ticks = beat * 96 * 12;
+    const num_ticks = beat * 96 * 24;
     fabric.ticks_since_start = num_ticks;
     var event = .{
         .Clock_Transport = .{
@@ -157,10 +167,10 @@ pub fn reset(beat: u64) void {
     events.post(event);
 }
 
-pub fn midi(message: u8, timestamp: f64) !void {
-    switch (source) {
-        .MIDI => {},
-        else => return,
+pub fn midi(message: u8) !void {
+    if (source != .MIDI) {
+        if (message == 0xf8) last = timer.read();
+        return;
     }
     switch (message) {
         0xfa => {
@@ -174,17 +184,19 @@ pub fn midi(message: u8, timestamp: f64) !void {
             try start();
         },
         0xf8 => {
-            midi_update_tempo(timestamp);
+            midi_update_tempo();
         },
         else => {},
     }
 }
 
-// var last: f64 = -1;
+var last: u64 = 0;
 
-fn midi_update_tempo(timestamp: f64) void {
-    const new_bpm = 60 / (24 * timestamp);
-    set_tempo((new_bpm + fabric.tempo) / 2);
+fn midi_update_tempo() void {
+    const midi_tick = timer.read();
+    const tick_from_midi_tick = @divFloor(midi_tick - last, 96);
+    fabric.tick = @divFloor(tick_from_midi_tick + fabric.tick, 2);
+    last = midi_tick;
 }
 
 pub fn set_source(new: Source) !void {
