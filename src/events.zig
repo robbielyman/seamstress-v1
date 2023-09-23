@@ -92,7 +92,7 @@ pub const Data = union(enum) {
     },
     MIDI: struct {
         id: u32,
-        timestamp: f64,
+        msg_num: u64,
         message: []const u8,
     },
     Clock_Resume: struct {
@@ -123,6 +123,17 @@ fn prioritize(context: Context, a: Data, b: Data) std.math.Order {
             switch (b) {
                 .Screen_Check => return .eq,
                 else => return .gt,
+            }
+        },
+        .MIDI => |m| {
+            switch (b) {
+                .Clock_Resume, .Metro => return .gt,
+                .Screen_Check => return .lt,
+                .MIDI => |n| {
+                    if (m.id != n.id) return .eq;
+                    if (m.msg_num < n.msg_num) return .lt else return .gt;
+                },
+                else => return .eq,
             }
         },
         else => {
@@ -255,10 +266,10 @@ fn handle(event: Data) !void {
         .MIDI_Remove => |e| try spindle.midi_remove(e.id),
         .MIDI => |e| {
             switch (e.message[0]) {
-                0xfa, 0xfb, 0xfc, 0xf8 => try clock.midi(e.message[0], e.timestamp),
+                0xfa, 0xfb, 0xfc, 0xf8 => try clock.midi(e.message[0]),
                 else => {},
             }
-            try spindle.midi_event(e.id, e.timestamp, e.message);
+            try spindle.midi_event(e.id, e.message);
         },
         .Clock_Resume => |e| try spindle.resume_clock(e.id),
         .Clock_Transport => |e| try spindle.clock_transport(e.transport),

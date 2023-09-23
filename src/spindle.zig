@@ -1497,7 +1497,7 @@ pub fn midi_remove(id: u32) !void {
     try docall(&lvm, 1, 0);
 }
 
-pub fn midi_event(id: u32, timestamp: f64, bytes: []const u8) !void {
+pub fn midi_event(id: u32, bytes: []const u8) !void {
     try push_lua_func("midi", "event");
     lvm.pushInteger(id + 1);
     lvm.createTable(@intCast(bytes.len), 0);
@@ -1506,8 +1506,7 @@ pub fn midi_event(id: u32, timestamp: f64, bytes: []const u8) !void {
         lvm.pushInteger(bytes[i]);
         lvm.rawSetIndex(-2, @intCast(i + 1));
     }
-    lvm.pushNumber(timestamp);
-    try docall(&lvm, 3, 0);
+    try docall(&lvm, 2, 0);
 }
 
 pub fn resume_clock(idx: u8) !void {

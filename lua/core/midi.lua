@@ -407,15 +407,15 @@ _seamstress.midi = {
       end
     end
   end,
-  event = function(id, bytes, timestamp)
+  event = function(id, bytes)
     local d = Midi.devices[id]
     if d ~= nil then
       if d.event ~= nil then
-        d.event(bytes, timestamp)
+        d.event(bytes)
       end
       if d.port then
         if Midi.vports[d.port].event then
-          Midi.vports[d.port].event(bytes, timestamp)
+          Midi.vports[d.port].event(bytes)
         end
         paramsMenu.menu_midi_event(Midi.to_msg(bytes), d.port)
       end

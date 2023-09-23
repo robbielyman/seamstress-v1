@@ -17,8 +17,10 @@ const Fabric = struct {
     lock: std.Thread.Mutex,
     tick: u64,
     ticks_since_start: u64,
+    timer: std.time.Timer,
     quit: bool,
     fn init(self: *Fabric) !void {
+        self.timer = try std.time.Timer.start();
         self.ticks_since_start = 0;
         self.quit = false;
         self.threads = try allocator.alloc(Clock, 100);
@@ -48,7 +50,9 @@ const Fabric = struct {
             if (thread.delta <= 0) {
                 thread.delta = 0;
                 thread.inactive = true;
-                events.post(.{ .Clock_Resume = .{ .id = @intCast(i), }});
+                events.post(.{ .Clock_Resume = .{
+                    .id = @intCast(i),
+                } });
             }
         }
         self.lock.unlock();
@@ -73,7 +77,7 @@ pub fn deinit() void {
 pub fn set_tempo(bpm: f64) void {
     fabric.tempo = bpm;
     const beats_per_sec = bpm / 60;
-    const ticks_per_sec = beats_per_sec * 96 * 12;
+    const ticks_per_sec = beats_per_sec * 96 * 24;
     const seconds_per_tick = 1.0 / ticks_per_sec;
     const nanoseconds_per_tick = seconds_per_tick * std.time.ns_per_s;
     fabric.tick = @intFromFloat(nanoseconds_per_tick);
@@ -157,10 +161,10 @@ pub fn reset(beat: u64) void {
     events.post(event);
 }
 
-pub fn midi(message: u8, timestamp: f64) !void {
-    switch (source) {
-        .MIDI => {},
-        else => return,
+pub fn midi(message: u8) !void {
+    if (source != .MIDI) {
+        if (message == 0xf8) fabric.timer.reset();
+        return;
     }
     switch (message) {
         0xfa => {
@@ -174,7 +178,7 @@ pub fn midi(message: u8, timestamp: f64) !void {
             try start();
         },
         0xf8 => {
-            midi_update_tempo(timestamp);
+            midi_update_tempo();
         },
         else => {},
     }
@@ -182,9 +186,10 @@ pub fn midi(message: u8, timestamp: f64) !void {
 
 // var last: f64 = -1;
 
-fn midi_update_tempo(timestamp: f64) void {
-    const new_bpm = 60 / (24 * timestamp);
-    set_tempo((new_bpm + fabric.tempo) / 2);
+fn midi_update_tempo() void {
+    const midi_tick = fabric.timer.lap();
+    const tick_from_midi_tick = @divFloor(midi_tick, 96);
+    fabric.tick = @divFloor(tick_from_midi_tick + fabric.tick, 2);
 }
 
 pub fn set_source(new: Source) !void {
