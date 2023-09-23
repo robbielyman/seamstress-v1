@@ -163,7 +163,7 @@ end
 -- @tparam integer default 0 or 1
 -- @tparam allow_pmap
 function ParamSet:add_binary(id, name, behavior, default, allow_pmap)
-  print(behavior)
+  -- print(behavior)
   self:add { param = binary.new(id, name, behavior or "toggle", default, allow_pmap) }
 end
 
