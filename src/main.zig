@@ -49,11 +49,7 @@ pub fn main() !void {
     defer if (option) |_| create.deinit();
     while (go_again) {
         try print_version();
-        const priority: pthread.sched_param = .{
-            .sched_priority = 99,
-            .__opaque = undefined,
-        };
-        _ = pthread.pthread_setschedparam(pthread.pthread_self(), pthread.SCHED_FIFO, &priority);
+        pthread.set_priority(99);
 
         const path = try std.fs.path.join(allocator, &.{ location, "..", "share", "seamstress", "lua" });
         defer allocator.free(path);
