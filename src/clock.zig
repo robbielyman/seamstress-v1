@@ -37,11 +37,7 @@ const Fabric = struct {
         allocator.destroy(self);
     }
     fn loop(self: *Fabric) void {
-        const priority: pthread.sched_param = .{
-            .sched_priority = 90,
-            .__opaque = undefined,
-        };
-        _ = pthread.pthread_setschedparam(pthread.pthread_self(), pthread.SCHED_FIFO, &priority);
+        pthread.set_priority(90);
         while (!self.quit) {
             self.do_tick();
             self.time += self.tick;
