@@ -1,5 +1,6 @@
 const std = @import("std");
 const events = @import("events.zig");
+const pthread = @import("pthread.zig");
 
 const Status = enum { Running, Stopped };
 const logger = std.log.scoped(.metros);
@@ -131,7 +132,11 @@ fn loop(self: *Metro, pid: *Thread) void {
     self.status_lock.lock();
     self.status = Status.Running;
     self.status_lock.unlock();
-
+    const priority: pthread.sched_param = .{
+        .sched_priority = 90,
+        .__opaque = undefined,
+    };
+    _ = pthread.pthread_setschedparam(pthread.pthread_self(), pthread.SCHED_FIFO, &priority);
     while (!pid.quit) {
         self.wait();
         self.stage_lock.lock();
