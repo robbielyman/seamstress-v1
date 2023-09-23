@@ -541,7 +541,7 @@ fn screen_line_rel(l: *Lua) i32 {
 // @param y2 2nd handle y
 // @param x3 3rd destination x
 // @param y3 3rd destination y
-// @see screen.curve_to
+// @see screen.curve
 // @function screen_curve
 fn screen_curve(l: *Lua) i32 {
     check_num_args(l, 6);
@@ -990,7 +990,6 @@ fn screen_clear(l: *Lua) i32 {
 }
 
 /// sets which screen to draw to.
-// @see screen.set
 // @function screen_set
 fn screen_set(l: *Lua) i32 {
     check_num_args(l, 1);
