@@ -44,6 +44,9 @@ function binary:set(v, silent)
       end
     end
   end
+  if self.behavior == "trigger" then
+    self.value = 0
+  end
 end
 
 function binary:delta(d)
