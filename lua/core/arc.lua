@@ -135,7 +135,7 @@ function Arc:segment(ring, from, to, level)
   for i = 1, 64 do
     local a = tau / 64 * (i - 1)
     local b = tau / 64 * i
-    local overlap_amt = overlap_segment(from, to, a, b)
+    local overlap_amt = overlap_segment(tau / 64 * from, tau / 64 * to, a, b)
     leds[i] = util.round(overlap_amt / step * level)
     self:led(ring, i, leds[i])
   end
