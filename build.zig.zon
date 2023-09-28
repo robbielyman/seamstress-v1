@@ -22,5 +22,9 @@
             .url = "https://github.com/ryleelyman/rtmidi/archive/39a98aca52e0a25aa705418ab97a770960d7ebe3.tar.gz",
             .hash = "12206646a51d34a15873cc1847426c0c03aecb4a71a93036098aabfefcd41eac3e9c",
         },
+        .link = .{
+            .url = "https://github.com/ryleelyman/link/archive/5aa137502ba2e9d86283ba5c83e31680ee924892.tar.gz",
+            .hash = "122034cab45d6e91dec17fd276c6b53af0b1ec89bfad6a0ce817125350a9073a47ae",
+        },
     },
 }

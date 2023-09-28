@@ -46,6 +46,12 @@ pub fn build(b: *std.Build) void {
     exe.addModule("ziglua", zig_lua.module("ziglua"));
     exe.linkLibrary(zig_lua.artifact("lua"));
 
+    const zig_link = b.dependency("link", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    exe.linkLibrary(zig_link.artifact("abl_link"));
+
     const zig_readline = b.dependency("readline", .{
         .target = target,
         .optimize = optimize,
