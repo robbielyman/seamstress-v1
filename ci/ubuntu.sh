@@ -13,4 +13,4 @@ sudo apt-get install \
      libegl-dev libxcursor-dev libxext-dev libxi-dev \
      libxrandr-dev libxss-dev libjack-dev libpipewire-0.3-dev \
      multimedia-devel libgudev-1.0-0 libdrm-dev libgbm-dev
-/opt/zig/zig build -Doptimize=ReleaseFast -Dcpu=x86_64
+/opt/zig/zig build -Doptimize=ReleaseFast -Dcpu=x86_64 --summary all
