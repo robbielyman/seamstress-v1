@@ -8,6 +8,8 @@
 --   my_var:note_off(note,vel,ch) : send MIDI note off
 --   my_var.event : assign incoming MIDI bytes to a function (use 'midi.to_msg(bytes)' for easy conversion)
 
+-- API: https://ryleealanza.org/docs/modules/midi.html
+
 local MU = require("musicutil") -- we'll use musicutil for easy note formatting + quantization
 
 function init()
