@@ -8,6 +8,23 @@
 --   my_var:note_off(note,vel,ch) : send MIDI note off
 --   my_var.event : assign incoming MIDI bytes to a function (use 'midi.to_msg(bytes)' for easy conversion)
 
+-- different MIDI messages processed by seamstress:
+--   "note_on"
+--   "note_off"
+--   "cc"
+--   "pitchbend"
+--   "key_pressure"
+--   "channel_pressure"
+--   "program_change"
+--   "start"
+--   "stop"
+--   "continue"
+--   "clock"
+--   "song_position"
+--   "song_select"
+--   "sysex"
+--   "other"
+
 -- API: https://ryleealanza.org/docs/modules/midi.html
 
 local MU = require("musicutil") -- we'll use musicutil for easy note formatting + quantization
@@ -189,7 +206,7 @@ end
 -- called with each incoming MIDI message:
 function midi_event(data, dev)
   if dev == params:get("midi_input_device") and params:string("midi_input_transport") == "yes" then
-    if data.type == "start" then
+    if data.type == "start" or data.type == "continue" then
       go()
     elseif data.type == "stop" then
       stop()
