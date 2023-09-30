@@ -21,8 +21,14 @@ pub fn build(b: *std.Build) void {
         .install_dir = .{ .custom = "share/seamstress" },
         .install_subdir = "resources",
     });
+    const install_examples = b.addInstallDirectory(.{
+        .source_dir = .{ .path = "examples" },
+        .install_dir = .{ .custom = "share/seamstress" },
+        .install_subdir = "examples",
+    });
     b.getInstallStep().dependOn(&install_resources.step);
     b.getInstallStep().dependOn(&install_lua_files.step);
+    b.getInstallStep().dependOn(&install_examples.step);
 
     const zig_sdl = b.dependency("SDL", .{
         .target = target,

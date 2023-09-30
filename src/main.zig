@@ -29,10 +29,11 @@ var allocator: std.mem.Allocator = undefined;
 pub fn main() !void {
     var go_again = true;
     timer = try std.time.Timer.start();
-    const option = try args.parse();
 
     var loc_buf = [_]u8{0} ** std.fs.MAX_PATH_BYTES;
     const location = try std.fs.selfExeDirPath(&loc_buf);
+
+    const option = try args.parse(location);
 
     const logger = std.log.scoped(.main);
     logfile = try std.fs.createFileAbsolute("/tmp/seamstress.log", .{});

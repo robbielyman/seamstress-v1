@@ -16,6 +16,7 @@ pub fn init(option: args.CreateOptions, alloc: std.mem.Allocator, loc: []const u
         .script => try script(),
         .project => try project(false),
         .norns_project => try project(true),
+        .example => try example(),
     }
 }
 
@@ -62,6 +63,7 @@ fn script() !void {
         allocator,
         &.{ seamstress_home, with_dot_lua },
     ) catch @panic("OOM!");
+    defer allocator.free(new_script_path);
     var try_again = false;
 
     var new_script_file = std.fs.createFileAbsolute(
@@ -107,6 +109,89 @@ fn script() !void {
     try stdout.print("bye for now!\n", .{});
     try bw.flush();
     args.watch = true;
+}
+
+fn example() !void {
+    const stdout_file = std.io.getStdOut().writer();
+    var bw = std.io.bufferedWriter(stdout_file);
+    const stdout = bw.writer();
+    const home = std.process.getEnvVarOwned(allocator, "HOME") catch {
+        std.debug.print("unable to capture $HOME! exiting\n", .{});
+        std.process.exit(1);
+    };
+    defer allocator.free(home);
+
+    const path = try std.fs.path.join(allocator, &.{ location, "..", "share", "seamstress" });
+    defer allocator.free(path);
+    const prefix = try std.fs.realpathAlloc(allocator, path);
+    defer allocator.free(prefix);
+    var dir = try std.fs.openDirAbsolute(prefix, .{});
+    defer dir.close();
+    var iterable = try dir.openIterableDir("examples", .{ .access_sub_paths = false });
+    defer iterable.close();
+    var walker = try iterable.walk(allocator);
+    defer walker.deinit();
+
+    const suffix = ".lua";
+    const s_name = if (std.mem.endsWith(u8, args.script_file, suffix))
+        args.script_file[0..(args.script_file.len - suffix.len)]
+    else
+        args.script_file;
+    while (try walker.next()) |file| {
+        if (!std.mem.endsWith(u8, file.basename, suffix)) continue;
+        const name = file.basename[0..(file.basename.len - suffix.len)];
+        if (!std.mem.eql(u8, name, s_name)) continue;
+        try stdout.print("welcome to SEAMSTRESS\n", .{});
+        try stdout.print("copying example script {s} into ~/seamstress...\n", .{name});
+        var try_again = false;
+        const new_script_path = std.fs.path.join(allocator, &.{ home, "seamstress", file.basename }) catch @panic("OOM!");
+        defer allocator.free(new_script_path);
+        var new_script_file = std.fs.createFileAbsolute(
+            new_script_path,
+            .{ .exclusive = true },
+        ) catch |err| blk: {
+            if (err != error.PathAlreadyExists) {
+                std.debug.print("error creating file! exiting\n", .{});
+                std.process.exit(1);
+            }
+            try_again = true;
+            break :blk @as(std.fs.File, undefined);
+        };
+
+        if (try_again) {
+            try stdout.print("a file with that name already exists! overwrite it?\n", .{});
+            try bw.flush();
+            var c_confirm = c.readline("['yes' to overwrite'] > ");
+            const c_slice = std.mem.sliceTo(c_confirm, 0);
+            if (!std.mem.eql(u8, c_slice, "yes")) {
+                try stdout.print("did not receive 'yes': goodbye!\n", .{});
+                try bw.flush();
+                std.process.exit(0);
+            }
+            new_script_file = std.fs.createFileAbsolute(
+                new_script_path,
+                .{ .truncate = true },
+            ) catch {
+                std.debug.print("error creating file! exiting\n", .{});
+                std.process.exit(1);
+            };
+        }
+        new_script_file.close();
+        const example_name = try std.fs.path.join(allocator, &.{ prefix, "examples", file.basename });
+        defer allocator.free(example_name);
+        std.fs.copyFileAbsolute(example_name, new_script_path, .{}) catch {
+            std.debug.print("error copying file! exiting\n", .{});
+            std.process.exit(1);
+        };
+        try stdout.print("seamstress will now restart, loading the example script!\n", .{});
+        try stdout.print("bye for now!\n", .{});
+        try bw.flush();
+        args.watch = true;
+        return;
+    }
+    try stdout.print("SEAMSTRESS\nno example script found with name {s}", .{args.script_file});
+    try bw.flush();
+    std.process.exit(1);
 }
 
 fn project(is_norns: bool) !void {

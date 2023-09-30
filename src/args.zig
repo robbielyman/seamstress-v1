@@ -8,10 +8,11 @@ pub var width: [:0]const u8 = "256";
 pub var height: [:0]const u8 = "128";
 pub var watch = false;
 
-pub const CreateOptions = enum { script, project, norns_project };
+pub const CreateOptions = enum { script, project, norns_project, example };
 
-pub fn parse() !?CreateOptions {
+pub fn parse(location: []const u8) !?CreateOptions {
     var double_dip = false;
+    var list_examples = false;
     var args = std.process.args();
     defer args.deinit();
     var i: u8 = 0;
@@ -40,6 +41,16 @@ pub fn parse() !?CreateOptions {
                 if (args.next()) |next| {
                     remote_port = next;
                     continue;
+                }
+            },
+            'e' => {
+                if (args.next()) |next| {
+                    script_file = next;
+                    list_examples = true;
+                    continue;
+                } else {
+                    list_examples = true;
+                    break;
                 }
             },
             'l' => {
@@ -83,13 +94,14 @@ pub fn parse() !?CreateOptions {
         break;
     } else {
         const suffix = ".lua";
-        if (script_file.len >= suffix.len and
-            std.mem.eql(
-            u8,
-            suffix,
-            script_file[(script_file.len - suffix.len)..script_file.len],
-        )) script_file = script_file[0..(script_file.len - suffix.len)];
+        if (std.mem.endsWith(u8, script_file, suffix))
+            script_file = script_file[0..(script_file.len - suffix.len)];
+        if (list_examples) return .example;
         return null;
+    }
+    if (list_examples) {
+        try print_examples(location);
+        std.process.exit(0);
     }
     try print_usage();
     std.process.exit(1);
@@ -103,11 +115,44 @@ fn print_usage() !void {
     try stdout.print("[script] (optional) should be the name of a lua file in CWD or ~/seamstress\n", .{});
     try stdout.print("[args]   (optional) should be one or more of the following\n", .{});
     try stdout.print("-s       override user script [current {s}]\n", .{script_file});
+    try stdout.print("-e       list or load example scripts\n", .{});
     try stdout.print("-l       override OSC listen port [current {s}]\n", .{local_port});
     try stdout.print("-b       override OSC broadcast port [current {s}]\n", .{remote_port});
     try stdout.print("-p       override socket listen port [current {s}]\n", .{socket_port});
     try stdout.print("-w       watch the directory containing the script file for changes\n", .{});
     try stdout.print("-x       override window width [current {s}]\n", .{width});
     try stdout.print("-y       override window height [current {s}]\n", .{height});
+    try bw.flush();
+}
+
+fn print_examples(location: []const u8) !void {
+    var buf: [1024 * 32]u8 = undefined;
+    var fba: std.heap.FixedBufferAllocator = .{
+        .buffer = &buf,
+        .end_index = 0,
+    };
+    var allocator = fba.allocator();
+    const path = try std.fs.path.join(allocator, &.{ location, "..", "share", "seamstress" });
+    defer allocator.free(path);
+    const prefix = try std.fs.realpathAlloc(allocator, path);
+    defer allocator.free(prefix);
+    var dir = try std.fs.openDirAbsolute(prefix, .{});
+    defer dir.close();
+    var iterable = try dir.openIterableDir("examples", .{ .access_sub_paths = false });
+    defer iterable.close();
+    var walker = try iterable.walk(allocator);
+    defer walker.deinit();
+
+    const stdout_file = std.io.getStdOut().writer();
+    var bw = std.io.bufferedWriter(stdout_file);
+    const stdout = bw.writer();
+    try stdout.print("EXAMPLE SCRIPTS:\nrerun seamstress with -e SCRIPTNAME to copy and run the example script.\n", .{});
+    while (try walker.next()) |file| {
+        const suffix = ".lua";
+        if (std.mem.endsWith(u8, file.basename, suffix)) {
+            const name = file.basename[0..(file.basename.len - suffix.len)];
+            try stdout.print("{s}\n", .{name});
+        }
+    }
     try bw.flush();
 }

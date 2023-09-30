@@ -10,7 +10,7 @@ local luafiles = _pwd .. "/?.lua;"
 local seamstressfiles = seamstress_home .. "/?.lua;"
 
 --- custom package.path setting for require.
--- includes folders under `/usr/local/share/seamstress/lua`,
+-- includes folders under seamstress binary directory,
 -- as well as the current directory
 -- and `$HOME/seamstress`
 package.path = sys .. core .. lib .. luafiles .. seamstressfiles .. package.path
