@@ -114,6 +114,8 @@ function pmap.write()
 end
 
 function pmap.read()
+  -- prevent weird crash in case we didn't find a script
+  if seamstress.state.name == nil then return end
   local function unquote(s)
     return s:gsub('^"', ""):gsub('"$', ""):gsub('\\"', '"')
   end
