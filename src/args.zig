@@ -87,6 +87,10 @@ pub fn parse(location: []const u8) !?CreateOptions {
                     continue;
                 }
             },
+            'h' => {
+                try print_usage();
+                std.process.exit(0);
+            },
             else => {
                 break;
             },
