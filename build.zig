@@ -10,6 +10,7 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     });
     b.installArtifact(exe);
+    exe.headerpad_max_install_names = true;
 
     const install_lua_files = b.addInstallDirectory(.{
         .source_dir = .{ .path = "lua" },
