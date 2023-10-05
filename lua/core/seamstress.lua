@@ -31,6 +31,8 @@ _menu.timer = metro[36]
 
 --- global init function to be overwritten in user scripts.
 init = function() end
+--- global redraw function to be overwritten in user scripts.
+redraw = function() end
 --- global cleanup function to be overwritten in user scripts.
 cleanup = function() end
 

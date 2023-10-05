@@ -1474,6 +1474,12 @@ pub fn screen_resized(w: i32, h: i32, window: usize) !void {
     try docall(&lvm, 3, 0);
 }
 
+pub fn redraw() !void {
+    const t = lvm.getGlobal("redraw") catch return;
+    if (t != .function) return;
+    try docall(&lvm, 0, 0);
+}
+
 pub fn metro_event(id: u8, stage: i64) !void {
     try push_lua_func("metro", "event");
     lvm.pushInteger(id + 1);

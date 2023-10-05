@@ -74,6 +74,7 @@ pub const Data = union(enum) {
         y: f64,
         window: usize,
     },
+    Redraw: void,
     Screen_Check: void,
     Screen_Resized: struct {
         w: i32,
@@ -254,6 +255,9 @@ fn handle(event: Data) !void {
         .Screen_Mouse_Motion => |e| try spindle.screen_mouse(e.x, e.y, e.window),
         .Screen_Mouse_Click => |e| try spindle.screen_click(e.x, e.y, e.state, e.button, e.window),
         .Screen_Mouse_Wheel => |e| try spindle.screen_wheel(e.x, e.y, e.window),
+        .Redraw => {
+            try spindle.redraw();
+        },
         .Screen_Check => {
             screen.check();
             screen.pending -= 1;

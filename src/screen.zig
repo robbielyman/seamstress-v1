@@ -833,13 +833,12 @@ pub fn check() void {
                             c.SDL_HideWindow(windows[ev.window.windowID - 1].window);
                         }
                     },
-                    c.SDL_WINDOWEVENT_EXPOSED => {
-                        const old = current;
-                        set(ev.window.windowID - 1);
-                        refresh();
-                        set(old);
+                    c.SDL_WINDOW_SHOWN, c.SDL_WINDOWEVENT_DISPLAY_CHANGED, c.SDL_WINDOWEVENT_EXPOSED => {
+                        events.post(.{
+                            .Redraw = {},
+                        });
                     },
-                    c.SDL_WINDOWEVENT_RESIZED => {
+                    c.SDL_WINDOWEVENT_RESIZED, c.SDL_WINDOWEVENT_MAXIMIZED, c.SDL_WINDOWEVENT_RESTORED => {
                         const old = current;
                         const id = ev.window.windowID - 1;
                         set(id);

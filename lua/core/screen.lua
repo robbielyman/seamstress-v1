@@ -279,6 +279,9 @@ _seamstress.screen = {
         if screen.resized ~= nil then
           screen.resized()
         end
+        if redraw ~= nil then
+          redraw()
+        end
       end)
     else
       screen.params_width = x
