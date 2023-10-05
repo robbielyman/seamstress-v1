@@ -81,7 +81,7 @@ fn read(timestamp: f64, message: [*c]const u8, len: usize, userdata: ?*anyopaque
         .message = line,
         .msg_num = in.msg_num,
         .id = self.id,
-        } });
+    } });
     in.msg_num += 1;
 }
 
@@ -127,6 +127,7 @@ pub fn init(alloc_pointer: std.mem.Allocator) !void {
     if (midi_in.*.ok == false) return error.Fail;
     c.rtmidi_open_virtual_port(midi_in, "seamstress_in");
     c.rtmidi_in_set_callback(midi_in, read, &devices[0]);
+    c.rtmidi_in_ignore_types(midi_in, false, false, false);
     errdefer c.rtmidi_close_port(midi_in);
     var midi_out = c.rtmidi_out_create(
         c.RTMIDI_API_UNSPECIFIED,
