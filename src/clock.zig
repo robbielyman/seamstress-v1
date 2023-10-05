@@ -196,6 +196,10 @@ fn midi_update_tempo() void {
     const midi_tick = timer.read();
     const tick_from_midi_tick = @divFloor(midi_tick - last, 96);
     fabric.tick = @divFloor(tick_from_midi_tick + fabric.tick, 2);
+    const ns_per_tick: f64 = @floatFromInt(fabric.tick);
+    const ticks_per_sec = std.time.ns_per_s / ns_per_tick;
+    const ticks_per_min = ticks_per_sec * 60;
+    fabric.tempo = ticks_per_min / (96.0 * 24.0);
     last = midi_tick;
 }
 
