@@ -1,6 +1,9 @@
 const std = @import("std");
 const events = @import("events.zig");
 const pthread = @import("pthread.zig");
+const c = @cImport({
+    @cInclude("abl_link.h");
+});
 
 pub const Transport = enum { Start, Stop, Reset };
 const Delta = union(enum) {
@@ -24,34 +27,46 @@ const Fabric = struct {
     ticks_since_start: u64,
     time: u64,
     quit: bool,
+    link: c.abl_link,
+    state: c.abl_link_session_state,
+    peers: u64 = 0,
+    source: Source,
     fn init(self: *Fabric) !void {
         self.time = timer.read();
         self.ticks_since_start = 0;
         self.quit = false;
+        self.source = .Internal;
         self.threads = try allocator.alloc(Clock, 100);
         @memset(self.threads, .{});
         set_tempo(120);
+        self.link = c.abl_link_create(120);
+        self.state = c.abl_link_create_session_state();
+        c.abl_link_set_start_stop_callback(self.link, start_stop_callback, self);
+        c.abl_link_set_num_peers_callback(self.link, peers_callback, self);
+        c.abl_link_set_tempo_callback(self.link, tempo_callback, self);
+        c.abl_link_enable_start_stop_sync(self.link, true);
         self.lock = .{};
         self.clock = try std.Thread.spawn(.{}, loop, .{self});
     }
     fn deinit(self: *Fabric) void {
         self.quit = true;
-        if (self.clock) |c| c.join();
+        if (self.clock) |clk| clk.join();
+        c.abl_link_destroy_session_state(self.state);
+        c.abl_link_destroy(self.link);
         allocator.free(self.threads);
         allocator.destroy(self);
     }
     fn loop(self: *Fabric) void {
         pthread.set_priority(90);
         while (!self.quit) {
+            self.lock.lock();
             self.do_tick();
-            self.time += self.tick;
-            const wait_time = @as(i128, self.time) - timer.read();
-            wait(wait_time);
+            self.lock.unlock();
+            self.wait();
             self.ticks_since_start += 1;
         }
     }
     fn do_tick(self: *Fabric) void {
-        self.lock.lock();
         for (self.threads, 0..) |*thread, i| {
             if (thread.inactive) continue;
             switch (thread.delta) {
@@ -76,14 +91,36 @@ const Fabric = struct {
                 },
             }
         }
+    }
+    fn wait(self: *Fabric) void {
+        self.time += self.tick;
+        self.lock.lock();
+        const source = self.source;
         self.lock.unlock();
+        switch (source) {
+            .Link => {
+                c.abl_link_capture_audio_session_state(self.link, self.state);
+                defer c.abl_link_commit_audio_session_state(self.link, self.state);
+                const now = c.abl_link_clock_micros(self.link);
+                const eps: f64 = 1.0 / (96.0 * 24);
+                const current_beat = c.abl_link_beat_at_time(self.state, @intCast(now), eps);
+                const phase = @mod(current_beat, eps);
+                const next_beat = current_beat + eps - phase;
+                const next_time = c.abl_link_time_at_beat(self.state, next_beat, eps);
+                const wait_time: i128 = (next_time - now) * std.time.ns_per_us;
+                if (wait_time > 0) std.time.sleep(@intCast(wait_time));
+            },
+            else => {
+                const wait_time = @as(i128, self.time) - timer.read();
+                if (wait_time > 0) std.time.sleep(@intCast(wait_time));
+            },
+        }
     }
 };
 
 var allocator: std.mem.Allocator = undefined;
 var fabric: *Fabric = undefined;
 var timer: std.time.Timer = undefined;
-var source: Source = .Internal;
 
 pub fn init(time: std.time.Timer, alloc_pointer: std.mem.Allocator) !void {
     timer = time;
@@ -113,11 +150,6 @@ pub fn get_tempo() f64 {
 pub fn get_beats() f64 {
     const ticks: f64 = @floatFromInt(fabric.ticks_since_start);
     return ticks / (96.0 * 24.0);
-}
-
-fn wait(nanoseconds: i128) void {
-    if (nanoseconds < 0) return;
-    std.time.sleep(@intCast(nanoseconds));
 }
 
 pub fn cancel(id: u8) void {
@@ -163,7 +195,7 @@ pub fn stop() void {
     events.post(event);
 }
 
-pub fn start() !void {
+pub fn start() void {
     const event = .{
         .Clock_Transport = .{
             .transport = .Start,
@@ -184,20 +216,20 @@ pub fn reset(beat: u64) void {
 }
 
 pub fn midi(message: u8) !void {
-    if (source != .MIDI) {
+    if (fabric.source != .MIDI) {
         if (message == 0xf8) last = timer.read();
         return;
     }
     switch (message) {
         0xfa => {
-            try start();
+            start();
             reset(0);
         },
         0xfc => {
             stop();
         },
         0xfb => {
-            try start();
+            start();
         },
         0xf8 => {
             midi_update_tempo();
@@ -220,9 +252,52 @@ fn midi_update_tempo() void {
 }
 
 pub fn set_source(new: Source) !void {
-    source = new;
+    c.abl_link_enable(fabric.link, new == .Link);
+    fabric.lock.lock();
+    fabric.source = new;
+    fabric.lock.unlock();
+}
+
+fn start_stop_callback(is_playing: bool, context: ?*anyopaque) callconv(.C) void {
+    var ctx = context orelse return;
+    var self: *Fabric = @ptrCast(@alignCast(ctx));
+    if (self.source == .Link) {
+        if (is_playing) start() else stop();
+    }
+}
+
+fn tempo_callback(tempo: f64, context: ?*anyopaque) callconv(.C) void {
+    var ctx = context orelse return;
+    var self: *Fabric = @ptrCast(@alignCast(ctx));
+    if (self.source == .Link) {
+        set_tempo(tempo);
+    }
+}
+
+fn peers_callback(peers: u64, context: ?*anyopaque) callconv(.C) void {
+    var ctx = context orelse return;
+    var self: *Fabric = @ptrCast(@alignCast(ctx));
+    self.peers = peers;
 }
 
 pub fn link_set_tempo(bpm: f64) void {
-    _ = bpm;
+    set_tempo(bpm);
+    c.abl_link_capture_app_session_state(fabric.link, fabric.state);
+    defer c.abl_link_commit_app_session_state(fabric.link, fabric.state);
+    const now = c.abl_link_clock_micros(fabric.link);
+    c.abl_link_set_tempo(fabric.state, bpm, now);
+}
+
+pub fn link_start() void {
+    c.abl_link_capture_app_session_state(fabric.link, fabric.state);
+    defer c.abl_link_commit_app_session_state(fabric.link, fabric.state);
+    const time = c.abl_link_clock_micros(fabric.link);
+    c.abl_link_set_is_playing(fabric.state, true, @intCast(time));
+}
+
+pub fn link_stop() void {
+    c.abl_link_capture_app_session_state(fabric.link, fabric.state);
+    defer c.abl_link_commit_app_session_state(fabric.link, fabric.state);
+    const time = c.abl_link_clock_micros(fabric.link);
+    c.abl_link_set_is_playing(fabric.state, false, @intCast(time));
 }

@@ -16,3 +16,6 @@
 [submodule "lib/SDL-libs"]
 	path = lib/SDL-libs
 	url = https://github.com/ryleelyman/SDL-libs
+[submodule "lib/link"]
+	path = lib/link
+	url = https://github.com/ryleelyman/link
