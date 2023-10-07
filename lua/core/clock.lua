@@ -116,8 +116,8 @@ clock.set_source = function(source)
     _seamstress.clock_set_source(0)
   elseif source == "midi" then
     _seamstress.clock_set_source(1)
-  -- elseif source == "link" then
-  --   _seamstress.clock_set_source(2)
+  elseif source == "link" then
+    _seamstress.clock_set_source(2)
   else
     error("unknown clock source: " .. source)
   end
@@ -144,11 +144,17 @@ clock.internal = {
   end,
 }
 
--- clock.link = {
---   set_tempo = function(bpm)
---     return _seamstress.clock_link_set_tempo(bpm)
---   end,
--- }
+clock.link = {
+  set_tempo = function(bpm)
+    return _seamstress.clock_link_set_tempo(bpm)
+  end,
+  start = function()
+    return _seamstress.clock_link_start()
+  end,
+  stop = function()
+    return _seamstress.clock_link_stop()
+  end,
+}
 
 clock.tempo_change_handler = nil
 
@@ -173,7 +179,7 @@ _seamstress.transport = {
 function clock.add_params()
   local send_midi_clock = {}
   params:add_group("CLOCK", "CLOCK", 19)
-  params:add_option("clock_source", "source", { "internal", "midi" }, seamstress.state.clock.source)
+  params:add_option("clock_source", "source", { "internal", "midi", "link" }, seamstress.state.clock.source)
   params:set_action("clock_source", function(x)
     clock.set_source(params:string("clock_source"))
     if x == 1 then
@@ -186,6 +192,8 @@ function clock.add_params()
     local source = params:string("clock_source")
     if source == "internal" then
       clock.internal.set_tempo(bpm)
+    elseif source == "link" then
+      clock.link.set_tempo(bpm)
     end
     seamstress.state.clock.tempo = bpm
     if clock.tempo_change_handler ~= nil then
@@ -203,7 +211,7 @@ function clock.add_params()
   params:add_separator("midi_clock_out_separator", "midi clock out")
   for i = 1, 16 do
     local short_name = string.len(midi.vports[i].name) <= 20 and midi.vports[i].name
-      or util.acronym(midi.vports[i].name)
+        or util.acronym(midi.vports[i].name)
     params:add_binary("clock_midi_out_" .. i, i .. ". " .. short_name, "toggle", seamstress.state.clock.midi_out[i])
     params:set_action("clock_midi_out_" .. i, function(x)
       if x == 1 then

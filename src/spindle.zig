@@ -93,6 +93,8 @@ pub fn init(prefix: []const u8, config: []const u8, time: std.time.Timer, alloc_
     register_seamstress("clock_get_beats", ziglua.wrap(clock_get_beats));
     register_seamstress("clock_set_source", ziglua.wrap(clock_set_source));
     register_seamstress("clock_link_set_tempo", ziglua.wrap(clock_link_set_tempo));
+    register_seamstress("clock_link_start", ziglua.wrap(clock_link_start));
+    register_seamstress("clock_link_stop", ziglua.wrap(clock_link_stop));
     register_seamstress("clock_internal_set_tempo", ziglua.wrap(clock_internal_set_tempo));
     register_seamstress("clock_internal_start", ziglua.wrap(clock_internal_start));
     register_seamstress("clock_internal_stop", ziglua.wrap(clock_internal_stop));
@@ -1243,9 +1245,25 @@ fn clock_set_source(l: *Lua) i32 {
 // @function clock_internal_start
 fn clock_internal_start(l: *Lua) i32 {
     check_num_args(l, 0);
-    clock.start() catch {
-        l.raiseErrorStr("failed to start clock!", .{});
-    };
+    clock.start();
+    return 0;
+}
+
+/// starts link transport
+// users should use `clock.link.start()` instead
+// @function clock_link_start
+fn clock_link_start(l: *Lua) i32 {
+    check_num_args(l, 0);
+    clock.link_start();
+    return 0;
+}
+
+/// stops link transport
+// users should use `clock.link.stop()` instead
+// @function clock_link_start
+fn clock_link_stop(l: *Lua) i32 {
+    check_num_args(l, 0);
+    clock.link_stop();
     return 0;
 }
 
