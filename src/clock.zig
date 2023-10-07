@@ -133,9 +133,6 @@ pub fn schedule_sync(id: u8, beat: f64, offset: f64) void {
 }
 
 pub fn stop() void {
-    fabric.quit = true;
-    if (fabric.clock) |pid| pid.join();
-    fabric.clock = null;
     const event = .{
         .Clock_Transport = .{
             .transport = .Stop,
@@ -145,9 +142,6 @@ pub fn stop() void {
 }
 
 pub fn start() !void {
-    if (fabric.clock == null) {
-        fabric.clock = try std.Thread.spawn(.{}, Fabric.loop, .{fabric});
-    }
     const event = .{
         .Clock_Transport = .{
             .transport = .Start,
@@ -204,14 +198,7 @@ fn midi_update_tempo() void {
 }
 
 pub fn set_source(new: Source) !void {
-    defer source = new;
-    if (source != new) {
-        switch (new) {
-            .MIDI => try start(),
-            .Internal => try start(),
-            .Link => {},
-        }
-    }
+    source = new;
 }
 
 pub fn link_set_tempo(bpm: f64) void {
