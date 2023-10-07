@@ -1216,7 +1216,6 @@ fn clock_internal_set_tempo(l: *Lua) i32 {
 }
 
 /// sets link clock tempo.
-// not yet implemented!!
 // users should use the clock param instead
 // @param bpm
 // @function clock_link_set_tempo
