@@ -3,12 +3,16 @@ const events = @import("events.zig");
 const pthread = @import("pthread.zig");
 
 pub const Transport = enum { Start, Stop, Reset };
+const Delta = union(enum) {
+    Sleep: i128,
+    Sync: u64,
+};
 
 pub const Source = enum(c_longlong) { Internal, MIDI, Link };
 
 const Clock = struct {
     inactive: bool = true,
-    delta: i128 = 0,
+    delta: Delta = .{ .Sleep = 0 },
 };
 
 const Fabric = struct {
@@ -50,12 +54,26 @@ const Fabric = struct {
         self.lock.lock();
         for (self.threads, 0..) |*thread, i| {
             if (thread.inactive) continue;
-            thread.delta -= self.tick;
-            if (thread.delta <= 0) {
-                thread.inactive = true;
-                events.post(.{ .Clock_Resume = .{
-                    .id = @intCast(i),
-                } });
+            switch (thread.delta) {
+                .Sleep => |*delta| {
+                    delta.* -= self.tick;
+                    if (delta.* <= 0) {
+                        thread.inactive = true;
+                        events.post(.{ .Clock_Resume = .{
+                            .id = @intCast(i),
+                        } });
+                    }
+                },
+                .Sync => |*delta| {
+                    if (delta.* == 0) {
+                        thread.inactive = true;
+                        events.post(.{ .Clock_Resume = .{
+                            .id = @intCast(i),
+                        } });
+                    } else {
+                        delta.* -= 1;
+                    }
+                },
             }
         }
         self.lock.unlock();
@@ -98,7 +116,6 @@ pub fn get_beats() f64 {
 }
 
 fn wait(nanoseconds: i128) void {
-    // for now, just call
     if (nanoseconds < 0) return;
     std.time.sleep(@intCast(nanoseconds));
 }
@@ -106,28 +123,33 @@ fn wait(nanoseconds: i128) void {
 pub fn cancel(id: u8) void {
     var clock = &fabric.threads[id];
     clock.inactive = true;
-    clock.delta = 0;
+    clock.delta = .{ .Sleep = 0 };
 }
 
 pub fn schedule_sleep(id: u8, seconds: f64) void {
     fabric.lock.lock();
     const delta: u64 = @intFromFloat(seconds * std.time.ns_per_s);
     var clock = &fabric.threads[id];
-    clock.delta += delta;
+    switch (clock.delta) {
+        .Sleep => |*d| {
+            d.* += delta;
+        },
+        .Sync => {
+            clock.delta = .{ .Sleep = delta };
+        },
+    }
     clock.inactive = false;
     fabric.lock.unlock();
 }
 
 pub fn schedule_sync(id: u8, beat: f64, offset: f64) void {
+    const ticks_from_beat: u64 = @intFromFloat(beat * 96.0 * 24.0);
+    const ticks_from_offset: u64 = @intFromFloat(offset * 96.0 * 24.0);
+    const current_tick = @mod(fabric.ticks_since_start, ticks_from_beat);
+    const ticks = ticks_from_beat - current_tick + ticks_from_offset;
     fabric.lock.lock();
-    const tick_sync = beat * 96 * 24;
-    const since_start: f64 = @floatFromInt(fabric.ticks_since_start);
-    const ticks_elapsed = std.math.mod(f64, since_start, tick_sync) catch unreachable;
-    const next_tick = tick_sync - ticks_elapsed + offset;
-    const tick: f64 = @floatFromInt(fabric.tick);
-    const delta: u64 = @intFromFloat(next_tick * tick);
     var clock = &fabric.threads[id];
-    clock.delta = delta;
+    clock.delta = .{ .Sync = ticks };
     clock.inactive = false;
     fabric.lock.unlock();
 }
