@@ -1,7 +1,7 @@
 -- collision.
 -- @eigen
 --
--- inspired by the visualisations for the ATLAS experiments at CERN's LHC.
+-- inspired by the visualizations for the ATLAS experiments at CERN's LHC.
 
 
 -- -------------------------------------------------------------------------
