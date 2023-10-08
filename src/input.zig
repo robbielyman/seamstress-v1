@@ -11,6 +11,8 @@ var quit = false;
 pub var readline = true;
 var pid: std.Thread = undefined;
 var allocator: std.mem.Allocator = undefined;
+const pollEnum = enum { StdIn };
+var watcher: std.io.Poller(pollEnum) = undefined;
 const logger = std.log.scoped(.input);
 
 pub fn init(allocator_pointer: std.mem.Allocator) !void {
@@ -27,6 +29,7 @@ pub fn init(allocator_pointer: std.mem.Allocator) !void {
 
 pub fn deinit() void {
     quit = true;
+    watcher.deinit();
     const newstdin = std.os.dup(std.io.getStdIn().handle) catch unreachable;
     std.io.getStdIn().close();
     pid.detach();
@@ -86,16 +89,14 @@ fn inner() !void {
 
 fn bare_input_run() !void {
     pid.setName("input_thread") catch {};
-    var stdin = std.io.getStdIn().reader();
     var stdout = std.io.getStdOut().writer();
-    var fds = [1]std.os.pollfd{
-        .{ .fd = std.io.getStdIn().handle, .events = std.os.POLL.IN, .revents = 0 },
-    };
+    watcher = std.io.poll(allocator, pollEnum, .{ .StdIn = std.io.getStdIn() });
+    var stdin = watcher.fifo(.StdIn).reader();
     try stdout.print("> ", .{});
     var buf: [1024]u8 = undefined;
     while (!quit) {
-        const data = try std.os.poll(&fds, 1);
-        if (data == 0) continue;
+        const data = try watcher.poll();
+        if (!data) continue;
         const len = stdin.read(&buf) catch break;
         if (len == 0) break;
         if (len >= buf.len - 1) {
