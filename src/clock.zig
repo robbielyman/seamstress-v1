@@ -80,13 +80,12 @@ const Fabric = struct {
                     }
                 },
                 .Sync => |*delta| {
+                    delta.* -= 1;
                     if (delta.* == 0) {
                         thread.inactive = true;
                         events.post(.{ .Clock_Resume = .{
                             .id = @intCast(i),
                         } });
-                    } else {
-                        delta.* -= 1;
                     }
                 },
             }
@@ -177,9 +176,9 @@ pub fn schedule_sleep(id: u8, seconds: f64) void {
 pub fn schedule_sync(id: u8, beat: f64, offset: f64) void {
     const ticks_from_beat: u64 = @intFromFloat(beat * 96.0 * 24.0);
     const ticks_from_offset: u64 = @intFromFloat(offset * 96.0 * 24.0);
+    fabric.lock.lock();
     const current_tick = @mod(fabric.ticks_since_start, ticks_from_beat);
     const ticks = ticks_from_beat - current_tick + ticks_from_offset;
-    fabric.lock.lock();
     var clock = &fabric.threads[id];
     clock.delta = .{ .Sync = ticks };
     clock.inactive = false;
