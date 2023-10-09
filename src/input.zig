@@ -29,7 +29,7 @@ pub fn init(allocator_pointer: std.mem.Allocator) !void {
 
 pub fn deinit() void {
     quit = true;
-    watcher.deinit();
+    if (!readline) watcher.deinit();
     const newstdin = std.os.dup(std.io.getStdIn().handle) catch unreachable;
     std.io.getStdIn().close();
     pid.detach();
