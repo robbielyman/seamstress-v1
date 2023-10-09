@@ -30,11 +30,11 @@ pub fn init(allocator_pointer: std.mem.Allocator) !void {
 pub fn deinit() void {
     quit = true;
     if (!readline) watcher.deinit();
-    const newstdin = std.os.dup(std.io.getStdIn().handle) catch unreachable;
-    std.io.getStdIn().close();
-    pid.detach();
-    if (readline) write_history();
-    std.os.dup2(newstdin, 0) catch unreachable;
+    if (readline) {
+        c.rl_done = 1;
+        pid.join();
+        write_history();
+    } else pid.detach();
 }
 
 fn write_history() void {
@@ -46,9 +46,14 @@ fn write_history() void {
     allocator.free(home);
 }
 
+fn event_hook() callconv(.C) c_int {
+    return 0;
+}
+
 fn input_run() !void {
     _ = c.rl_initialize();
     c.rl_prep_terminal(1);
+    c.rl_event_hook = event_hook;
     c.using_history();
     c.stifle_history(500);
     const home = std.process.getEnvVarOwned(allocator, "HOME") catch home: {
