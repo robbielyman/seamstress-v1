@@ -152,9 +152,11 @@ pub fn get_beats() f64 {
 }
 
 pub fn cancel(id: u8) void {
+    fabric.lock.lock();
     var clock = &fabric.threads[id];
     clock.inactive = true;
     clock.delta = .{ .Sleep = 0 };
+    fabric.lock.unlock();
 }
 
 pub fn schedule_sleep(id: u8, seconds: f64) void {
