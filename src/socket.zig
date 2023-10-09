@@ -12,7 +12,7 @@ var quit = false;
 pub fn init(alloc_pointer: std.mem.Allocator, port: u16) !void {
     quit = false;
     allocator = alloc_pointer;
-    const addr = try std.net.Address.resolveIp("127.0.0.1", port);
+    const addr = try std.net.Address.parseIp4("127.0.0.1", port);
     listener = std.net.StreamServer.init(.{});
     try listener.listen(addr);
     pid = try std.Thread.spawn(.{}, loop, .{});
