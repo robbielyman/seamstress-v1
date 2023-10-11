@@ -270,7 +270,7 @@ fn handle(event: Data) !void {
         .MIDI_Remove => |e| try spindle.midi_remove(e.id),
         .MIDI => |e| {
             switch (e.message[0]) {
-                0xfa, 0xfb, 0xfc, 0xf8 => try clock.midi(e.message[0]),
+                0xfa, 0xfb, 0xfc, 0xf8 => clock.midi(e.message[0]),
                 else => {},
             }
             try spindle.midi_event(e.id, e.message);

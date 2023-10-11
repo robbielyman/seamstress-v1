@@ -1211,7 +1211,7 @@ fn clock_get_beats(l: *Lua) i32 {
 fn clock_internal_set_tempo(l: *Lua) i32 {
     check_num_args(l, 1);
     const bpm = l.checkNumber(1);
-    clock.set_tempo(bpm);
+    clock.internal_set_tempo(bpm);
     return 0;
 }
 
