@@ -1244,6 +1244,7 @@ fn clock_set_source(l: *Lua) i32 {
 // @function clock_internal_start
 fn clock_internal_start(l: *Lua) i32 {
     check_num_args(l, 0);
+    clock.reset(0);
     clock.start();
     return 0;
 }
