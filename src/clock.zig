@@ -339,8 +339,8 @@ pub fn midi(message: u8) void {
     if (fabric.source != .MIDI) {
         if (message == 0xf8) {
             midi_tick();
-            return;
         }
+        return;
     }
     switch (message) {
         0xfa => {
