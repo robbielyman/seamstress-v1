@@ -174,8 +174,10 @@ const Link_Beat_Reference = struct {
             const beat = c.abl_link_beat_at_time(fabric.state, @intCast(now), quantum);
             const phase = c.abl_link_phase_at_time(fabric.state, @intCast(now), quantum);
             self.beat.beats = beat;
-            const micros = c.abl_link_time_at_beat(fabric.state, self.beat.beats + 1, quantum);
-            self.beat.beat_duration = @intCast(@as(i128, micros - now) * std.time.ns_per_us);
+            const micros = c.abl_link_time_at_beat(fabric.state, beat + 1, quantum);
+            if (micros > now) {
+                self.beat.beat_duration = @intCast((micros - now) * std.time.ns_per_us);
+            }
             self.lock.unlock();
             if (self.flag == 1 and beat > 0 and beat < 1) {
                 self.flag = 0;
@@ -216,6 +218,7 @@ pub fn get_tempo() f64 {
 
 fn get_delta(now: i128, then: u64, duration: u64) f64 {
     const numerator: i128 = now - then;
+    if (numerator <= 0) return 0;
     const fnum: f64 = @floatFromInt(numerator);
     return fnum / @as(f64, @floatFromInt(duration));
 }
