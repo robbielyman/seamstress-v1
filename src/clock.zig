@@ -173,13 +173,14 @@ const Link_Beat_Reference = struct {
             const now = c.abl_link_clock_micros(fabric.link);
             const beat = c.abl_link_beat_at_time(fabric.state, @intCast(now), quantum);
             const phase = c.abl_link_phase_at_time(fabric.state, @intCast(now), quantum);
+            const last = self.beat.beats;
             self.beat.beats = beat;
             const micros = c.abl_link_time_at_beat(fabric.state, beat + 1, quantum);
             if (micros > now) {
                 self.beat.beat_duration = @intCast((micros - now) * std.time.ns_per_us);
             }
             self.lock.unlock();
-            if (self.flag == 1 and beat > 0 and beat < 1) {
+            if (self.flag == 1 and phase > 0 and phase < 1) {
                 self.flag = 0;
                 start();
                 reschedule_sync_events();
@@ -187,6 +188,7 @@ const Link_Beat_Reference = struct {
                 self.flag = 0;
                 stop();
             }
+            if (last > beat) reschedule_sync_events();
             c.abl_link_commit_audio_session_state(fabric.link, fabric.state);
             std.time.sleep(1000);
         }
@@ -269,9 +271,12 @@ pub fn schedule_sleep(id: u8, seconds: f64) void {
 
 pub fn schedule_sync(id: u8, beat: f64, offset: f64) void {
     const clock_beat = get_beats();
-    const sync_beat = get_sync_beat(clock_beat, beat, offset);
-    fabric.lock.lock();
     var clock = &fabric.threads[id];
+    const sync_beat = switch (clock.data) {
+        .Sleep => get_sync_beat(clock_beat, beat, offset),
+        .Sync => |sync| get_sync_beat(sync.beat, beat, offset),
+    };
+    fabric.lock.lock();
     clock.data = .{ .Sync = .{
         .beat = sync_beat,
         .sync = beat,
