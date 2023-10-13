@@ -11,6 +11,7 @@ var timer: std.time.Timer = undefined;
 var quantum: f64 = 4.0;
 pub const Transport = enum { Start, Stop, Reset };
 pub const Source = enum(c_longlong) { Internal, MIDI, Link };
+const logger = std.log.scoped(.clock);
 
 pub fn init(time: std.time.Timer, alloc_pointer: std.mem.Allocator) !void {
     timer = time;
@@ -34,9 +35,14 @@ pub fn init(time: std.time.Timer, alloc_pointer: std.mem.Allocator) !void {
     };
     internal_beat_reference.thread = try std.Thread.spawn(.{}, Internal_Beat_Reference.loop, .{&internal_beat_reference});
     midi_beat_reference = .{
-        .last_beat_time = now,
-        .beats = 0,
-        .beat_duration = @divFloor(std.time.ns_per_min, 120),
+        .beat = .{
+            .last_beat_time = now,
+            .beats = 0,
+            .beat_duration = @divFloor(std.time.ns_per_min, 120),
+        },
+        .duration_buf = .{@divFloor(std.time.ns_per_min, 120)} ** 6,
+        .idx = 0,
+        .lock = .{},
     };
     link_beat_reference = .{
         .beat = .{
@@ -102,6 +108,7 @@ const Fabric = struct {
     }
     fn loop(self: *Fabric) void {
         pthread.set_priority(90);
+        self.clock.setName("clock_scheduler") catch {};
         while (!self.quit) {
             self.lock.lock();
             self.do_tick();
@@ -144,6 +151,7 @@ const Internal_Beat_Reference = struct {
     thread: std.Thread,
     quit: bool,
     fn loop(self: *@This()) void {
+        self.thread.setName("internal_clock_thread") catch {};
         self.beat.last_beat_time = timer.read();
         self.beat.beats = 0;
         while (!self.quit) {
@@ -166,6 +174,7 @@ const Link_Beat_Reference = struct {
     quit: bool,
     flag: i2,
     fn loop(self: *@This()) void {
+        self.thread.setName("link_clock_thread") catch {};
         while (!self.quit) {
             c.abl_link_capture_audio_session_state(fabric.link, fabric.state);
             self.lock.lock();
@@ -194,10 +203,16 @@ const Link_Beat_Reference = struct {
         }
     }
 };
+const Midi_Beat_Reference = struct {
+    beat: Beat,
+    duration_buf: [6]u64,
+    idx: u8,
+    lock: std.Thread.Mutex,
+};
 
 var internal_beat_reference: Internal_Beat_Reference = undefined;
 var link_beat_reference: Link_Beat_Reference = undefined;
-var midi_beat_reference: Beat = undefined;
+var midi_beat_reference: Midi_Beat_Reference = undefined;
 
 pub fn internal_set_tempo(bpm: f64) void {
     defer fabric.tempo = bpm;
@@ -234,8 +249,10 @@ pub fn get_beats() f64 {
             return internal_beat_reference.beat.beats + delta;
         },
         .MIDI => {
-            const delta = get_delta(timer.read(), midi_beat_reference.last_beat_time, midi_beat_reference.beat_duration);
-            return midi_beat_reference.beats + delta;
+            midi_beat_reference.lock.lock();
+            defer midi_beat_reference.lock.unlock();
+            const delta = get_delta(timer.read(), midi_beat_reference.beat.last_beat_time, midi_beat_reference.beat.beat_duration);
+            return midi_beat_reference.beat.beats + delta;
         },
         .Link => {
             link_beat_reference.lock.lock();
@@ -288,6 +305,7 @@ pub fn schedule_sync(id: u8, beat: f64, offset: f64) void {
 
 fn reschedule_sync_events() void {
     const clock_beat = get_beats();
+    logger.info("rescheduling at beat {d}", .{clock_beat});
     fabric.lock.lock();
     defer fabric.lock.unlock();
     for (fabric.threads) |*thread| {
@@ -328,7 +346,9 @@ pub fn reset(beat: f64) void {
             reschedule_sync_events();
         },
         .MIDI => {
-            midi_beat_reference.beats = beat;
+            midi_beat_reference.lock.lock();
+            midi_beat_reference.beat.beats = beat;
+            midi_beat_reference.lock.unlock();
             reschedule_sync_events();
         },
         .Link => {
@@ -352,9 +372,12 @@ pub fn midi(message: u8) void {
     }
     switch (message) {
         0xfa => {
+            const now = timer.read();
             start();
             reset(0);
-            midi_beat_reference.last_beat_time = timer.read();
+            midi_beat_reference.lock.lock();
+            midi_beat_reference.beat.last_beat_time = now;
+            midi_beat_reference.lock.unlock();
         },
         0xfc => {
             stop();
@@ -371,17 +394,28 @@ pub fn midi(message: u8) void {
 
 fn midi_tick() void {
     const now = timer.read();
-    midi_beat_reference.beat_duration = (now - midi_beat_reference.last_beat_time) * 24;
-    fabric.tempo = @as(f64, std.time.ns_per_min) / @as(f64, @floatFromInt(midi_beat_reference.beat_duration));
-    midi_beat_reference.last_beat_time = now;
-    midi_beat_reference.beats += 1.0 / 24.0;
+    midi_beat_reference.lock.lock();
+    defer midi_beat_reference.lock.unlock();
+    midi_beat_reference.beat.beats += 1.0 / 24.0;
+    if (now < midi_beat_reference.beat.last_beat_time) return;
+    midi_beat_reference.idx = @mod(midi_beat_reference.idx + 1, 6);
+    midi_beat_reference.duration_buf[midi_beat_reference.idx] = (now - midi_beat_reference.beat.last_beat_time) * 4;
+    var duration: u64 = 0;
+    inline for (midi_beat_reference.duration_buf) |dur| {
+        duration += dur;
+    }
+    midi_beat_reference.beat.beat_duration = @divFloor(duration + midi_beat_reference.beat.beat_duration, 2);
+    fabric.tempo = @as(f64, std.time.ns_per_min) / @as(f64, @floatFromInt(midi_beat_reference.beat.beat_duration));
+    midi_beat_reference.beat.last_beat_time = now;
 }
 
 pub fn set_source(new: Source) !void {
     c.abl_link_enable(fabric.link, new == .Link);
     if (new == .Internal) internal_set_tempo(fabric.tempo);
-    fabric.source = new;
-    reschedule_sync_events();
+    if (new != fabric.source) {
+        fabric.source = new;
+        reschedule_sync_events();
+    }
 }
 
 fn start_stop_callback(is_playing: bool, context: ?*anyopaque) callconv(.C) void {
