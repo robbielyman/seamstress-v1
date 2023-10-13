@@ -222,6 +222,7 @@ fn is_prefixed(name: [:0]const u8) bool {
 }
 
 fn main_loop() !void {
+    thread.setName("midi_device_loop") catch {};
     while (!quit) {
         std.time.sleep(std.time.ns_per_s);
         try add_devices();

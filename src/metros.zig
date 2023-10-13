@@ -8,8 +8,10 @@ var timer: std.time.Timer = undefined;
 
 const Thread = struct {
     pid: std.Thread = undefined,
+    name: []const u8,
     quit: bool = false,
     fn cancel(self: *Thread) void {
+        allocator.free(self.name);
         self.quit = true;
         self.pid.detach();
     }
@@ -49,6 +51,7 @@ const Metro = struct {
         self.thread = allocator.create(Thread) catch @panic("OOM!");
         self.thread.?.* = .{
             .quit = false,
+            .name = try std.fmt.allocPrint(allocator, "metro_thread_{d}", .{self.id}),
             .pid = try std.Thread.spawn(.{}, loop, .{ self, self.thread.? }),
         };
     }
@@ -122,6 +125,7 @@ pub fn deinit() void {
     defer allocator.free(metros);
     for (metros) |*metro| {
         if (metro.thread) |pid| {
+            allocator.free(pid.name);
             pid.quit = true;
             pid.pid.join();
         }
@@ -129,6 +133,7 @@ pub fn deinit() void {
 }
 
 fn loop(self: *Metro, pid: *Thread) void {
+    pid.pid.setName(pid.name) catch {};
     self.status_lock.lock();
     self.status = Status.Running;
     self.status_lock.unlock();

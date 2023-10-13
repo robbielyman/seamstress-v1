@@ -64,6 +64,7 @@ fn input_run() !void {
 }
 
 fn inner() !void {
+    pid.setName("input_thread") catch {};
     while (!quit) {
         var c_line = c.readline("> ") orelse {
             quit = true;
@@ -84,6 +85,7 @@ fn inner() !void {
 }
 
 fn bare_input_run() !void {
+    pid.setName("input_thread") catch {};
     var stdin = std.io.getStdIn().reader();
     var stdout = std.io.getStdOut().writer();
     var fds = [1]std.os.pollfd{

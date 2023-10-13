@@ -18,6 +18,7 @@ pub fn init(alloc_pointer: std.mem.Allocator, path: [*:0]const u8) !void {
 }
 
 fn loop(path: [*:0]const u8) !void {
+    thread.setName("watcher_thread") catch {};
     var last_changed: ?i128 = null;
     while (!quit) {
         std.time.sleep(std.time.ns_per_s);

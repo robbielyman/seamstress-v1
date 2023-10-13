@@ -24,7 +24,7 @@ pub const std_options = struct {
 var timer: std.time.Timer = undefined;
 
 var logfile: std.fs.File = undefined;
-var allocator: std.mem.Allocator = undefined;
+var main_thread: std.Thread = undefined;
 
 pub fn main() !void {
     var go_again = true;
@@ -35,13 +35,13 @@ pub fn main() !void {
 
     const option = try args.parse(location);
 
-    const logger = std.log.scoped(.main);
     logfile = try std.fs.createFileAbsolute("/tmp/seamstress.log", .{});
     defer logfile.close();
+    const logger = std.log.scoped(.app);
 
     var general_allocator = std.heap.GeneralPurposeAllocator(.{}){};
-    allocator = switch (comptime builtin.mode) {
-        .ReleaseFast => std.heap.c_allocator,
+    var allocator = switch (comptime builtin.mode) {
+        .ReleaseFast => std.heap.raw_c_allocator,
         else => general_allocator.allocator(),
     };
     defer _ = general_allocator.deinit();
@@ -50,12 +50,10 @@ pub fn main() !void {
     defer if (option) |_| create.deinit();
     while (go_again) {
         try print_version();
-        pthread.set_priority(99);
-
-        const path = try std.fs.path.join(allocator, &.{ location, "..", "share", "seamstress", "lua" });
+        const path = try std.fs.path.joinZ(allocator, &.{ location, "..", "share", "seamstress", "lua" });
         defer allocator.free(path);
-        var pref_buf = [_]u8{0} ** std.fs.MAX_PATH_BYTES;
-        const prefix = try std.fs.realpath(path, &pref_buf);
+        const prefix = try std.fs.realpathAlloc(allocator, path);
+        defer allocator.free(prefix);
         defer logger.info("seamstress shutdown complete", .{});
         const config = std.process.getEnvVarOwned(allocator, "SEAMSTRESS_CONFIG") catch |err| blk: {
             if (err == std.process.GetEnvVarOwnedError.EnvironmentVariableNotFound) {
@@ -106,22 +104,10 @@ pub fn main() !void {
         try screen.init(allocator, width, height, assets);
         defer screen.deinit();
 
-        logger.info("handle events", .{});
-        try events.handle_pending();
+        main_thread = try std.Thread.spawn(.{}, inner, .{ &go_again, try allocator.dupe(u8, location), allocator });
+        defer main_thread.join();
 
-        logger.info("spinning spindle", .{});
-        const filepath = try spindle.startup(args.script_file);
-
-        if (args.watch and filepath != null) {
-            logger.info("watching {s}", .{filepath.?});
-            try watcher.init(allocator, filepath.?);
-        }
-
-        logger.info("entering main loop", .{});
-        go_again = try events.loop();
-
-        defer spindle.deinit();
-        defer if (args.watch and filepath != null) watcher.deinit();
+        screen.loop();
     }
     std.io.getStdIn().close();
     try print_goodbye();
@@ -156,4 +142,29 @@ fn log(
     const writer = logfile.writer();
     const timestamp = @divTrunc(timer.read(), std.time.ns_per_us);
     writer.print(prefix ++ "+{d}: " ++ format ++ "\n", .{timestamp} ++ log_args) catch return;
+}
+
+fn inner(go_again: *bool, location: []const u8, allocator: std.mem.Allocator) !void {
+    main_thread.setName("seamstress_core") catch {};
+    defer allocator.free(location);
+    const logger = std.log.scoped(.main);
+    pthread.set_priority(99);
+
+    logger.info("handle events", .{});
+    try events.handle_pending();
+
+    logger.info("spinning spindle", .{});
+    const filepath = try spindle.startup(args.script_file);
+
+    if (args.watch and filepath != null) {
+        logger.info("watching {s}", .{filepath.?});
+        try watcher.init(allocator, filepath.?);
+    }
+
+    logger.info("entering main loop", .{});
+    go_again.* = try events.loop();
+    screen.quit = true;
+
+    defer spindle.deinit();
+    defer if (args.watch and filepath != null) watcher.deinit();
 }

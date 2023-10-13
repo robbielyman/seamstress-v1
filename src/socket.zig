@@ -50,6 +50,7 @@ fn receive(stream: *std.net.Stream) ![:0]const u8 {
 }
 
 pub fn loop() !void {
+    pid.setName("socket_thread") catch {};
     while (!quit) {
         var fds: [1]std.os.pollfd = .{
             .{

@@ -8,8 +8,6 @@ const c = @cImport({
 
 var allocator: std.mem.Allocator = undefined;
 const logger = std.log.scoped(.screen);
-pub var pending: i32 = 0;
-var missed: usize = 0;
 
 const Bitmask = struct {
     r: u32,
@@ -77,8 +75,7 @@ var windows: [2]Gui = undefined;
 var current: usize = 0;
 
 var font: *c.TTF_Font = undefined;
-var thread: std.Thread = undefined;
-var quit = false;
+pub var quit = false;
 
 pub fn define_geometry(texture: ?*const Texture, vertices: []const Vertex, indices: ?[]const usize) void {
     var verts = allocator.alloc(c.SDL_Vertex, vertices.len) catch @panic("OOM!");
@@ -672,8 +669,6 @@ pub fn set_fullscreen(is_fullscreen: bool) void {
 
 pub fn init(alloc_pointer: std.mem.Allocator, width: u16, height: u16, resources: []const u8) !void {
     quit = false;
-    pending = 0;
-    missed = 0;
     allocator = alloc_pointer;
 
     if (c.SDL_Init(c.SDL_INIT_VIDEO) < 0) {
@@ -737,7 +732,6 @@ pub fn init(alloc_pointer: std.mem.Allocator, width: u16, height: u16, resources
     }
     set(0);
     textures = std.ArrayList(Texture).init(allocator);
-    thread = try std.Thread.spawn(.{}, loop, .{});
 }
 
 fn window_rect(gui: *Gui) void {
@@ -863,9 +857,6 @@ pub fn check() void {
 }
 
 pub fn deinit() void {
-    quit = true;
-    thread.join();
-    if (missed > 0) logger.warn("missed {d} events", .{missed});
     for (textures.items) |texture| {
         c.SDL_FreeSurface(texture.surface);
     }
@@ -881,13 +872,10 @@ pub fn deinit() void {
     c.SDL_Quit();
 }
 
-fn loop() void {
+pub fn loop() void {
     while (!quit) {
-        if (pending < 100) {
-            events.post(.{ .Screen_Check = {} });
-            pending += 1;
-        } else missed += 1;
-        std.time.sleep(10 * std.time.ns_per_ms);
+        check();
+        std.time.sleep(std.time.ns_per_ms);
     }
 }
 

@@ -75,7 +75,6 @@ pub const Data = union(enum) {
         window: usize,
     },
     Redraw: void,
-    Screen_Check: void,
     Screen_Resized: struct {
         w: i32,
         h: i32,
@@ -120,16 +119,9 @@ fn prioritize(context: Context, a: Data, b: Data) std.math.Order {
                 else => return .lt,
             }
         },
-        .Screen_Check => {
-            switch (b) {
-                .Screen_Check => return .eq,
-                else => return .gt,
-            }
-        },
         .MIDI => |m| {
             switch (b) {
                 .Clock_Resume, .Metro => return .gt,
-                .Screen_Check => return .lt,
                 .MIDI => |n| {
                     if (m.id != n.id) return .eq;
                     if (m.msg_num < n.msg_num) return .lt else return .gt;
@@ -140,7 +132,6 @@ fn prioritize(context: Context, a: Data, b: Data) std.math.Order {
         else => {
             switch (b) {
                 .Clock_Resume, .Metro => return .gt,
-                .Screen_Check => return .lt,
                 else => return .eq,
             }
         },
@@ -257,10 +248,6 @@ fn handle(event: Data) !void {
         .Screen_Mouse_Wheel => |e| try spindle.screen_wheel(e.x, e.y, e.window),
         .Redraw => {
             try spindle.redraw();
-        },
-        .Screen_Check => {
-            screen.check();
-            screen.pending -= 1;
         },
         .Screen_Resized => |e| try spindle.screen_resized(e.w, e.h, e.window),
         .Metro => |e| {
