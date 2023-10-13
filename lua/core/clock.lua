@@ -251,7 +251,13 @@ function clock.add_params()
       local source = params:string("clock_source")
       if source ~= "internal" then
         local bpm = _seamstress.clock_get_tempo()
-        params:set("clock_tempo", bpm)
+        params:set("clock_tempo", bpm, source == "link")
+        if source == "link" then
+          seamstress.state.clock.tempo = bpm
+          if clock.tempo_change_handler ~= nil then
+            clock.tempo_change_handler(bpm)
+          end
+        end
         paramsMenu.redraw()
       end
       clock.sleep(1)
