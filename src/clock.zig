@@ -68,6 +68,7 @@ pub fn deinit() void {
 }
 
 const Clock = struct {
+    id: u8 = 255,
     inactive: bool = true,
     data: union(enum) {
         Sleep: i128,
@@ -88,6 +89,14 @@ const Fabric = struct {
     link: c.abl_link,
     state: c.abl_link_session_state,
     source: Source,
+    fn find(self: *Fabric, id: u8) ?*Clock {
+        var ret: ?*Clock = null;
+        for (self.threads) |*clock| {
+            if (clock.id == id) return clock;
+            if (ret == null and clock.id == 255) ret = clock;
+        }
+        return ret;
+    }
     fn init(self: *Fabric) !void {
         quantum = 4;
         self.quit = false;
@@ -119,19 +128,20 @@ const Fabric = struct {
     fn do_tick(self: *Fabric) void {
         const now = timer.read();
         const current_beat = get_beats();
-        for (self.threads, 0..) |*thread, i| {
+        for (self.threads) |*thread| {
+            if (thread.id == 255) continue;
             if (thread.inactive) continue;
             switch (thread.data) {
                 .Sleep => |time| if (now > time) {
                     thread.inactive = true;
                     events.post(.{ .Clock_Resume = .{
-                        .id = @intCast(i),
+                        .id = thread.id,
                     } });
                 },
                 .Sync => |sync| if (current_beat > sync.beat) {
                     thread.inactive = true;
                     events.post(.{ .Clock_Resume = .{
-                        .id = @intCast(i),
+                        .id = thread.id,
                     } });
                 },
             }
@@ -271,36 +281,47 @@ fn get_sync_beat(clock_beat: f64, sync_beat: f64, offset: f64) f64 {
 
 pub fn cancel(id: u8) void {
     fabric.lock.lock();
-    var clock = &fabric.threads[id];
-    clock.inactive = true;
-    clock.data = .{ .Sleep = 0 };
-    fabric.lock.unlock();
+    defer fabric.lock.unlock();
+    for (fabric.threads) |*clock| {
+        if (clock.id != id) continue;
+        clock.id = 255;
+        clock.inactive = true;
+        clock.data = .{ .Sleep = 0 };
+    }
 }
 
 pub fn schedule_sleep(id: u8, seconds: f64) void {
     fabric.lock.lock();
+    defer fabric.lock.unlock();
     const delta: u64 = @intFromFloat(seconds * std.time.ns_per_s);
-    var clock = &fabric.threads[id];
+    var clock = fabric.find(id) orelse {
+        logger.warn("unable to find clock thread for id {d}", .{id});
+        return;
+    };
     clock.data = .{ .Sleep = timer.read() + delta };
     clock.inactive = false;
-    fabric.lock.unlock();
+    clock.id = id;
 }
 
 pub fn schedule_sync(id: u8, beat: f64, offset: f64) void {
     const clock_beat = get_beats();
-    var clock = &fabric.threads[id];
+    fabric.lock.lock();
+    defer fabric.lock.unlock();
+    var clock = fabric.find(id) orelse {
+        logger.warn("unable to find clock thread for id {d}", .{id});
+        return;
+    };
     const sync_beat = switch (clock.data) {
         .Sleep => get_sync_beat(clock_beat, beat, offset),
         .Sync => |sync| get_sync_beat(sync.beat, beat, offset),
     };
-    fabric.lock.lock();
     clock.data = .{ .Sync = .{
         .beat = sync_beat,
         .sync = beat,
         .offset = offset,
     } };
+    clock.id = id;
     clock.inactive = false;
-    fabric.lock.unlock();
 }
 
 fn reschedule_sync_events() void {

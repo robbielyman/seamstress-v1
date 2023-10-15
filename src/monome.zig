@@ -114,18 +114,18 @@ pub const Monome = struct {
 pub fn init(alloc_pointer: std.mem.Allocator, port: u16) !void {
     allocator = alloc_pointer;
     devices = try allocator.alloc(Monome, 8);
+    @memset(devices, .{});
     for (devices, 0..) |*device, i| {
-        device.* = .{};
         device.id = @intCast(i);
         device.from_port = device.id + 1 + port;
         const from_port_str = try std.fmt.allocPrintZ(allocator, "{d}", .{device.from_port});
         defer allocator.free(from_port_str);
         device.thread = c.lo_server_thread_new(from_port_str, osc.lo_error_handler) orelse return error.Fail;
-        _ = c.lo_server_thread_add_method(device.thread, "/sys/size", "ii", handle_size, &device.id);
-        _ = c.lo_server_thread_add_method(device.thread, "/monome/grid/key", "iii", handle_grid_key, &device.id);
-        _ = c.lo_server_thread_add_method(device.thread, "/monome/enc/key", "ii", handle_arc_key, &device.id);
-        _ = c.lo_server_thread_add_method(device.thread, "/monome/enc/delta", "ii", handle_delta, &device.id);
-        _ = c.lo_server_thread_add_method(device.thread, "/monome/tilt", "iiii", handle_tilt, &device.id);
+        _ = c.lo_server_thread_add_method(device.thread, "/sys/size", "ii", handle_size, device);
+        _ = c.lo_server_thread_add_method(device.thread, "/monome/grid/key", "iii", handle_grid_key, device);
+        _ = c.lo_server_thread_add_method(device.thread, "/monome/enc/key", "ii", handle_arc_key, device);
+        _ = c.lo_server_thread_add_method(device.thread, "/monome/enc/delta", "ii", handle_delta, device);
+        _ = c.lo_server_thread_add_method(device.thread, "/monome/tilt", "iiii", handle_tilt, device);
         _ = c.lo_server_thread_start(device.thread);
     }
 }
@@ -145,6 +145,7 @@ pub fn add(name: []const u8, dev_type: []const u8, port: i32) void {
         if (free == null and device.connected == false and device.name == null) free = device;
         const n = device.name orelse continue;
         if (std.mem.eql(u8, n, name)) {
+            if (device.connected == true) return;
             device.connected = true;
             const event = .{
                 .Monome_Add = .{
@@ -272,15 +273,14 @@ fn handle_size(
     _ = argc;
     _ = types;
     _ = path;
-    const ptr: *u8 = @ptrCast(user_data);
-    const i = ptr.*;
-    devices[i].cols = @intCast(argv[0].*.i);
-    devices[i].rows = @intCast(argv[1].*.i);
-    devices[i].quads = @intCast(@divExact(argv[0].*.i * argv[1].*.i, 64));
-    if (!devices[i].connected) {
-        devices[i].connected = true;
+    var device: *Monome = @ptrCast(@alignCast(user_data orelse return 1));
+    device.cols = @intCast(argv[0].*.i);
+    device.rows = @intCast(argv[1].*.i);
+    device.quads = @intCast(@divExact(argv[0].*.i * argv[1].*.i, 64));
+    if (!device.connected) {
+        device.connected = true;
         const event = .{
-            .Monome_Add = .{ .dev = &devices[i] },
+            .Monome_Add = .{ .dev = device },
         };
         events.post(event);
     }
@@ -299,11 +299,10 @@ fn handle_grid_key(
     _ = argc;
     _ = types;
     _ = path;
-    const ptr: *u8 = @ptrCast(user_data);
-    const i = ptr.*;
+    const device: *Monome = @ptrCast(@alignCast(user_data orelse return 1));
     const event = .{
         .Grid_Key = .{
-            .id = i,
+            .id = device.id,
             .x = argv[0].*.i,
             .y = argv[1].*.i,
             .state = argv[2].*.i,
@@ -325,11 +324,10 @@ fn handle_arc_key(
     _ = argc;
     _ = types;
     _ = path;
-    const ptr: *u8 = @ptrCast(user_data);
-    const i = ptr.*;
+    const device: *Monome = @ptrCast(@alignCast(user_data orelse return 1));
     const event = .{
         .Arc_Key = .{
-            .id = i,
+            .id = device.id,
             .ring = argv[0].*.i,
             .state = argv[1].*.i,
         },
@@ -350,11 +348,10 @@ fn handle_delta(
     _ = argc;
     _ = types;
     _ = path;
-    const ptr: *u8 = @ptrCast(user_data);
-    const i = ptr.*;
+    const device: *Monome = @ptrCast(@alignCast(user_data orelse return 1));
     const event = .{
         .Arc_Encoder = .{
-            .id = i,
+            .id = device.id,
             .ring = argv[0].*.i,
             .delta = argv[1].*.i,
         },
@@ -375,11 +372,10 @@ fn handle_tilt(
     _ = argc;
     _ = types;
     _ = path;
-    const ptr: *u8 = @ptrCast(user_data);
-    const i = ptr.*;
+    const device: *Monome = @ptrCast(@alignCast(user_data orelse return 1));
     const event = .{
         .Grid_Tilt = .{
-            .id = i,
+            .id = device.id,
             .sensor = argv[0].*.i,
             .x = argv[1].*.i,
             .y = argv[2].*.i,

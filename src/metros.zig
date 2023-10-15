@@ -26,7 +26,7 @@ const Metro = struct {
     stage: i64 = 0,
     delta: u64 = undefined,
     time: u64 = undefined,
-    thread: ?*Thread = null,
+    thread: ?Thread = null,
     stage_lock: std.Thread.Mutex = .{},
     status_lock: std.Thread.Mutex = .{},
     fn set_time(self: *Metro) void {
@@ -36,7 +36,7 @@ const Metro = struct {
         self.status_lock.lock();
         self.status = Status.Stopped;
         self.status_lock.unlock();
-        if (self.thread) |pid| {
+        if (self.thread) |*pid| {
             pid.cancel();
         }
         self.thread = null;
@@ -48,11 +48,10 @@ const Metro = struct {
     fn init(self: *Metro, delta: u64, count: i64) !void {
         self.delta = delta;
         self.count = count;
-        self.thread = allocator.create(Thread) catch @panic("OOM!");
-        self.thread.?.* = .{
+        self.thread = .{
             .quit = false,
             .name = try std.fmt.allocPrint(allocator, "metro_thread_{d}", .{self.id}),
-            .pid = try std.Thread.spawn(.{}, loop, .{ self, self.thread.? }),
+            .pid = try std.Thread.spawn(.{}, loop, .{self}),
         };
     }
     fn reset(self: *Metro, stage: i64) void {
@@ -124,7 +123,7 @@ pub fn init(time: std.time.Timer, alloc_pointer: std.mem.Allocator) !void {
 pub fn deinit() void {
     defer allocator.free(metros);
     for (metros) |*metro| {
-        if (metro.thread) |pid| {
+        if (metro.thread) |*pid| {
             allocator.free(pid.name);
             pid.quit = true;
             pid.pid.join();
@@ -132,29 +131,28 @@ pub fn deinit() void {
     }
 }
 
-fn loop(self: *Metro, pid: *Thread) void {
-    pid.pid.setName(pid.name) catch {};
+fn loop(self: *Metro) void {
+    self.thread.?.pid.setName(self.thread.?.name) catch {};
     self.status_lock.lock();
     self.status = Status.Running;
     self.status_lock.unlock();
     pthread.set_priority(90);
-    while (!pid.quit) {
+    while (!self.thread.?.quit) {
         self.wait();
         self.stage_lock.lock();
         if (self.stage >= self.count and self.count > 0) {
-            pid.quit = true;
+            self.thread.?.quit = true;
         }
         self.stage_lock.unlock();
         self.status_lock.lock();
         if (self.status == Status.Stopped) {
-            pid.quit = true;
+            self.thread.?.quit = true;
         }
         self.status_lock.unlock();
-        if (pid.quit) break;
+        if (self.thread.?.quit) break;
         self.bang();
         self.stage_lock.lock();
         self.stage += 1;
         self.stage_lock.unlock();
     }
-    allocator.destroy(pid);
 }

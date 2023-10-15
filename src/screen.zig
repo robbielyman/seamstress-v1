@@ -7,6 +7,7 @@ const c = @cImport({
 });
 
 var allocator: std.mem.Allocator = undefined;
+var lock: std.Thread.Mutex = .{};
 const logger = std.log.scoped(.screen);
 
 const Bitmask = struct {
@@ -697,7 +698,7 @@ pub fn init(alloc_pointer: std.mem.Allocator, width: u16, height: u16, resources
     for (0..2) |i| {
         var w = c.SDL_CreateWindow(
             if (i == 0) "seamstress" else "seamstress_params",
-            0,
+            @intCast(i * width * 4),
             @intCast(i * height * 4),
             width * 4,
             height * 4,
@@ -735,6 +736,8 @@ pub fn init(alloc_pointer: std.mem.Allocator, width: u16, height: u16, resources
 }
 
 fn window_rect(gui: *Gui) void {
+    lock.lock();
+    defer lock.unlock();
     var xsize: i32 = undefined;
     var ysize: i32 = undefined;
     var xzoom: u16 = 1;
