@@ -105,7 +105,7 @@ fn osc_receive(
             },
             c.LO_STRING => {
                 const slice: [*:0]const u8 = @ptrCast(&argv[i].*.s);
-                const slice_copy = allocator.dupeZ(u8, std.mem.span(slice)) catch @panic("OOM!");
+                const slice_copy = allocator.dupeZ(u8, std.mem.sliceTo(slice, 0)) catch @panic("OOM!");
                 message[i] = Lo_Arg{ .Lo_String = slice_copy };
             },
             c.LO_BLOB => {
@@ -126,7 +126,7 @@ fn osc_receive(
             },
             c.LO_SYMBOL => {
                 const slice: [*:0]const u8 = @ptrCast(&argv[i].*.S);
-                const slice_copy = allocator.dupeZ(u8, std.mem.span(slice)) catch @panic("OOM!");
+                const slice_copy = allocator.dupeZ(u8, std.mem.sliceTo(slice, 0)) catch @panic("OOM!");
                 message[i] = Lo_Arg{ .Lo_Symbol = slice_copy };
             },
             c.LO_MIDI => {
@@ -173,25 +173,37 @@ pub fn send(
     path: [*:0]const u8,
     msg: []Lo_Arg,
 ) void {
+    defer {
+        for (msg) |m| {
+            switch (m) {
+                .Lo_String => |s| allocator.free(s),
+                .Lo_Symbol => |s| allocator.free(s),
+                .Lo_Blob => |s| allocator.free(s),
+                else => {},
+            }
+        }
+        allocator.free(msg);
+    }
     const address: c.lo_address = c.lo_address_new(to_host, to_port);
     if (address == null) {
         logger.err("failed to create lo_address", .{});
         return;
     }
+    defer c.lo_address_free(address);
     var message: c.lo_message = c.lo_message_new();
-    var i: usize = 0;
-    while (i < msg.len) : (i += 1) {
-        switch (msg[i]) {
+    defer c.lo_message_free(message);
+    for (msg) |m| {
+        switch (m) {
             .Lo_Int32 => |a| _ = c.lo_message_add_int32(message, a),
             .Lo_Float => |a| _ = c.lo_message_add_float(message, a),
-            .Lo_String => |a| _ = c.lo_message_add_string(message, a),
+            .Lo_String => |a| _ = c.lo_message_add_string(message, a.ptr),
             .Lo_Blob => |a| {
                 const blob = c.lo_blob_new(@intCast(a.len), a.ptr);
                 _ = c.lo_message_add_blob(message, blob);
             },
             .Lo_Int64 => |a| _ = c.lo_message_add_int64(message, a),
             .Lo_Double => |a| _ = c.lo_message_add_double(message, a),
-            .Lo_Symbol => |a| _ = c.lo_message_add_symbol(message, a),
+            .Lo_Symbol => |a| _ = c.lo_message_add_symbol(message, a.ptr),
             .Lo_Midi => |a| _ = c.lo_message_add_midi(message, @as([*c]u8, @ptrCast(@constCast(a[0..4])))),
             .Lo_True => _ = c.lo_message_add_true(message),
             .Lo_False => _ = c.lo_message_add_false(message),
@@ -200,6 +212,4 @@ pub fn send(
         }
     }
     _ = c.lo_send_message(address, path, message);
-    c.lo_address_free(address);
-    c.lo_message_free(message);
 }

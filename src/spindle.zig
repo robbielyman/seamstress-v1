@@ -221,40 +221,42 @@ fn osc_send(l: *Lua) i32 {
     }
 
     var msg: []osc.Lo_Arg = undefined;
-    if (num_args == 2) {
-        osc.send(host.?, port.?, path.?, msg);
-        return 0;
-    }
     l.checkType(3, ziglua.LuaType.table);
     const len = l.rawLen(3);
     msg = allocator.alloc(osc.Lo_Arg, len) catch @panic("OOM!");
-    defer allocator.free(msg);
     var i: usize = 1;
     while (i <= len) : (i += 1) {
         l.pushInteger(@intCast(i));
         _ = l.getTable(3);
         msg[i - 1] = switch (l.typeOf(-1)) {
-            .nil => osc.Lo_Arg{ .Lo_Nil = false },
+            .nil => .{ .Lo_Nil = false },
             .boolean => blk: {
                 if (l.toBoolean(-1)) {
-                    break :blk osc.Lo_Arg{ .Lo_True = true };
+                    break :blk .{ .Lo_True = true };
                 } else {
-                    break :blk osc.Lo_Arg{ .Lo_False = false };
+                    break :blk .{ .Lo_False = false };
                 }
             },
-            .number => osc.Lo_Arg{ .Lo_Double = l.toNumber(-1) catch unreachable },
+            .number => blk: {
+                if (l.toInteger(-1)) |number| {
+                    break :blk .{ .Lo_Int64 = number };
+                } else |_| {
+                    break :blk .{ .Lo_Double = l.toNumber(-1) catch unreachable };
+                }
+            },
             .string => blk: {
-                const str = std.mem.span(l.toString(-1) catch unreachable);
-                break :blk osc.Lo_Arg{ .Lo_String = str };
+                const str = allocator.dupeZ(u8, std.mem.sliceTo(l.toString(-1) catch unreachable, 0)) catch @panic("OOM!");
+                break :blk .{ .Lo_String = str };
             },
             else => blk: {
-                const str = std.fmt.allocPrint(
+                const str = std.fmt.allocPrintZ(
                     allocator,
                     "invalid osc argument type {s}",
                     .{l.typeName(l.typeOf(-1))},
                 ) catch unreachable;
-                l.raiseErrorStr(str[0..str.len :0], .{});
-                break :blk osc.Lo_Arg{ .Lo_Nil = false };
+                l.raiseErrorStr(str, .{});
+                allocator.free(str);
+                break :blk .{ .Lo_Nil = false };
             },
         };
         l.pop(1);
