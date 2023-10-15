@@ -311,10 +311,7 @@ pub fn schedule_sync(id: u8, beat: f64, offset: f64) void {
         logger.warn("unable to find clock thread for id {d}", .{id});
         return;
     };
-    const sync_beat = switch (clock.data) {
-        .Sleep => get_sync_beat(clock_beat, beat, offset),
-        .Sync => |sync| get_sync_beat(sync.beat, beat, offset),
-    };
+    const sync_beat = get_sync_beat(clock_beat, beat, offset);
     clock.data = .{ .Sync = .{
         .beat = sync_beat,
         .sync = beat,
