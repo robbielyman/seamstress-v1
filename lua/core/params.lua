@@ -64,7 +64,7 @@ function ParamSet:add(args)
     local name = args.name or id
 
     if args.type == "number" then
-      self:add_number(id, name, args.min, args.max, args.default, args.units, args.allow_pmap)
+      self:add_number(id, name, args.min, args.max, args.default, args.units, args.formatter, args.allow_pmap)
     elseif args.type == "option" then
       self:add_option(id, name, args.options, args.default, args.allow_pmap)
     elseif args.type == "control" then
@@ -134,10 +134,11 @@ end
 -- @tparam number max maximum value
 -- @tparam number default default / initial value
 -- @tparam string units
+-- @param formatter
 -- @tparam bool allow_pmap
-function ParamSet:add_number(id, name, min, max, default, units, allow_pmap)
+function ParamSet:add_number(id, name, min, max, default, units, formatter, allow_pmap)
   local cs = controlspec.new(min, max, "lin", 1, default, units, 1 / math.abs(max - min))
-  self:add { param = control.new(id, name, cs, nil, allow_pmap) }
+  self:add { param = control.new(id, name, cs, formatter, allow_pmap) }
   params.params[params.lookup[id]].is_number = true
 end
 
