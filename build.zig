@@ -61,7 +61,7 @@ pub fn build(b: *std.Build) void {
 
     const zig_liblo = b.dependency("liblo", .{
         .target = target,
-        .optimize = optimize,
+        .optimize = .ReleaseFast,
     });
     exe.linkLibrary(zig_liblo.artifact("liblo"));
 
