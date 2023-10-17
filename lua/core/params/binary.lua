@@ -34,11 +34,19 @@ function binary:get()
 end
 
 function binary:set(v, silent)
+  local lookup_id = params.lookup[self.id]
   silent = silent or false
   v = (v > 0) and 1 or 0
   if self.value ~= v then
     self.value = v
+    -- adjust params UI state:
+    if self.behavior ~= "trigger" then
+      paramsMenu.on[lookup_id] = self.value
+    else
+      paramsMenu.triggered[lookup_id] = 2
+    end
     if silent == false then
+      -- execute action:
       if self.behavior ~= "trigger" or v == 1 then
         self:bang()
       end
