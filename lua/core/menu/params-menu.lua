@@ -58,6 +58,8 @@ local m = {
   dir_prev = nil,
   highlightColors = { r = 0, g = 140, b = 140 },
   delta = 0,
+  triggered = {},
+  on = {},
 }
 
 local page
