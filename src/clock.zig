@@ -52,7 +52,7 @@ pub fn init(time: std.time.Timer, alloc_pointer: std.mem.Allocator) !void {
         },
         .lock = .{},
         .quit = false,
-        .flag = 0,
+        .flag = false,
         .thread = undefined,
     };
     link_beat_reference.thread = try std.Thread.spawn(.{}, Link_Beat_Reference.loop, .{&link_beat_reference});
@@ -182,7 +182,7 @@ const Link_Beat_Reference = struct {
     lock: std.Thread.Mutex,
     thread: std.Thread,
     quit: bool,
-    flag: i2,
+    flag: bool,
     fn loop(self: *@This()) void {
         self.thread.setName("link_clock_thread") catch {};
         while (!self.quit) {
@@ -191,7 +191,7 @@ const Link_Beat_Reference = struct {
             self.beat.last_beat_time = timer.read();
             const now = c.abl_link_clock_micros(fabric.link);
             const beat = c.abl_link_beat_at_time(fabric.state, @intCast(now), quantum);
-            const phase = c.abl_link_phase_at_time(fabric.state, @intCast(now), quantum);
+            // const phase = c.abl_link_phase_at_time(fabric.state, @intCast(now), quantum);
             const last = self.beat.beats;
             self.beat.beats = beat;
             const micros = c.abl_link_time_at_beat(fabric.state, beat + 1, quantum);
@@ -199,13 +199,10 @@ const Link_Beat_Reference = struct {
                 self.beat.beat_duration = @intCast((micros - now) * std.time.ns_per_us);
             }
             self.lock.unlock();
-            if (self.flag == 1 and phase > 0 and phase < 1) {
-                self.flag = 0;
+            if (self.flag and beat > 0 and beat < 1) {
+                self.flag = false;
                 start();
                 reschedule_sync_events();
-            } else if (self.flag == -1 and phase > 0 and phase < 1) {
-                self.flag = 0;
-                stop();
             }
             if (last > beat) reschedule_sync_events();
             c.abl_link_commit_audio_session_state(fabric.link, fabric.state);
@@ -449,7 +446,9 @@ fn start_stop_callback(is_playing: bool, context: ?*anyopaque) callconv(.C) void
             quantum,
         );
         c.abl_link_commit_app_session_state(fabric.link, fabric.state);
-        link_beat_reference.flag = if (is_playing) 1 else -1;
+        if (is_playing) {
+            link_beat_reference.flag = true;
+        } else stop();
     }
 }
 
