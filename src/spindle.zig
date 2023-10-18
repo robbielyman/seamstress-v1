@@ -95,6 +95,7 @@ pub fn init(prefix: []const u8, config: []const u8, time: std.time.Timer, alloc_
     register_seamstress("clock_link_set_tempo", ziglua.wrap(clock_link_set_tempo));
     register_seamstress("clock_link_start", ziglua.wrap(clock_link_start));
     register_seamstress("clock_link_stop", ziglua.wrap(clock_link_stop));
+    register_seamstress("clock_link_set_quantum", ziglua.wrap(clock_link_set_quantum));
     register_seamstress("clock_internal_set_tempo", ziglua.wrap(clock_internal_set_tempo));
     register_seamstress("clock_internal_start", ziglua.wrap(clock_internal_start));
     register_seamstress("clock_internal_stop", ziglua.wrap(clock_internal_stop));
@@ -1225,6 +1226,17 @@ fn clock_link_set_tempo(l: *Lua) i32 {
     check_num_args(l, 1);
     const bpm = l.checkNumber(1);
     clock.link_set_tempo(bpm);
+    return 0;
+}
+
+/// sets clock link quantum
+// users should use the clock param instead
+// @param quantum (in beats)
+// @function clock_link_set_quantum
+fn clock_link_set_quantum(l: *Lua) i32 {
+    check_num_args(l, 1);
+    const quantum = l.checkNumber(1);
+    clock.set_quantum(quantum);
     return 0;
 }
 
