@@ -14,6 +14,7 @@ pub const Source = enum(c_longlong) { Internal, MIDI, Link };
 const logger = std.log.scoped(.clock);
 
 pub fn init(time: std.time.Timer, alloc_pointer: std.mem.Allocator) !void {
+    quantum = 4.0;
     timer = time;
     allocator = alloc_pointer;
     fabric = try allocator.create(Fabric);
@@ -269,6 +270,10 @@ pub fn get_beats() f64 {
     }
 }
 
+pub fn set_quantum(q: f64) void {
+    quantum = q;
+}
+
 fn get_sync_beat(clock_beat: f64, sync_beat: f64, offset: f64) f64 {
     var next_beat: f64 = (std.math.floor((clock_beat + std.math.floatEps(f64)) / sync_beat) + 1) * sync_beat;
     next_beat = next_beat + offset;
@@ -464,7 +469,14 @@ pub fn link_start() void {
     c.abl_link_capture_app_session_state(fabric.link, fabric.state);
     defer c.abl_link_commit_app_session_state(fabric.link, fabric.state);
     const time = c.abl_link_clock_micros(fabric.link);
-    c.abl_link_set_is_playing(fabric.state, true, @intCast(time));
+    c.abl_link_set_is_playing_and_request_beat_at_time(
+        fabric.state,
+        true,
+        time,
+        0.0,
+        quantum,
+    );
+    link_beat_reference.flag = true;
 }
 
 pub fn link_stop() void {

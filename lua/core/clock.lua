@@ -201,11 +201,18 @@ function clock.add_params()
     end
   end)
   params:set_save("clock_tempo", false)
+  params:add_number("clock_link_quantum", "quantum", 0, 50, seamstress.state.clock.quantum)
+  params:set_action("clock_link_quantum", function(quantum)
+    _seamstress.clock_link_set_quantum(quantum)
+    seamstress.state.clock.quantum = quantum
+  end)
   params:add_trigger("clock_reset", "reset")
   params:set_action("clock_reset", function()
     local source = params:string("clock_source")
     if source == "internal" then
       clock.internal.start()
+    elseif source == "link" then
+      clock.link.start()
     end
   end)
   params:add_separator("midi_clock_out_separator", "midi clock out")
