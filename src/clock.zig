@@ -472,7 +472,7 @@ pub fn link_start() void {
     c.abl_link_set_is_playing_and_request_beat_at_time(
         fabric.state,
         true,
-        time,
+        @intCast(time),
         0.0,
         quantum,
     );
