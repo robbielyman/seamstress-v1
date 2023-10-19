@@ -160,11 +160,15 @@ clock.tempo_change_handler = nil
 
 _seamstress.transport = {
   start = function()
+    _seamstress.transport_active = true
+    paramsMenu.redraw()
     if clock.transport.start then
       clock.transport.start()
     end
   end,
   stop = function()
+    _seamstress.transport_active = false
+    paramsMenu.redraw()
     if clock.transport.stop then
       clock.transport.stop()
     end
@@ -184,7 +188,13 @@ function clock.add_params()
     clock.set_source(params:string("clock_source"))
     if x == 1 then
       clock.internal.set_tempo(params:get("clock_tempo"))
+      params:hide("clock_link_quantum")
+    elseif x == 2 then
+      params:hide("clock_link_quantum")
+    elseif x == 3 then
+      params:show("clock_link_quantum")
     end
+    _menu.rebuild_params()
   end)
   params:set_save("clock_source", false)
   params:add_number("clock_tempo", "tempo", 1, 300, seamstress.state.clock.tempo)
@@ -201,7 +211,7 @@ function clock.add_params()
     end
   end)
   params:set_save("clock_tempo", false)
-  params:add_number("clock_link_quantum", "quantum", 0, 50, seamstress.state.clock.quantum)
+  params:add_number("clock_link_quantum", "link quantum", 0, 50, seamstress.state.clock.quantum, nil, function(param) return param:get().." beats" end)
   params:set_action("clock_link_quantum", function(quantum)
     _seamstress.clock_link_set_quantum(quantum)
     seamstress.state.clock.quantum = quantum
@@ -255,6 +265,11 @@ function clock.add_params()
   -- update tempo param value
   clock.run(function()
     while true do
+      if paramsMenu.groupname == "CLOCK" then
+        clock.sync(1/4)
+      else
+        clock.sleep(1)
+      end
       local source = params:string("clock_source")
       if source ~= "internal" then
         local bpm = _seamstress.clock_get_tempo()
@@ -265,9 +280,10 @@ function clock.add_params()
             clock.tempo_change_handler(bpm)
           end
         end
+      end
+      if paramsMenu.groupname == "CLOCK" then
         paramsMenu.redraw()
       end
-      clock.sleep(1)
     end
   end)
 end

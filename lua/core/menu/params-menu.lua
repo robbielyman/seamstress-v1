@@ -298,6 +298,8 @@ m.key = function(char, modifiers, is_repeat, state)
       elseif state == 1 then
         if m.group == true then
           m.group = false
+          m.groupid = 0
+          m.groupname = nil
           build_page()
           m.pos = m.oldpos
         end
@@ -509,6 +511,22 @@ m.redraw = function()
     local n = "PARAMETERS"
     if m.group then
       n = n .. " / " .. m.groupname
+      if m.groupname == "CLOCK" then
+        screen.move(137,10)
+        local beatcount = math.floor(clock.get_beats()/0.25)*0.25
+        local is_whole = beatcount == math.floor(beatcount)
+        screen.color(255, 255, 255, is_whole and 255 or 130)
+        if params:get("clock_source") == 3 then
+          if _seamstress.transport_active then
+            screen.text("beat: "..beatcount)
+          else
+            screen.color(255, 255, 255, 130)
+            screen.text("waiting for Link start")
+          end
+        else
+          screen.text("beat: " .. beatcount)
+        end
+      end
     end
     screen.color(130, 140, 140, 255)
     screen.move(10, 10)
