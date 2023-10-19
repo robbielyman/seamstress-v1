@@ -16,7 +16,13 @@ const logger = std.log.scoped(.input);
 pub fn init(allocator_pointer: std.mem.Allocator) !void {
     quit = false;
     allocator = allocator_pointer;
-    const term = std.os.getenv("TERM") orelse "";
+    const term = std.process.getEnvVarOwned(allocator, "TERM") catch |err| blk: {
+        switch (err) {
+            error.EnvironmentVariableNotFound => break :blk try allocator.dupe(u8, "nuttin"),
+            else => return err,
+        }
+    };
+    defer allocator.free(term);
     if (std.mem.eql(u8, term, "emacs") or std.mem.eql(u8, term, "dumb")) {
         readline = false;
         pid = try std.Thread.spawn(.{}, bare_input_run, .{});
