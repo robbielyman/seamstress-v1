@@ -14,7 +14,7 @@ const watcher = @import("watcher.zig");
 const create = @import("create.zig");
 const pthread = @import("pthread.zig");
 
-const VERSION = .{ .major = 0, .minor = 25, .patch = 7 };
+const VERSION = .{ .major = 1, .minor = 0, .patch = 0 };
 
 pub const std_options = struct {
     pub const log_level = .info;
