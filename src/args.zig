@@ -7,6 +7,7 @@ pub var socket_port: [:0]const u8 = "8888";
 pub var width: [:0]const u8 = "256";
 pub var height: [:0]const u8 = "128";
 pub var watch = false;
+pub var quiet = false;
 
 pub const CreateOptions = enum { script, project, norns_project, example };
 
@@ -64,6 +65,10 @@ pub fn parse(location: []const u8) !?CreateOptions {
                     socket_port = next;
                     continue;
                 }
+            },
+            'q' => {
+                quiet = true;
+                continue;
             },
             's' => {
                 if (args.next()) |next| {
@@ -123,6 +128,7 @@ fn print_usage() !void {
     try stdout.print("-l       override OSC listen port [current {s}]\n", .{local_port});
     try stdout.print("-b       override OSC broadcast port [current {s}]\n", .{remote_port});
     try stdout.print("-p       override socket listen port [current {s}]\n", .{socket_port});
+    try stdout.print("-q       don't print welcome and version number\n", .{});
     try stdout.print("-w       watch the directory containing the script file for changes\n", .{});
     try stdout.print("-x       override window width [current {s}]\n", .{width});
     try stdout.print("-y       override window height [current {s}]\n", .{height});

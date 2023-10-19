@@ -49,7 +49,7 @@ pub fn main() !void {
     if (option) |opt| try create.init(opt, allocator, location);
     defer if (option) |_| create.deinit();
     while (go_again) {
-        try print_version();
+        if (!args.quiet) try print_version();
         const path = try std.fs.path.joinZ(allocator, &.{ location, "..", "share", "seamstress", "lua" });
         defer allocator.free(path);
         const prefix = try std.fs.realpathAlloc(allocator, path);
@@ -110,7 +110,7 @@ pub fn main() !void {
         screen.loop();
     }
     std.io.getStdIn().close();
-    try print_goodbye();
+    if (!args.quiet) try print_goodbye();
     std.io.getStdOut().close();
 }
 
