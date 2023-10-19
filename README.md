@@ -1,11 +1,35 @@
 # seamstress
 
-seamstress is a lua scripting environment for musical communication.
+*seamstress* is a Lua scripting environment
+for communicating with music, visuals and data.
 
-write scripts that interact with monome devices, OSC, and MIDI.
-a screen is provided for you to play with.
+## usage
 
-currently beta software.
+seamstress is run from the command line. 
+invoke it with `seamstress` or `seamstress <filename>`
+(`seamstress -h` lists optional command-line arguments).
+on startup, seamstress will search for a user-provided script file 
+named `<filename>.lua` (defaulting to `script.lua`) to run.
+this file may either be found in the current directory of your command-line prompt
+or in `~/seamstress` (that is, a folder named `seamstress` under your `$HOME` directory,
+which is typically `/Users/<username>` on macOS and `/home/<username>` on Linux).
+
+on startup, seamstress creates two OS windows
+and commandeers the command-line prompt as a Lua
+REPL (short for **r**ead **e**valuate **p**rint **l**oop).
+one of these windows is reserved for seamstress's `params` system,
+while the other (the main window)
+is available for scripts to draw to using seamstress's `screen` module.
+to exit seamstress, close the main window or enter `quit` in to the REPL.
+
+## scripting 
+
+seamstress scripts are written in Lua,
+an embeddable, extensible scripting language.
+as of 1.0.0, seamstress supports Lua version 5.4.x.
+[Lua.org](https://www.lua.org) has resources for programming in Lua.
+additionally, [monome](https://monome.org) has studies for scripting in Lua for
+[norns](https://monome.org/docs/norns/studies/) and [seamstress](https://monome.org/docs/grid/studies/seamstress/) to get you off the ground.
 
 ## installation
 
@@ -13,6 +37,12 @@ seamstress requires `freetype2`, `harfbuzz` and `ncurses`. on macOS do
 
 ```bash
 brew install freetype2 harfbuzz ncurses
+```
+
+alternatively to install with homebrew, do
+```bash
+brew tap ryleelyman/seamstress
+brew install seamstress
 ```
 
 on linux, additional requirements include `alsa`.
@@ -47,14 +77,6 @@ NB: `seamstress` will be built as `zig-out/bin/seamstress`; you can add this to 
 
 if you previously built seamstress with `sudo`, you may want to run `sudo zig build uninstall -p /usr/local` to remove the old binary.
 you may also have to delete `~/.cache/zig` as well as `zig-cache` in the relevant directories.
-
-## usage
-
-invoke `seamstress` from the terminal.
-`Ctrl+C`, 'quit' or closing the OS window exits.
-by default seamstress looks for and runs a file called `script.lua`
-in either the current directory or in `~/seamstress/`.
-this behavior can be overridden, see `seamstress -h` for details.
 
 ## docs
 
