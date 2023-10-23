@@ -128,9 +128,16 @@ function Control:bang()
 end
 
 --- get_range.
+-- @return range as table {minval, maxval}
 function Control:get_range()
   r = { self.controlspec.minval, self.controlspec.maxval }
   return r
+end
+
+--- get_wrap.
+-- @return wrap boolean
+function Control:get_wrap()
+  return self.controlspec.wrap
 end
 
 --- string.
