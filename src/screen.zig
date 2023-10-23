@@ -7,8 +7,15 @@ const c = @cImport({
 });
 
 var allocator: std.mem.Allocator = undefined;
+pub var SDL_USER_EVENT: u32 = undefined;
 var lock: std.Thread.Mutex = .{};
 const logger = std.log.scoped(.screen);
+
+const ScreenSize = struct {
+    w: i32,
+    h: i32,
+    z: i32,
+};
 
 const Bitmask = struct {
     r: u32,
@@ -20,7 +27,7 @@ const Bitmask = struct {
 const BITMASK = if (c.SDL_BYTEORDER == c.SDL_BIG_ENDIAN)
 blk: {
     break :blk .{
-        .r = 0xff000000,
+        .r2 = 0xff000000,
         .g = 0x00ff0000,
         .b = 0x0000ff00,
         .a = 0x000000ff,
@@ -634,6 +641,21 @@ pub fn get_size() Size {
 }
 
 pub fn set_size(width: i32, height: i32, zoom: i32) void {
+    var size = allocator.create(ScreenSize) catch @panic("OOM!");
+    size.* = .{
+        .w = width,
+        .h = height,
+        .z = zoom,
+    };
+    var event: c.SDL_Event = undefined;
+    event = std.mem.zeroes(c.SDL_Event);
+    event.type = SDL_USER_EVENT;
+    event.user.code = 0;
+    event.user.data1 = size;
+    sdl_call(c.SDL_PushEvent(&event), "screen.set_size");
+}
+
+fn set_size_inner(width: i32, height: i32, zoom: i32) void {
     const gui = &windows[current];
     gui.WIDTH = @intCast(width);
     gui.HEIGHT = @intCast(height);
@@ -733,6 +755,11 @@ pub fn init(alloc_pointer: std.mem.Allocator, width: u16, height: u16, resources
     }
     set(0);
     textures = std.ArrayList(Texture).init(allocator);
+    SDL_USER_EVENT = c.SDL_RegisterEvents(1);
+    if (SDL_USER_EVENT == std.math.maxInt(u32)) {
+        return error.Fail;
+    }
+    c.SDL_RaiseWindow(windows[0].window);
 }
 
 fn window_rect(gui: *Gui) void {
@@ -763,6 +790,14 @@ fn window_rect(gui: *Gui) void {
 pub fn check() void {
     var ev: c.SDL_Event = undefined;
     while (c.SDL_PollEvent(&ev) != 0) {
+        if (ev.type == SDL_USER_EVENT) {
+            if (ev.user.code == 0) {
+                const size: *ScreenSize = @ptrCast(@alignCast(ev.user.data1));
+                set_size_inner(size.w, size.h, size.z);
+                allocator.destroy(size);
+            }
+            continue;
+        }
         switch (ev.type) {
             c.SDL_KEYUP, c.SDL_KEYDOWN => {
                 const event = .{
