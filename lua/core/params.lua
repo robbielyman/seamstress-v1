@@ -64,7 +64,17 @@ function ParamSet:add(args)
     local name = args.name or id
 
     if args.type == "number" then
-      self:add_number(id, name, args.min, args.max, args.default, args.units, args.formatter, args.allow_pmap)
+      self:add_number(
+        id,
+        name,
+        args.min,
+        args.max,
+        args.default,
+        args.units,
+        args.formatter,
+        args.wrap,
+        args.allow_pmap
+      )
     elseif args.type == "option" then
       self:add_option(id, name, args.options, args.default, args.allow_pmap)
     elseif args.type == "control" then
@@ -134,10 +144,23 @@ end
 -- @tparam number max maximum value
 -- @tparam number default default / initial value
 -- @tparam string units
--- @param formatter
+-- @tparam function formatter
+-- @tparam bool wrap value adjustments wrap around when incremented / decremented
 -- @tparam bool allow_pmap
-function ParamSet:add_number(id, name, min, max, default, units, formatter, allow_pmap)
-  local cs = controlspec.new(min, max, "lin", 1, default, units, 1 / math.abs(max - min))
+function ParamSet:add_number(id, name, min, max, default, units, formatter, wrap, allow_pmap)
+  local frm = formatter
+  if type(units) == "function" then
+    formatter = units
+    units = nil
+    print(">> " .. id .. ": 'units' was specified as a function, assuming 'formatter'.")
+    print("   check seamstress scripting API for usage.")
+  end
+  if type(frm) == "boolean" then
+    wrap = frm
+    print(">> " .. id .. ": formatter was specified as a boolean, assuming 'wrap'.")
+    print("   check seamstress scripting API for usage.")
+  end
+  local cs = controlspec.new(min, max, "lin", 1, default, units, 1 / math.abs(max - min), wrap)
   self:add { param = control.new(id, name, cs, formatter, allow_pmap) }
   params.params[params.lookup[id]].is_number = true
 end
@@ -370,6 +393,13 @@ end
 function ParamSet:get_range(index)
   local param = self:lookup_param(index)
   return param:get_range()
+end
+
+--- get wrap
+-- @param index
+function ParamSet:get_wrap(index)
+  local param = self:lookup_param(index)
+  return param:get_wrap()
 end
 
 --- get whether or not parameter should be pmap'able
