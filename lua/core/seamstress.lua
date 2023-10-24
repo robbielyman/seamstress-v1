@@ -86,6 +86,9 @@ _startup = function(script_file)
     end
 
     local file = seamstress.state.data .. "pset-last.txt"
+    params:clear()
+    pmap.clear()
+    
     if util.file_exists(file) then
       local f = io.open(file, "r")
       io.input(f)
@@ -99,9 +102,6 @@ _startup = function(script_file)
 
     dofile(filename)
   end
-
-  params:clear()
-  pmap.clear()
 
   clock.add_params()
   init()
