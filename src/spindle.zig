@@ -16,17 +16,16 @@ const c = input.c;
 
 const Lua = ziglua.Lua;
 var lvm: Lua = undefined;
+var buf: [32 * 1024]u8 = undefined;
 var allocator: std.mem.Allocator = undefined;
 const logger = std.log.scoped(.spindle);
 var stdout = std.io.getStdOut().writer();
 var timer: std.time.Timer = undefined;
 
-pub fn init(prefix: []const u8, config: []const u8, time: std.time.Timer, alloc_pointer: std.mem.Allocator) !void {
+pub fn init(prefix: []const u8, config: []const u8, time: std.time.Timer) !void {
     timer = time;
-    allocator = alloc_pointer;
-
     logger.info("starting lua vm", .{});
-    lvm = try Lua.init(allocator);
+    lvm = try Lua.init(std.heap.raw_c_allocator);
 
     lvm.openLibs();
 
@@ -112,22 +111,25 @@ pub fn init(prefix: []const u8, config: []const u8, time: std.time.Timer, alloc_
     lvm.setField(-2, "local_port");
     _ = lvm.pushString(args.remote_port);
     lvm.setField(-2, "remote_port");
-    const prefixZ = try allocator.dupeZ(u8, prefix);
-    defer allocator.free(prefixZ);
+    var buffer: [8 * 1024]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    var alloc = fba.allocator();
+    const prefixZ = try alloc.dupeZ(u8, prefix);
+    defer alloc.free(prefixZ);
     _ = lvm.pushString(prefixZ);
     lvm.setField(-2, "prefix");
 
     lvm.setGlobal("_seamstress");
 
-    const cwd = std.process.getCwdAlloc(allocator) catch @panic("OOM!");
-    defer allocator.free(cwd);
-    const lua_cwd = allocator.dupeZ(u8, cwd) catch @panic("OOM!");
-    defer allocator.free(lua_cwd);
+    const cwd = std.process.getCwdAlloc(alloc) catch @panic("OOM!");
+    defer alloc.free(cwd);
+    const lua_cwd = alloc.dupeZ(u8, cwd) catch @panic("OOM!");
+    defer alloc.free(lua_cwd);
     _ = lvm.pushString(lua_cwd);
     lvm.setGlobal("_pwd");
 
-    const cmd = try std.fmt.allocPrint(allocator, "dofile(\"{s}\")\n", .{config});
-    defer allocator.free(cmd);
+    const cmd = try std.fmt.allocPrint(alloc, "dofile(\"{s}\")\n", .{config});
+    defer alloc.free(cmd);
     try run_code(cmd);
     try run_code("require('core/seamstress')");
 }
@@ -151,6 +153,8 @@ pub fn deinit() void {
 }
 
 pub fn startup(script: []const u8) !?[*:0]const u8 {
+    var fba = std.heap.FixedBufferAllocator.init(&buf);
+    allocator = fba.allocator();
     const script_string = allocator.dupeZ(u8, script) catch @panic("OOM!");
     defer allocator.free(script_string);
     _ = lvm.pushString(script_string);
@@ -1593,11 +1597,11 @@ fn dostring(l: *Lua, str: []const u8, name: [:0]const u8) !void {
 
 var save_buf: ?[]u8 = null;
 
-fn save_statement_buffer(buf: []u8) void {
+fn save_statement_buffer(buffer: []u8) void {
     if (save_buf) |b| {
         allocator.free(b);
     }
-    save_buf = allocator.dupe(u8, buf) catch @panic("OOM!");
+    save_buf = allocator.dupe(u8, buffer) catch @panic("OOM!");
 }
 
 fn clear_statement_buffer() void {
@@ -1687,20 +1691,20 @@ fn handle_line(l: *Lua, line: [:0]const u8) !void {
 
 fn statement(l: *Lua) !bool {
     const line = try l.toString(1);
-    var buf: []u8 = undefined;
+    var buffer: []u8 = undefined;
     if (save_buf) |b| {
-        buf = try std.fmt.allocPrint(allocator, "{s}\n{s}", .{ b, line });
+        buffer = try std.fmt.allocPrint(allocator, "{s}\n{s}", .{ b, line });
     } else {
-        buf = try std.fmt.allocPrint(allocator, "{s}", .{line});
+        buffer = try std.fmt.allocPrint(allocator, "{s}", .{line});
     }
-    defer allocator.free(buf);
-    l.loadBuffer(buf, "=stdin", ziglua.Mode.text) catch |err| {
+    defer allocator.free(buffer);
+    l.loadBuffer(buffer, "=stdin", ziglua.Mode.text) catch |err| {
         if (err != error.Syntax) return err;
         const msg = std.mem.span(try l.toString(-1));
         const eofmark = "<eof>";
         if ((msg.len >= eofmark.len) and std.mem.eql(u8, eofmark, msg[(msg.len - eofmark.len)..msg.len])) {
             l.pop(1);
-            save_statement_buffer(buf);
+            save_statement_buffer(buffer);
             return true;
         } else {
             clear_statement_buffer();

@@ -701,10 +701,9 @@ pub fn set_fullscreen_inner(is_fullscreen: bool) void {
     events.post(event);
 }
 
-pub fn init(alloc_pointer: std.mem.Allocator, width: u16, height: u16, resources: []const u8) !void {
+pub fn init(width: u16, height: u16, resources: []const u8) !void {
     quit = false;
-    allocator = alloc_pointer;
-
+    allocator = std.heap.raw_c_allocator;
     if (c.SDL_Init(c.SDL_INIT_VIDEO) < 0) {
         logger.err("screen.init(): {s}", .{c.SDL_GetError()});
         return error.Fail;

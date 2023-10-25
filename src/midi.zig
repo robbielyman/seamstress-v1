@@ -5,6 +5,7 @@ const c = @cImport({
 });
 const events = @import("events.zig");
 
+var gpa: std.heap.GeneralPurposeAllocator(.{}) = undefined;
 var allocator: std.mem.Allocator = undefined;
 var thread: std.Thread = undefined;
 var quit = false;
@@ -23,7 +24,8 @@ pub const Device = struct {
 
     pub const Input = struct {
         ptr: *c.RtMidiWrapper,
-        msg_num: u64 = 0,
+        buf: [8 * 1024]u8 = undefined,
+        allocator: std.mem.Allocator = undefined,
 
         fn create(self: *Device, i: c_uint) !void {
             if (self.input) |_| return;
@@ -33,12 +35,14 @@ pub const Device = struct {
                 1024,
             ) orelse return error.Fail;
             const name = self.name orelse return error.Fail;
-            c.rtmidi_open_port(midi_in, i, name.ptr);
-            c.rtmidi_in_set_callback(midi_in, read, self);
-            c.rtmidi_in_ignore_types(midi_in, false, false, false);
             self.input = .{
                 .ptr = midi_in,
             };
+            var fba = std.heap.FixedBufferAllocator.init(&self.input.?.buf);
+            self.input.?.allocator = fba.allocator();
+            c.rtmidi_open_port(midi_in, i, name.ptr);
+            c.rtmidi_in_set_callback(midi_in, read, self);
+            c.rtmidi_in_ignore_types(midi_in, false, false, false);
         }
     };
 
@@ -76,13 +80,12 @@ fn read(timestamp: f64, message: [*c]const u8, len: usize, userdata: ?*anyopaque
     const ud = userdata orelse return;
     var self: *Device = @ptrCast(@alignCast(ud));
     var in = self.input orelse return;
-    var line = allocator.dupe(u8, message[0..len]) catch @panic("OOM!");
+    var line = in.allocator.dupe(u8, message[0..len]) catch @panic("OOM!");
     events.post(.{ .MIDI = .{
         .message = line,
-        .msg_num = in.msg_num,
         .id = self.id,
+        .allocator = in.allocator,
     } });
-    in.msg_num += 1;
 }
 
 pub const DeviceError = error{ NotFound, ReadError, WriteError };
@@ -106,9 +109,10 @@ fn remove(id: usize) void {
     });
 }
 
-pub fn init(alloc_pointer: std.mem.Allocator) !void {
+pub fn init() !void {
     quit = false;
-    allocator = alloc_pointer;
+    gpa = .{};
+    allocator = gpa.allocator();
     devices = try allocator.alloc(Device, 32);
     inline for (0..32) |idx| {
         devices[@intCast(idx)] = .{
@@ -164,12 +168,12 @@ fn add_devices() !void {
     for (0..in_count) |i| {
         var len: c_int = 256;
         _ = c.rtmidi_get_port_name(midi_in_counter, @intCast(i), null, &len);
-        var buf = allocator.allocSentinel(u8, @intCast(len), 0) catch @panic("OOM!");
-        defer allocator.free(buf);
-        _ = c.rtmidi_get_port_name(midi_in_counter, @intCast(i), buf.ptr, &len);
+        var buffer = allocator.allocSentinel(u8, @intCast(len), 0) catch @panic("OOM!");
+        defer allocator.free(buffer);
+        _ = c.rtmidi_get_port_name(midi_in_counter, @intCast(i), buffer.ptr, &len);
         const spanned = switch (comptime builtin.os.tag) {
-            .linux => std.mem.sliceTo(buf.ptr, ':'),
-            else => std.mem.sliceTo(buf.ptr, 0),
+            .linux => std.mem.sliceTo(buffer.ptr, ':'),
+            else => std.mem.sliceTo(buffer.ptr, 0),
         };
         // NB: on linux, rtmidi keeps on reannouncing registered devices
         // with 'RtMidiPrefix' added.
@@ -186,12 +190,12 @@ fn add_devices() !void {
     for (0..out_count) |i| {
         var len: c_int = 256;
         _ = c.rtmidi_get_port_name(midi_out_counter, @intCast(i), null, &len);
-        var buf = allocator.allocSentinel(u8, @intCast(len), 0) catch @panic("OOM!");
-        defer allocator.free(buf);
-        _ = c.rtmidi_get_port_name(midi_out_counter, @intCast(i), buf.ptr, &len);
+        var buffer = allocator.allocSentinel(u8, @intCast(len), 0) catch @panic("OOM!");
+        defer allocator.free(buffer);
+        _ = c.rtmidi_get_port_name(midi_out_counter, @intCast(i), buffer.ptr, &len);
         const spanned = switch (comptime builtin.os.tag) {
-            .linux => std.mem.sliceTo(buf.ptr, ':'),
-            else => std.mem.sliceTo(buf.ptr, 0),
+            .linux => std.mem.sliceTo(buffer.ptr, ':'),
+            else => std.mem.sliceTo(buffer.ptr, 0),
         };
         if (find(spanned)) |id| {
             is_active[id].output = true;
@@ -270,4 +274,5 @@ pub fn deinit() void {
         remove(i);
     }
     allocator.free(devices);
+    _ = gpa.deinit();
 }

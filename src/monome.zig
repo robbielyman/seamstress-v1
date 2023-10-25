@@ -4,7 +4,8 @@ const c = osc.c;
 const events = @import("events.zig");
 
 var allocator: std.mem.Allocator = undefined;
-var devices: []Monome = undefined;
+var monomes: [8]Monome = undefined;
+var devices: []Monome = &monomes;
 const logger = std.log.scoped(.monome);
 
 pub const Monome_t = enum { Grid, Arc };
@@ -111,9 +112,8 @@ pub const Monome = struct {
     }
 };
 
-pub fn init(alloc_pointer: std.mem.Allocator, port: u16) !void {
-    allocator = alloc_pointer;
-    devices = try allocator.alloc(Monome, 8);
+pub fn init(alloc: std.mem.Allocator, port: u16) !void {
+    allocator = alloc;
     @memset(devices, .{});
     for (devices, 0..) |*device, i| {
         device.id = @intCast(i);
@@ -136,7 +136,6 @@ pub fn deinit() void {
         if (device.name) |n| allocator.free(n);
         c.lo_server_thread_free(device.thread);
     }
-    allocator.free(devices);
 }
 
 pub fn add(name: []const u8, dev_type: []const u8, port: i32) void {

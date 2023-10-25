@@ -10,19 +10,21 @@ pub const c = @cImport({
 var quit = false;
 pub var readline = true;
 var pid: std.Thread = undefined;
-var allocator: std.mem.Allocator = undefined;
+var buffer: [32 * 1024]u8 = undefined;
 const logger = std.log.scoped(.input);
 
-pub fn init(allocator_pointer: std.mem.Allocator) !void {
+pub fn init() !void {
     quit = false;
-    allocator = allocator_pointer;
-    const term = std.process.getEnvVarOwned(allocator, "TERM") catch |err| blk: {
+    var buf: [1024]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buf);
+    var alloc = fba.allocator();
+    const term = std.process.getEnvVarOwned(alloc, "TERM") catch |err| blk: {
         switch (err) {
-            error.EnvironmentVariableNotFound => break :blk try allocator.dupe(u8, "nuttin"),
+            error.EnvironmentVariableNotFound => break :blk try alloc.dupe(u8, "nuttin"),
             else => return err,
         }
     };
-    defer allocator.free(term);
+    defer alloc.free(term);
     if (std.mem.eql(u8, term, "emacs") or std.mem.eql(u8, term, "dumb")) {
         readline = false;
         pid = try std.Thread.spawn(.{}, bare_input_run, .{});
@@ -41,6 +43,9 @@ pub fn deinit() void {
 }
 
 fn write_history() void {
+    var buf: [2 * 1024]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buf);
+    var allocator = fba.allocator();
     const home = std.process.getEnvVarOwned(allocator, "HOME") catch return;
     const history_file = std.fs.path.joinZ(allocator, &.{ home, "seamstress_history" }) catch return;
     _ = c.write_history(history_file.ptr);
@@ -50,6 +55,9 @@ fn write_history() void {
 }
 
 fn input_run() !void {
+    var buf: [2 * 1024]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&buf);
+    var allocator = fba.allocator();
     _ = c.rl_initialize();
     c.rl_prep_terminal(1);
     c.using_history();
@@ -70,6 +78,8 @@ fn input_run() !void {
 }
 
 fn inner() !void {
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    var allocator = fba.allocator();
     pid.setName("input_thread") catch {};
     while (!quit) {
         var c_line = c.readline("> ") orelse {
@@ -84,13 +94,18 @@ fn inner() !void {
             continue;
         }
         _ = c.add_history(c_line);
-        const event = .{ .Exec_Code_Line = .{ .line = line } };
+        const event = .{ .Exec_Code_Line = .{
+            .line = line,
+            .allocator = allocator,
+        } };
         events.post(event);
     }
     events.post(.{ .Quit = {} });
 }
 
 fn bare_input_run() !void {
+    var fba = std.heap.FixedBufferAllocator.init(&buffer);
+    var allocator = fba.allocator();
     pid.setName("input_thread") catch {};
     var stdin = std.io.getStdIn().reader();
     var stdout = std.io.getStdOut().writer();
@@ -115,7 +130,10 @@ fn bare_input_run() !void {
             continue;
         }
         const event = .{
-            .Exec_Code_Line = .{ .line = line },
+            .Exec_Code_Line = .{
+                .line = line,
+                .allocator = allocator,
+            },
         };
         events.post(event);
     }

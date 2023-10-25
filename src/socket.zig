@@ -2,14 +2,16 @@ const std = @import("std");
 const events = @import("events.zig");
 
 const logger = std.log.scoped(.socket);
+var buf: [16 * 1024]u8 = undefined;
 var allocator: std.mem.Allocator = undefined;
 var listener: std.net.StreamServer = undefined;
 var pid: std.Thread = undefined;
 var quit = false;
 
-pub fn init(alloc_pointer: std.mem.Allocator, port: u16) !void {
+pub fn init(port: u16) !void {
     quit = false;
-    allocator = alloc_pointer;
+    var fba = std.heap.FixedBufferAllocator.init(&buf);
+    allocator = fba.allocator();
     const addr = try std.net.Address.resolveIp("127.0.0.1", port);
     listener = std.net.StreamServer.init(.{});
     try listener.listen(addr);
@@ -75,6 +77,7 @@ pub fn loop() !void {
         const event = .{
             .Exec_Code_Line = .{
                 .line = line,
+                .allocator = allocator,
             },
         };
         events.post(event);

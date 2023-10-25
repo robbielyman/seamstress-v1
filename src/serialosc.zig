@@ -11,11 +11,13 @@ var server_thread: c.lo_server_thread = undefined;
 var localport: u16 = undefined;
 var localhost = "localhost";
 pub var serialosc_addr: c.lo_address = undefined;
+var buf: [256 * 1024]u8 = undefined;
 var allocator: std.mem.Allocator = undefined;
 const logger = std.log.scoped(.serialosc);
 
-pub fn init(local_port: [:0]const u8, alloc: std.mem.Allocator) !void {
-    allocator = alloc;
+pub fn init(local_port: [:0]const u8) !void {
+    var fba = std.heap.FixedBufferAllocator.init(&buf);
+    allocator = fba.allocator();
     localport = try std.fmt.parseUnsigned(u16, local_port, 10);
     serialosc_addr = c.lo_address_new("localhost", "12002") orelse return error.Fail;
     server_thread = c.lo_server_thread_new(local_port, lo_error_handler) orelse return error.Fail;
@@ -25,7 +27,7 @@ pub fn init(local_port: [:0]const u8, alloc: std.mem.Allocator) !void {
     _ = c.lo_server_thread_add_method(server_thread, null, null, osc_receive, null);
     // _ = c.DNSServiceRegister(&dnssd_ref, 0, 0, "seamstress", "_osc._udp", null, null, state.port, 0, null, null, null);
     _ = c.lo_server_thread_start(server_thread);
-    try monome.init(alloc, localport);
+    try monome.init(allocator, localport);
     var message = c.lo_message_new();
     _ = c.lo_message_add_string(message, localhost);
     _ = c.lo_message_add_int32(message, localport);
@@ -162,6 +164,7 @@ fn osc_receive(
         .from_host = host_copy,
         .from_port = port_copy,
         .path = path_copy,
+        .allocator = allocator,
     } };
     events.post(event);
     return 1;
