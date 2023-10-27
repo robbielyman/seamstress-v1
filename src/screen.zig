@@ -666,6 +666,17 @@ fn set_size_inner(width: i32, height: i32, zoom: i32) void {
 }
 
 pub fn set_fullscreen(is_fullscreen: bool) void {
+    var fullscreen = allocator.create(bool) catch @panic("OOM!");
+    fullscreen.* = is_fullscreen;
+    var event: c.SDL_Event = undefined;
+    event = std.mem.zeroes(c.SDL_Event);
+    event.type = SDL_USER_EVENT;
+    event.user.code = 1;
+    event.user.data1 = fullscreen;
+    sdl_call(c.SDL_PushEvent(&event), "screen.set_fullscreen");
+}
+
+pub fn set_fullscreen_inner(is_fullscreen: bool) void {
     const gui = windows[current];
     if (is_fullscreen) {
         sdl_call(
@@ -791,10 +802,18 @@ pub fn check() void {
     var ev: c.SDL_Event = undefined;
     while (c.SDL_PollEvent(&ev) != 0) {
         if (ev.type == SDL_USER_EVENT) {
-            if (ev.user.code == 0) {
-                const size: *ScreenSize = @ptrCast(@alignCast(ev.user.data1));
-                set_size_inner(size.w, size.h, size.z);
-                allocator.destroy(size);
+            switch (ev.user.code) {
+                0 => {
+                    const size: *ScreenSize = @ptrCast(@alignCast(ev.user.data1));
+                    set_size_inner(size.w, size.h, size.z);
+                    allocator.destroy(size);
+                },
+                1 => {
+                    const fullscreen: *bool = @ptrCast(@alignCast(ev.user.data1));
+                    set_fullscreen_inner(fullscreen.*);
+                    allocator.destroy(fullscreen);
+                },
+                else => {},
             }
             continue;
         }
