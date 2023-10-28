@@ -6,7 +6,6 @@ const c = @cImport({
     @cInclude("SDL2/SDL_image.h");
 });
 
-var allocator: std.mem.Allocator = undefined;
 pub var SDL_USER_EVENT: u32 = undefined;
 var lock: std.Thread.Mutex = .{};
 const logger = std.log.scoped(.screen);
@@ -86,6 +85,8 @@ var font: *c.TTF_Font = undefined;
 pub var quit = false;
 
 pub fn define_geometry(texture: ?*const Texture, vertices: []const Vertex, indices: ?[]const usize) void {
+    var sfba = std.heap.stackFallback(8 * 1024, std.heap.raw_c_allocator);
+    const allocator = sfba.get();
     var verts = allocator.alloc(c.SDL_Vertex, vertices.len) catch @panic("OOM!");
     defer allocator.free(verts);
     for (vertices, verts) |v, *w| {
@@ -190,6 +191,8 @@ pub fn quad(ax: f32, ay: f32, bx: f32, by: f32, cx: f32, cy: f32, dx: f32, dy: f
 }
 
 pub fn new_texture(width: u16, height: u16) !*Texture {
+    var sfba = std.heap.stackFallback(8 * 1024, std.heap.raw_c_allocator);
+    const allocator = sfba.get();
     const n: usize = @as(usize, width * windows[current].zoom) * @as(usize, height * windows[current].zoom) * 4;
     var pixels = allocator.alloc(u8, n) catch @panic("OOM!");
     defer allocator.free(pixels);
@@ -378,8 +381,8 @@ pub fn line_rel(bx: c_int, by: c_int) void {
 
 pub fn curve(x1: f64, y1: f64, x2: f64, y2: f64, x3: f64, y3: f64) void {
     const gui = windows[current];
-    var points = allocator.alloc(c.SDL_Point, 1000) catch @panic("OOM!");
-    defer allocator.free(points);
+    var points_buf: [1000]c.SDL_Point = undefined;
+    var points: []c.SDL_Point = &points_buf;
     const x0: f64 = @floatFromInt(gui.x);
     const y0: f64 = @floatFromInt(gui.y);
 
@@ -480,6 +483,8 @@ pub fn text_right(words: [:0]const u8) void {
 }
 
 pub fn arc(radius: i32, theta_1: f64, theta_2: f64) void {
+    var sfba = std.heap.stackFallback(8 * 1024, std.heap.raw_c_allocator);
+    const allocator = sfba.get();
     std.debug.assert(0 <= theta_1);
     std.debug.assert(theta_1 <= theta_2);
     std.debug.assert(theta_2 <= std.math.tau);
@@ -545,6 +550,8 @@ pub fn arc(radius: i32, theta_1: f64, theta_2: f64) void {
 }
 
 pub fn circle(radius: i32) void {
+    var sfba = std.heap.stackFallback(8 * 1024, std.heap.raw_c_allocator);
+    const allocator = sfba.get();
     const perimeter_estimate: usize = @intFromFloat(2 * std.math.tau * @as(f64, @floatFromInt(radius)) + 8);
     const gui = windows[current];
     var points = std.ArrayList(c.SDL_Point).initCapacity(allocator, perimeter_estimate) catch @panic("OOM!");
@@ -599,6 +606,8 @@ pub fn circle(radius: i32) void {
 }
 
 pub fn circle_fill(radius: i32) void {
+    var sfba = std.heap.stackFallback(8 * 1024, std.heap.raw_c_allocator);
+    const allocator = sfba.get();
     const r = if (radius < 0) -radius else radius;
     const rsquared = radius * radius;
     const gui = windows[current];
@@ -641,7 +650,7 @@ pub fn get_size() Size {
 }
 
 pub fn set_size(width: i32, height: i32, zoom: i32) void {
-    var size = allocator.create(ScreenSize) catch @panic("OOM!");
+    var size = std.heap.raw_c_allocator.create(ScreenSize) catch @panic("OOM!");
     size.* = .{
         .w = width,
         .h = height,
@@ -703,7 +712,8 @@ pub fn set_fullscreen_inner(is_fullscreen: bool) void {
 
 pub fn init(width: u16, height: u16, resources: []const u8) !void {
     quit = false;
-    allocator = std.heap.raw_c_allocator;
+    var sfba = std.heap.stackFallback(1024, std.heap.raw_c_allocator);
+    const allocator = sfba.get();
     if (c.SDL_Init(c.SDL_INIT_VIDEO) < 0) {
         logger.err("screen.init(): {s}", .{c.SDL_GetError()});
         return error.Fail;
@@ -764,7 +774,7 @@ pub fn init(width: u16, height: u16, resources: []const u8) !void {
         );
     }
     set(0);
-    textures = std.ArrayList(Texture).init(allocator);
+    textures = std.ArrayList(Texture).init(std.heap.raw_c_allocator);
     SDL_USER_EVENT = c.SDL_RegisterEvents(1);
     if (SDL_USER_EVENT == std.math.maxInt(u32)) {
         return error.Fail;
@@ -805,12 +815,12 @@ pub fn check() void {
                 0 => {
                     const size: *ScreenSize = @ptrCast(@alignCast(ev.user.data1));
                     set_size_inner(size.w, size.h, size.z);
-                    allocator.destroy(size);
+                    std.heap.raw_c_allocator.destroy(size);
                 },
                 1 => {
                     const fullscreen: *bool = @ptrCast(@alignCast(ev.user.data1));
                     set_fullscreen_inner(fullscreen.*);
-                    allocator.destroy(fullscreen);
+                    std.heap.raw_c_allocator.destroy(fullscreen);
                 },
                 else => {},
             }

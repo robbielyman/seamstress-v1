@@ -11,13 +11,12 @@ var server_thread: c.lo_server_thread = undefined;
 var localport: u16 = undefined;
 var localhost = "localhost";
 pub var serialosc_addr: c.lo_address = undefined;
-var buf: [256 * 1024]u8 = undefined;
+var sfba = std.heap.stackFallback(32 * 1024, std.heap.raw_c_allocator);
 var allocator: std.mem.Allocator = undefined;
 const logger = std.log.scoped(.serialosc);
 
 pub fn init(local_port: [:0]const u8) !void {
-    var fba = std.heap.FixedBufferAllocator.init(&buf);
-    allocator = fba.allocator();
+    allocator = sfba.get();
     localport = try std.fmt.parseUnsigned(u16, local_port, 10);
     serialosc_addr = c.lo_address_new("localhost", "12002") orelse return error.Fail;
     server_thread = c.lo_server_thread_new(local_port, lo_error_handler) orelse return error.Fail;
@@ -100,15 +99,15 @@ fn osc_receive(
     for (0..@intCast(argc)) |i| {
         switch (types[i]) {
             c.LO_INT32 => {
-                message[i] = Lo_Arg{ .Lo_Int32 = argv[i].*.i };
+                message[i] = .{ .Lo_Int32 = argv[i].*.i };
             },
             c.LO_FLOAT => {
-                message[i] = Lo_Arg{ .Lo_Float = argv[i].*.f };
+                message[i] = .{ .Lo_Float = argv[i].*.f };
             },
             c.LO_STRING => {
                 const slice: [*:0]const u8 = @ptrCast(&argv[i].*.s);
                 const slice_copy = allocator.dupeZ(u8, std.mem.sliceTo(slice, 0)) catch @panic("OOM!");
-                message[i] = Lo_Arg{ .Lo_String = slice_copy };
+                message[i] = .{ .Lo_String = slice_copy };
             },
             c.LO_BLOB => {
                 const arg: c.lo_blob = @ptrCast(argv[i]);
@@ -116,39 +115,39 @@ fn osc_receive(
                 const ptr: [*]const u8 = @ptrCast(c.lo_blob_dataptr(arg));
                 var blobby = allocator.alloc(u8, len) catch @panic("OOM!");
                 @memcpy(blobby, ptr);
-                message[i] = Lo_Arg{
+                message[i] = .{
                     .Lo_Blob = blobby,
                 };
             },
             c.LO_INT64 => {
-                message[i] = Lo_Arg{ .Lo_Int64 = argv[i].*.h };
+                message[i] = .{ .Lo_Int64 = argv[i].*.h };
             },
             c.LO_DOUBLE => {
-                message[i] = Lo_Arg{ .Lo_Double = argv[i].*.d };
+                message[i] = .{ .Lo_Double = argv[i].*.d };
             },
             c.LO_SYMBOL => {
                 const slice: [*:0]const u8 = @ptrCast(&argv[i].*.S);
                 const slice_copy = allocator.dupeZ(u8, std.mem.sliceTo(slice, 0)) catch @panic("OOM!");
-                message[i] = Lo_Arg{ .Lo_Symbol = slice_copy };
+                message[i] = .{ .Lo_Symbol = slice_copy };
             },
             c.LO_MIDI => {
-                message[i] = Lo_Arg{ .Lo_Midi = argv[i].*.m };
+                message[i] = .{ .Lo_Midi = argv[i].*.m };
             },
             c.LO_TRUE => {
-                message[i] = Lo_Arg{ .Lo_True = true };
+                message[i] = .{ .Lo_True = true };
             },
             c.LO_FALSE => {
-                message[i] = Lo_Arg{ .Lo_False = false };
+                message[i] = .{ .Lo_False = false };
             },
             c.LO_NIL => {
-                message[i] = Lo_Arg{ .Lo_Nil = false };
+                message[i] = .{ .Lo_Nil = false };
             },
             c.LO_INFINITUM => {
-                message[i] = Lo_Arg{ .Lo_Infinitum = true };
+                message[i] = .{ .Lo_Infinitum = true };
             },
             else => {
                 logger.err("unknown osc typetag: {c}", .{types[i]});
-                message[i] = Lo_Arg{ .Lo_Nil = false };
+                message[i] = .{ .Lo_Nil = false };
             },
         }
     }
@@ -171,23 +170,12 @@ fn osc_receive(
 }
 
 pub fn send(
-    to_host: [*:0]const u8,
-    to_port: [*:0]const u8,
-    path: [*:0]const u8,
+    to_host: [:0]const u8,
+    to_port: [:0]const u8,
+    path: [:0]const u8,
     msg: []Lo_Arg,
 ) void {
-    defer {
-        for (msg) |m| {
-            switch (m) {
-                .Lo_String => |s| allocator.free(s),
-                .Lo_Symbol => |s| allocator.free(s),
-                .Lo_Blob => |s| allocator.free(s),
-                else => {},
-            }
-        }
-        allocator.free(msg);
-    }
-    const address: c.lo_address = c.lo_address_new(to_host, to_port);
+    const address: c.lo_address = c.lo_address_new(to_host.ptr, to_port.ptr);
     if (address == null) {
         logger.err("failed to create lo_address", .{});
         return;
@@ -214,5 +202,5 @@ pub fn send(
             .Lo_Infinitum => _ = c.lo_message_add_infinitum(message),
         }
     }
-    _ = c.lo_send_message(address, path, message);
+    _ = c.lo_send_message(address, path.ptr, message);
 }

@@ -24,8 +24,7 @@ pub const Device = struct {
 
     pub const Input = struct {
         ptr: *c.RtMidiWrapper,
-        buf: [8 * 1024]u8 = undefined,
-        allocator: std.mem.Allocator = undefined,
+        allocator: std.mem.Allocator = std.heap.raw_c_allocator,
 
         fn create(self: *Device, i: c_uint) !void {
             if (self.input) |_| return;
@@ -38,8 +37,6 @@ pub const Device = struct {
             self.input = .{
                 .ptr = midi_in,
             };
-            var fba = std.heap.FixedBufferAllocator.init(&self.input.?.buf);
-            self.input.?.allocator = fba.allocator();
             c.rtmidi_open_port(midi_in, i, name.ptr);
             c.rtmidi_in_set_callback(midi_in, read, self);
             c.rtmidi_in_ignore_types(midi_in, false, false, false);

@@ -149,7 +149,8 @@ fn inner(go_again: *bool) !void {
     try events.handle_pending();
 
     logger.info("spinning spindle", .{});
-    const filepath = try spindle.startup(args.script_file);
+    var buf: [1024]u8 = undefined;
+    const filepath = try spindle.startup(args.script_file, &buf);
 
     if (args.watch and filepath != null) {
         logger.info("watching {s}", .{filepath.?});

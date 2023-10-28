@@ -105,8 +105,6 @@ pub const Data = union(enum) {
     },
 };
 
-var allocator: std.mem.Allocator = undefined;
-
 const Context = struct {
     cond: std.Thread.Condition,
     lock: std.Thread.Mutex,
@@ -141,7 +139,7 @@ pub fn init() !void {
     reset = false;
     quit = false;
     gpa = .{};
-    allocator = gpa.allocator();
+    const allocator = gpa.allocator();
     queue = Queue.init(allocator, .{ .cond = .{}, .lock = .{} });
     try queue.ensureTotalCapacity(5000);
 }
@@ -167,6 +165,14 @@ pub fn free(event: Data) void {
             e.allocator.free(e.from_host);
             e.allocator.free(e.from_port);
             e.allocator.free(e.path);
+            for (e.msg) |a| {
+                switch (a) {
+                    .Lo_Symbol => |s| e.allocator.free(s),
+                    .Lo_String => |s| e.allocator.free(s),
+                    .Lo_Blob => |s| e.allocator.free(s),
+                    else => {},
+                }
+            }
             e.allocator.free(e.msg);
         },
         .Exec_Code_Line => |e| {
