@@ -675,7 +675,7 @@ fn set_size_inner(width: i32, height: i32, zoom: i32) void {
 }
 
 pub fn set_fullscreen(is_fullscreen: bool) void {
-    var fullscreen = allocator.create(bool) catch @panic("OOM!");
+    var fullscreen = std.heap.raw_c_allocator.create(bool) catch @panic("OOM!");
     fullscreen.* = is_fullscreen;
     var event: c.SDL_Event = undefined;
     event = std.mem.zeroes(c.SDL_Event);
