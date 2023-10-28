@@ -10,12 +10,6 @@ pub var SDL_USER_EVENT: u32 = undefined;
 var lock: std.Thread.Mutex = .{};
 const logger = std.log.scoped(.screen);
 
-const ScreenSize = struct {
-    w: i32,
-    h: i32,
-    z: i32,
-};
-
 const Bitmask = struct {
     r: u32,
     g: u32,
@@ -649,12 +643,20 @@ pub fn get_size() Size {
     };
 }
 
+const ScreenSizeEvent = struct {
+    w: i32,
+    h: i32,
+    z: i32,
+    gui: *Gui,
+};
+
 pub fn set_size(width: i32, height: i32, zoom: i32) void {
-    var size = std.heap.raw_c_allocator.create(ScreenSize) catch @panic("OOM!");
+    var size = std.heap.raw_c_allocator.create(ScreenSizeEvent) catch @panic("OOM!");
     size.* = .{
         .w = width,
         .h = height,
         .z = zoom,
+        .gui = &windows[current],
     };
     var event: c.SDL_Event = undefined;
     event = std.mem.zeroes(c.SDL_Event);
@@ -664,8 +666,7 @@ pub fn set_size(width: i32, height: i32, zoom: i32) void {
     sdl_call(c.SDL_PushEvent(&event), "screen.set_size");
 }
 
-fn set_size_inner(width: i32, height: i32, zoom: i32) void {
-    const gui = &windows[current];
+fn set_size_inner(width: i32, height: i32, zoom: i32, gui: *Gui) void {
     gui.WIDTH = @intCast(width);
     gui.HEIGHT = @intCast(height);
     gui.ZOOM = @intCast(zoom);
@@ -674,9 +675,17 @@ fn set_size_inner(width: i32, height: i32, zoom: i32) void {
     window_rect(gui);
 }
 
+const FullscreenEvent = struct {
+    fullscreen: bool,
+    gui: *Gui,
+};
+
 pub fn set_fullscreen(is_fullscreen: bool) void {
-    var fullscreen = std.heap.raw_c_allocator.create(bool) catch @panic("OOM!");
-    fullscreen.* = is_fullscreen;
+    var fullscreen = std.heap.raw_c_allocator.create(FullscreenEvent) catch @panic("OOM!");
+    fullscreen.* = .{
+        .fullscreen = is_fullscreen,
+        .gui = &windows[current],
+    };
     var event: c.SDL_Event = undefined;
     event = std.mem.zeroes(c.SDL_Event);
     event.type = SDL_USER_EVENT;
@@ -685,20 +694,19 @@ pub fn set_fullscreen(is_fullscreen: bool) void {
     sdl_call(c.SDL_PushEvent(&event), "screen.set_fullscreen");
 }
 
-pub fn set_fullscreen_inner(is_fullscreen: bool) void {
-    const gui = windows[current];
+pub fn set_fullscreen_inner(is_fullscreen: bool, gui: *Gui) void {
     if (is_fullscreen) {
         sdl_call(
             c.SDL_SetWindowFullscreen(gui.window, c.SDL_WINDOW_FULLSCREEN_DESKTOP),
             "screen.set_fullscreen()",
         );
-        window_rect(&windows[current]);
+        window_rect(gui);
     } else {
         sdl_call(
             c.SDL_SetWindowFullscreen(gui.window, 0),
             "screen.set_fullscreen()",
         );
-        set_size(gui.WIDTH, gui.HEIGHT, gui.ZOOM);
+        set_size_inner(gui.WIDTH, gui.HEIGHT, gui.ZOOM, gui);
     }
     const event = .{
         .Screen_Resized = .{
@@ -738,12 +746,13 @@ pub fn init(width: u16, height: u16, resources: []const u8) !void {
     };
 
     for (0..2) |i| {
+        const z: c_int = if (i == 0) 4 else 2;
         var w = c.SDL_CreateWindow(
             if (i == 0) "seamstress" else "seamstress_params",
             @intCast(i * width * 4),
             @intCast(i * height * 4),
-            width * 4,
-            height * 4,
+            width * z,
+            height * z,
             c.SDL_WINDOW_SHOWN | c.SDL_WINDOW_RESIZABLE,
         );
         var window = w orelse {
@@ -759,10 +768,10 @@ pub fn init(width: u16, height: u16, resources: []const u8) !void {
         windows[i] = .{
             .window = window,
             .render = render,
-            .zoom = 4,
+            .zoom = @intCast(z),
             .WIDTH = width,
             .HEIGHT = height,
-            .ZOOM = 4,
+            .ZOOM = @intCast(z),
         };
         set(i);
         window_rect(&windows[current]);
@@ -813,13 +822,13 @@ pub fn check() void {
         if (ev.type == SDL_USER_EVENT) {
             switch (ev.user.code) {
                 0 => {
-                    const size: *ScreenSize = @ptrCast(@alignCast(ev.user.data1));
-                    set_size_inner(size.w, size.h, size.z);
+                    const size: *ScreenSizeEvent = @ptrCast(@alignCast(ev.user.data1));
+                    set_size_inner(size.w, size.h, size.z, size.gui);
                     std.heap.raw_c_allocator.destroy(size);
                 },
                 1 => {
-                    const fullscreen: *bool = @ptrCast(@alignCast(ev.user.data1));
-                    set_fullscreen_inner(fullscreen.*);
+                    const fullscreen: *FullscreenEvent = @ptrCast(@alignCast(ev.user.data1));
+                    set_fullscreen_inner(fullscreen.fullscreen, fullscreen.gui);
                     std.heap.raw_c_allocator.destroy(fullscreen);
                 },
                 else => {},
