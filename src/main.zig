@@ -39,16 +39,12 @@ pub fn main() !void {
     defer logfile.close();
     const logger = std.log.scoped(.app);
 
-    var general_allocator = std.heap.GeneralPurposeAllocator(.{}){};
-    var allocator = switch (comptime builtin.mode) {
-        .ReleaseFast => std.heap.raw_c_allocator,
-        else => general_allocator.allocator(),
-    };
-    defer _ = general_allocator.deinit();
-
-    if (option) |opt| try create.init(opt, allocator, location);
+    if (option) |opt| try create.init(opt, location);
     defer if (option) |_| create.deinit();
     while (go_again) {
+        var buf: [8 * 1024]u8 = undefined;
+        var fba = std.heap.FixedBufferAllocator.init(&buf);
+        var allocator = fba.allocator();
         if (!args.quiet) try print_version();
         const path = try std.fs.path.joinZ(allocator, &.{ location, "..", "share", "seamstress", "lua" });
         defer allocator.free(path);
@@ -63,35 +59,35 @@ pub fn main() !void {
         defer allocator.free(config);
 
         logger.info("init events", .{});
-        try events.init(allocator);
+        try events.init();
         defer events.deinit();
 
         logger.info("init metros", .{});
-        try metros.init(timer, allocator);
+        try metros.init(timer);
         defer metros.deinit();
 
         logger.info("init clocks", .{});
-        try clocks.init(timer, allocator);
+        try clocks.init(timer);
         defer clocks.deinit();
 
         logger.info("init spindle", .{});
-        try spindle.init(prefix, config, timer, allocator);
+        try spindle.init(prefix, config, timer);
 
         logger.info("init MIDI", .{});
-        try midi.init(allocator);
+        try midi.init();
         defer midi.deinit();
 
         logger.info("init osc", .{});
-        try osc.init(args.local_port, allocator);
+        try osc.init(args.local_port);
         defer osc.deinit();
 
         logger.info("init input", .{});
-        try input.init(allocator);
+        try input.init();
         defer input.deinit();
 
         logger.info("init socket", .{});
         const sock = try std.fmt.parseUnsigned(u16, args.socket_port, 10);
-        try socket.init(allocator, sock);
+        try socket.init(sock);
         defer socket.deinit();
 
         logger.info("init screen", .{});
@@ -101,10 +97,10 @@ pub fn main() !void {
         defer allocator.free(assets_path);
         var assets_buf = [_]u8{0} ** std.fs.MAX_PATH_BYTES;
         const assets = try std.fs.realpath(assets_path, &assets_buf);
-        try screen.init(allocator, width, height, assets);
+        try screen.init(width, height, assets);
         defer screen.deinit();
 
-        main_thread = try std.Thread.spawn(.{}, inner, .{ &go_again, try allocator.dupe(u8, location), allocator });
+        main_thread = try std.Thread.spawn(.{}, inner, .{&go_again});
         defer main_thread.join();
 
         screen.loop();
@@ -144,9 +140,8 @@ fn log(
     writer.print(prefix ++ "+{d}: " ++ format ++ "\n", .{timestamp} ++ log_args) catch return;
 }
 
-fn inner(go_again: *bool, location: []const u8, allocator: std.mem.Allocator) !void {
+fn inner(go_again: *bool) !void {
     main_thread.setName("seamstress_core") catch {};
-    defer allocator.free(location);
     const logger = std.log.scoped(.main);
     pthread.set_priority(99);
 
@@ -154,11 +149,12 @@ fn inner(go_again: *bool, location: []const u8, allocator: std.mem.Allocator) !v
     try events.handle_pending();
 
     logger.info("spinning spindle", .{});
-    const filepath = try spindle.startup(args.script_file);
+    var buf: [1024]u8 = undefined;
+    const filepath = try spindle.startup(args.script_file, &buf);
 
     if (args.watch and filepath != null) {
         logger.info("watching {s}", .{filepath.?});
-        try watcher.init(allocator, filepath.?);
+        try watcher.init(filepath.?);
     }
 
     logger.info("entering main loop", .{});

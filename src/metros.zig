@@ -109,11 +109,13 @@ pub fn set_period(idx: u8, seconds: f64) void {
 
 const max_num_metros = 36;
 var metros: []Metro = undefined;
+var gpa: std.heap.GeneralPurposeAllocator(.{}) = undefined;
 var allocator: std.mem.Allocator = undefined;
 
-pub fn init(time: std.time.Timer, alloc_pointer: std.mem.Allocator) !void {
+pub fn init(time: std.time.Timer) !void {
     timer = time;
-    allocator = alloc_pointer;
+    gpa = .{};
+    allocator = gpa.allocator();
     metros = try allocator.alloc(Metro, max_num_metros);
     for (metros, 0..) |*metro, idx| {
         metro.* = .{ .id = @intCast(idx) };
@@ -121,6 +123,7 @@ pub fn init(time: std.time.Timer, alloc_pointer: std.mem.Allocator) !void {
 }
 
 pub fn deinit() void {
+    defer _ = gpa.deinit();
     defer allocator.free(metros);
     for (metros) |*metro| {
         if (metro.thread) |*pid| {

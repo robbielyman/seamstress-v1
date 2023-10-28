@@ -5,6 +5,7 @@ const c = @cImport({
     @cInclude("abl_link.h");
 });
 
+var buf: [8 * 1024]u8 = undefined;
 var allocator: std.mem.Allocator = undefined;
 var fabric: *Fabric = undefined;
 var timer: std.time.Timer = undefined;
@@ -13,10 +14,11 @@ pub const Transport = enum { Start, Stop, Reset };
 pub const Source = enum(c_longlong) { Internal, MIDI, Link };
 const logger = std.log.scoped(.clock);
 
-pub fn init(time: std.time.Timer, alloc_pointer: std.mem.Allocator) !void {
+pub fn init(time: std.time.Timer) !void {
     quantum = 4.0;
     timer = time;
-    allocator = alloc_pointer;
+    var fba = std.heap.FixedBufferAllocator.init(&buf);
+    allocator = fba.allocator();
     fabric = try allocator.create(Fabric);
     fabric.link = c.abl_link_create(120);
     fabric.state = c.abl_link_create_session_state();

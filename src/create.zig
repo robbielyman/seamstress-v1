@@ -2,12 +2,14 @@ const std = @import("std");
 const args = @import("args.zig");
 const c = @import("input.zig").c;
 
+var buf: [8 * 1024]u8 = undefined;
 var allocator: std.mem.Allocator = undefined;
 var location: []const u8 = undefined;
 var to_be_freed: ?[]const u8 = null;
 
-pub fn init(option: args.CreateOptions, alloc: std.mem.Allocator, loc: []const u8) !void {
-    allocator = alloc;
+pub fn init(option: args.CreateOptions, loc: []const u8) !void {
+    var fba = std.heap.FixedBufferAllocator.init(&buf);
+    allocator = fba.allocator();
     location = loc;
     _ = c.rl_initialize();
     c.rl_prep_terminal(1);

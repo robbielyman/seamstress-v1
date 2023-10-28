@@ -14,12 +14,14 @@ pub const Data = union(enum) {
     Reset: void,
     Exec_Code_Line: struct {
         line: [:0]const u8,
+        allocator: std.mem.Allocator,
     },
     OSC: struct {
         from_host: [:0]const u8,
         from_port: [:0]const u8,
         path: [:0]const u8,
         msg: []osc.Lo_Arg,
+        allocator: std.mem.Allocator,
     },
     Monome_Add: struct {
         dev: *monome.Monome,
@@ -92,8 +94,8 @@ pub const Data = union(enum) {
     },
     MIDI: struct {
         id: u32,
-        msg_num: u64,
         message: []const u8,
+        allocator: std.mem.Allocator,
     },
     Clock_Resume: struct {
         id: u8,
@@ -102,8 +104,6 @@ pub const Data = union(enum) {
         transport: clock.Transport,
     },
 };
-
-var allocator: std.mem.Allocator = undefined;
 
 const Context = struct {
     cond: std.Thread.Condition,
@@ -117,16 +117,6 @@ fn prioritize(context: Context, a: Data, b: Data) std.math.Order {
             switch (b) {
                 .Clock_Resume, .Metro => return .eq,
                 else => return .lt,
-            }
-        },
-        .MIDI => |m| {
-            switch (b) {
-                .Clock_Resume, .Metro => return .gt,
-                .MIDI => |n| {
-                    if (m.id != n.id) return .eq;
-                    if (m.msg_num < n.msg_num) return .lt else return .gt;
-                },
-                else => return .eq,
             }
         },
         else => {
@@ -143,11 +133,13 @@ var queue: Queue = undefined;
 
 var quit = false;
 var reset = false;
+var gpa: std.heap.GeneralPurposeAllocator(.{}) = undefined;
 
-pub fn init(alloc_ptr: std.mem.Allocator) !void {
+pub fn init() !void {
     reset = false;
     quit = false;
-    allocator = alloc_ptr;
+    gpa = .{};
+    const allocator = gpa.allocator();
     queue = Queue.init(allocator, .{ .cond = .{}, .lock = .{} });
     try queue.ensureTotalCapacity(5000);
 }
@@ -170,16 +162,24 @@ pub fn loop() !bool {
 pub fn free(event: Data) void {
     switch (event) {
         .OSC => |e| {
-            allocator.free(e.from_host);
-            allocator.free(e.from_port);
-            allocator.free(e.path);
-            allocator.free(e.msg);
+            e.allocator.free(e.from_host);
+            e.allocator.free(e.from_port);
+            e.allocator.free(e.path);
+            for (e.msg) |a| {
+                switch (a) {
+                    .Lo_Symbol => |s| e.allocator.free(s),
+                    .Lo_String => |s| e.allocator.free(s),
+                    .Lo_Blob => |s| e.allocator.free(s),
+                    else => {},
+                }
+            }
+            e.allocator.free(e.msg);
         },
         .Exec_Code_Line => |e| {
-            allocator.free(e.line);
+            e.allocator.free(e.line);
         },
         .MIDI => |e| {
-            allocator.free(e.message);
+            e.allocator.free(e.message);
         },
         else => {},
     }
@@ -211,6 +211,7 @@ pub fn handle_pending() !void {
 pub fn deinit() void {
     free_pending();
     queue.deinit();
+    _ = gpa.deinit();
 }
 
 fn free_pending() void {
