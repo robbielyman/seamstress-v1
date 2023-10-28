@@ -746,7 +746,7 @@ pub fn init(width: u16, height: u16, resources: []const u8) !void {
     };
 
     for (0..2) |i| {
-        const z: c_int = if (i == 0) 4 else 2;
+        const z: c_int = if (i == 0) 4 else 3;
         var w = c.SDL_CreateWindow(
             if (i == 0) "seamstress" else "seamstress_params",
             @intCast(i * width * 4),
