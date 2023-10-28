@@ -1584,6 +1584,7 @@ fn lua_print(l: *Lua) i32 {
     if (input.readline) {
         _ = c.rl_clear_visible_line();
         _ = c.rl_set_prompt("> ");
+        c.rl_already_prompted = 1;
         _ = c.rl_forced_update_display();
     } else {
         stdout.print("> ", .{}) catch unreachable;
@@ -1648,6 +1649,7 @@ fn prompt(comptime kind: PromptKind) !void {
             if (input.readline) {
                 _ = c.rl_clear_visible_line();
                 _ = c.rl_set_prompt("> ");
+                c.rl_already_prompted = 1;
                 _ = c.rl_forced_update_display();
             } else {
                 try stdout.print("> ", .{});
@@ -1655,7 +1657,10 @@ fn prompt(comptime kind: PromptKind) !void {
         },
         .Continue => {
             if (input.readline) {
+                _ = c.rl_clear_visible_line();
                 _ = c.rl_set_prompt(">... ");
+                c.rl_already_prompted = 1;
+                _ = c.rl_forced_update_display();
             } else {
                 try stdout.print(">... ", .{});
             }
