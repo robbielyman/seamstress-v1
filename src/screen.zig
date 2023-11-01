@@ -694,7 +694,7 @@ pub fn set_fullscreen(is_fullscreen: bool) void {
     sdl_call(c.SDL_PushEvent(&event), "screen.set_fullscreen");
 }
 
-pub fn set_fullscreen_inner(is_fullscreen: bool, gui: *Gui) void {
+fn set_fullscreen_inner(is_fullscreen: bool, gui: *Gui) void {
     if (is_fullscreen) {
         sdl_call(
             c.SDL_SetWindowFullscreen(gui.window, c.SDL_WINDOW_FULLSCREEN_DESKTOP),
@@ -716,6 +716,31 @@ pub fn set_fullscreen_inner(is_fullscreen: bool, gui: *Gui) void {
         },
     };
     events.post(event);
+}
+
+const PositionEvent = struct {
+    x: i32,
+    y: i32,
+    gui: *Gui,
+};
+
+pub fn set_position(x: i32, y: i32) void {
+    var position = std.heap.raw_c_allocator.create(PositionEvent) catch @panic("OOM!");
+    position.* = .{
+        .x = x,
+        .y = y,
+        .gui = &windows[current],
+    };
+    var event: c.SDL_Event = undefined;
+    event = std.mem.zeroes(c.SDL_Event);
+    event.type = SDL_USER_EVENT;
+    event.user.code = 2;
+    event.user.data1 = position;
+    sdl_call(c.SDL_PushEvent(&event), "screen.set_position");
+}
+
+fn set_position_inner(x: i32, y: i32, gui: *Gui) void {
+    c.SDL_SetWindowPosition(gui.window, x, y);
 }
 
 pub fn init(width: u16, height: u16, resources: []const u8) !void {
@@ -830,6 +855,11 @@ pub fn check() void {
                     const fullscreen: *FullscreenEvent = @ptrCast(@alignCast(ev.user.data1));
                     set_fullscreen_inner(fullscreen.fullscreen, fullscreen.gui);
                     std.heap.raw_c_allocator.destroy(fullscreen);
+                },
+                2 => {
+                    const position: *PositionEvent = @ptrCast(@alignCast(ev.user.data1));
+                    set_position_inner(position.x, position.y, position.gui);
+                    std.heap.raw_c_allocator.destroy(position);
                 },
                 else => {},
             }

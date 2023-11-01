@@ -248,6 +248,13 @@ function screen.set_fullscreen(is_fullscreen)
   _seamstress.screen_set_fullscreen(is_fullscreen)
 end
 
+--- sets the position of the current window on the display
+-- @tparam integer x x-position of upper left corner
+-- @tparam integer y y-position of upper left corner
+function screen.set_position(x, y)
+  _seamstress.screen_set_position(x, y)
+end
+
 _seamstress.screen = {
   key = function(symbol, modifiers, is_repeat, state, window)
     local char = keycodes[symbol]

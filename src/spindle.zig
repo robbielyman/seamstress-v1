@@ -1070,6 +1070,21 @@ fn screen_set_fullscreen(l: *Lua) i32 {
     return 0;
 }
 
+/// sets the position of the current window.
+// users should use `screen.set_position` instead
+// @see screen.set_position
+// @param x x-position of upper-left corner
+// @param y y-position of upper-left corner
+// @function screen_set_position
+fn screen_set_position(l: *Lua) i32 {
+    check_num_args(l, 2);
+    const x: i32 = @intFromFloat(l.checkNumber(1));
+    const y: i32 = @intFromFloat(l.checkNumber(2));
+    screen.set_position(x, y);
+    l.setTop(0);
+    return 0;
+}
+
 /// starts a new metro.
 // users should use `metro:start` instead
 // @param idx metro id (1-36)
