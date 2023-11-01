@@ -4,13 +4,21 @@
 -- for a fully-developed script example, run 'seamstress -e plasma'
 
 function init()
-  screen.set_size(120,56)
+  screen.set_size(128,56)
   data = {
     modifier = "none",
     char = "none",
     is_repeat = "false",
     state = 0,
   }
+  display_lines = {
+    {"last char: ", "char"},
+    {"current mod: ", "modifier"},
+    {"repeat: ", "is_repeat"},
+    { "state: ", "state"}
+  }
+  L1 = 10
+  L2 = 15
 end
 
 function screen.key(char, modifiers, is_repeat, state)
@@ -32,14 +40,17 @@ end
 
 function redraw()
   screen.clear()
-  screen.level(15)
-  screen.move(10, 10)
-  screen.text("last char: " .. data.char)
-  screen.move_rel(0, 10)
-  screen.text("current mod: " .. data.modifier)
-  screen.move_rel(0, 10)
-  screen.text("repeat: " .. data.is_repeat)
-  screen.move_rel(0, 10)
-  screen.text("state: " .. data.state)
+  for i = 1,4 do
+    screen.move(10, 10 * i)
+    screen.level(L1)
+    local ln = display_lines[i][1] -- get text string
+    screen.text(ln) -- display text string
+    
+    local width,height = screen.get_text_size(ln)
+    screen.move_rel(width,0)
+    screen.level(L2)
+    ln = data[display_lines[i][2]] -- get data
+    screen.text(ln) -- display data
+  end
   screen.update()
 end
