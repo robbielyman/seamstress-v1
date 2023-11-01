@@ -17,7 +17,7 @@ function init()
     {"repeat: ", "is_repeat"},
     { "state: ", "state"}
   }
-  L1 = 10
+  L1 = 7
   L2 = 15
 end
 
