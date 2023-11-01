@@ -211,7 +211,9 @@ function clock.add_params()
     end
   end)
   params:set_save("clock_tempo", false)
-  params:add_number("clock_link_quantum", "link quantum", 0, 50, seamstress.state.clock.quantum, nil, function(param) return param:get().." beats" end)
+  params:add_number("clock_link_quantum", "link quantum", 0, 50, seamstress.state.clock.quantum, nil, function(param)
+    return param:get() .. " beats"
+  end)
   params:set_action("clock_link_quantum", function(quantum)
     _seamstress.clock_link_set_quantum(quantum)
     seamstress.state.clock.quantum = quantum
@@ -228,7 +230,7 @@ function clock.add_params()
   params:add_separator("midi_clock_out_separator", "midi clock out")
   for i = 1, 16 do
     local short_name = string.len(midi.vports[i].name) <= 20 and midi.vports[i].name
-        or util.acronym(midi.vports[i].name)
+      or util.acronym(midi.vports[i].name)
     params:add_binary("clock_midi_out_" .. i, i .. ". " .. short_name, "toggle", seamstress.state.clock.midi_out[i])
     params:set_action("clock_midi_out_" .. i, function(x)
       if x == 1 then
@@ -266,7 +268,7 @@ function clock.add_params()
   clock.run(function()
     while true do
       if paramsMenu.groupname == "CLOCK" then
-        clock.sync(1/4)
+        clock.sync(1 / 4)
       else
         clock.sleep(1)
       end

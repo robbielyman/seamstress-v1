@@ -512,13 +512,13 @@ m.redraw = function()
     if m.group then
       n = n .. " / " .. m.groupname
       if m.groupname == "CLOCK" then
-        screen.move(137,10)
-        local beatcount = math.floor(clock.get_beats()/0.25)*0.25
+        screen.move(137, 10)
+        local beatcount = math.floor(clock.get_beats() / 0.25) * 0.25
         local is_whole = beatcount == math.floor(beatcount)
         screen.color(255, 255, 255, is_whole and 255 or 130)
         if params:get("clock_source") == 3 then
           if _seamstress.transport_active then
-            screen.text("beat: "..beatcount)
+            screen.text("beat: " .. beatcount)
           else
             screen.color(255, 255, 255, 130)
             screen.text("waiting for Link start")

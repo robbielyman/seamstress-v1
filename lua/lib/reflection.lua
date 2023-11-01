@@ -9,30 +9,32 @@ reflection.__index = reflection
 function reflection.new()
   local p = {}
   setmetatable(p, reflection)
-  p.rec                  = 0
-  p.rec_enabled          = 0
-  p.play                 = 0
-  p.event                = {}
-  p.event_prev           = {}
-  p.step                 = 0
-  p.count                = 0
-  p.loop                 = 0
-  p.clock                = nil
-  p.queued_rec           = nil
-  p.rec_dur              = nil
-  p.quantize             = 1 / 48
-  p.endpoint             = 0
-  p.start_callback       = function() end
+  p.rec = 0
+  p.rec_enabled = 0
+  p.play = 0
+  p.event = {}
+  p.event_prev = {}
+  p.step = 0
+  p.count = 0
+  p.loop = 0
+  p.clock = nil
+  p.queued_rec = nil
+  p.rec_dur = nil
+  p.quantize = 1 / 48
+  p.endpoint = 0
+  p.start_callback = function() end
   p.end_of_loop_callback = function() end
-  p.end_of_rec_callback  = function() end
-  p.end_callback         = function() end
-  p.process              = function(_) end
+  p.end_of_rec_callback = function() end
+  p.end_callback = function() end
+  p.process = function(_) end
   return p
 end
 
 local function deep_copy(tbl)
   local ret = {}
-  if type(tbl) ~= 'table' then return tbl end
+  if type(tbl) ~= "table" then
+    return tbl
+  end
   for key, value in pairs(tbl) do
     ret[key] = deep_copy(value)
   end
@@ -217,12 +219,16 @@ function reflection:begin_playback()
         end
       end
     else
-      if self.step % q ~= 1 then goto continue end
+      if self.step % q ~= 1 then
+        goto continue
+      end
       for i = q - 1, 0, -1 do
         if self.event[self.step - i] and next(self.event[self.step - i]) then
           for j = 1, #self.event[self.step - i] do
             local event = self.event[self.step - i][j]
-            if not event._flag then self.process(event) end
+            if not event._flag then
+              self.process(event)
+            end
           end
         end
       end
@@ -264,7 +270,9 @@ function reflection:end_playback(silent)
 end
 
 function reflection:_clear_flags()
-  if self.endpoint == 0 then return end
+  if self.endpoint == 0 then
+    return
+  end
   for i = 1, self.endpoint do
     local list = self.event[i]
     if list then

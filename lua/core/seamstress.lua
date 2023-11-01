@@ -88,7 +88,7 @@ _startup = function(script_file)
     local file = seamstress.state.data .. "pset-last.txt"
     params:clear()
     pmap.clear()
-    
+
     if util.file_exists(file) then
       local f = io.open(file, "r")
       io.input(f)

@@ -3,7 +3,6 @@
 --
 -- inspired by the visualizations for the ATLAS experiments at CERN's LHC.
 
-
 -- -------------------------------------------------------------------------
 -- consts
 
@@ -12,19 +11,17 @@ FPS = 60
 -- time in seconds between each collision
 BANG_INTERVAL_S = 2
 
-
 -- -------------------------------------------------------------------------
 -- colors
 
-COL_BG = {0, 0, 0}
-COL_FLASH = {250, 250, 250}
-COL_DETECTOR_BG = {25, 21, 13}
-COL_PARTICLE = {255, 165, 0}
-COL_BARS = {253, 238, 0}
-COL_MUON = {255, 0, 0}
-COL_BORDER = {147, 112, 219}
-COL_RIPPLE = {110, 105, 120}
-
+COL_BG = { 0, 0, 0 }
+COL_FLASH = { 250, 250, 250 }
+COL_DETECTOR_BG = { 25, 21, 13 }
+COL_PARTICLE = { 255, 165, 0 }
+COL_BARS = { 253, 238, 0 }
+COL_MUON = { 255, 0, 0 }
+COL_BORDER = { 147, 112, 219 }
+COL_RIPPLE = { 110, 105, 120 }
 
 -- -------------------------------------------------------------------------
 -- fading speed
@@ -34,12 +31,11 @@ COL_RIPPLE = {110, 105, 120}
 -- at 1/2, it will stay for half this duration
 -- at 2 it will only fade by half
 
-FADE_T_INNER_RIPPLES = 1/1.5
-FADE_T_RIPPLES = 1/1.5
-FADE_T_PARTICLES = 1/4
-FADE_T_HADRONS = 1/2
+FADE_T_INNER_RIPPLES = 1 / 1.5
+FADE_T_RIPPLES = 1 / 1.5
+FADE_T_PARTICLES = 1 / 4
+FADE_T_HADRONS = 1 / 2
 FADE_T_MUONS = 4
-
 
 -- -------------------------------------------------------------------------
 -- state
@@ -54,7 +50,7 @@ hadrons = {}
 ripples = {}
 
 function pct_time_bang()
-  local elapsed_s = frame_count * (1/FPS)
+  local elapsed_s = frame_count * (1 / FPS)
   return (elapsed_s % BANG_INTERVAL_S) / BANG_INTERVAL_S
 end
 
@@ -66,29 +62,29 @@ function bang()
   hadrons = {}
 
   muons = {}
-  for m=1,nb_muons do
+  for m = 1, nb_muons do
     local angle = math.random(100) / 100
     table.insert(muons, angle)
 
-    table.insert(hadrons, {angle, math.random(100) / 100})
+    table.insert(hadrons, { angle, math.random(100) / 100 })
   end
 
   particles = {}
-  for m=1,nb_particles do
+  for m = 1, nb_particles do
     local angle = math.random(100) / 100
     local angle2 = math.random(10) / 100
     local dir = (math.random(2) - 1.5) * 2
-    table.insert(particles, {angle, angle2, dir})
+    table.insert(particles, { angle, angle2, dir })
 
-    table.insert(hadrons, {angle, math.random(100) / 100})
+    table.insert(hadrons, { angle, math.random(100) / 100 })
   end
 
   ripples = {}
-  for m=1,nb_ripples do
+  for m = 1, nb_ripples do
     local angle = math.random(100) / 100
     local offset = math.random(100) / 100
     local radius = math.random(10, 100) / 100
-    table.insert(ripples, {angle, offset, radius})
+    table.insert(ripples, { angle, offset, radius })
   end
 end
 
@@ -106,20 +102,19 @@ end
 function points_dist(x1, y1, x2, y2)
   local dx = x1 - x2
   local dy = y1 - y2
-  return math.sqrt(dx^2 + dy^2)
+  return math.sqrt(dx ^ 2 + dy ^ 2)
 end
 
 function point_in_circle(cx, cy, r, px, py)
-  return (points_dist(cx, cy, px, py) <= r )
+  return (points_dist(cx, cy, px, py) <= r)
 end
 
 function color_scale(min_col, max_col, cursor)
   local r = min_col[1] + (max_col[1] - min_col[1]) * cursor
   local g = min_col[2] + (max_col[2] - min_col[2]) * cursor
   local b = min_col[3] + (max_col[3] - min_col[3]) * cursor
-  return {r, g, b}
+  return { r, g, b }
 end
-
 
 -- -------------------------------------------------------------------------
 -- init
@@ -129,23 +124,22 @@ local clock_bang
 
 function init()
   clock_redraw = clock.run(function()
-      while true do
-        clock.sleep(1/FPS)
-          redraw()
-          frame_count = frame_count + 1
-      end
+    while true do
+      clock.sleep(1 / FPS)
+      redraw()
+      frame_count = frame_count + 1
+    end
   end)
 
   clock_bang = clock.run(function()
-      while true do
-        clock.sleep(BANG_INTERVAL_S)
-        bang()
-        frame_count = 1
-        has_banged = true
-      end
+    while true do
+      clock.sleep(BANG_INTERVAL_S)
+      bang()
+      frame_count = 1
+      has_banged = true
+    end
   end)
 end
-
 
 -- -------------------------------------------------------------------------
 -- screen
@@ -155,10 +149,10 @@ function redraw()
 
   screen.clear()
 
-  local center_x, center_y = screen_w/2, screen_h/2
-  local outer_r = (screen_h/2) * 3/4
-  local inner_r = outer_r/2
-  local bar_max = (screen_h/2) - outer_r
+  local center_x, center_y = screen_w / 2, screen_h / 2
+  local outer_r = (screen_h / 2) * 3 / 4
+  local inner_r = outer_r / 2
+  local bar_max = (screen_h / 2) - outer_r
 
   local pct_bang = pct_time_bang()
 
@@ -178,15 +172,15 @@ function redraw()
 
   -- inner (concentric) ripples
   if tab.count(muons) > 0 then
-    local inner_ripples = {1/9, 1/2, 1/2 + 1/8, 1/2 + 2/8, 1/2 + 3/8}
+    local inner_ripples = { 1 / 9, 1 / 2, 1 / 2 + 1 / 8, 1 / 2 + 2 / 8, 1 / 2 + 3 / 8 }
     screen.color(table.unpack(color_scale(COL_BARS, COL_BG, pct_bang / FADE_T_INNER_RIPPLES)))
     for _, r_ratio in pairs(inner_ripples) do
       local r = inner_r * r_ratio
-      for i=1,70 do
+      for i = 1, 70 do
         if math.random(3) > 1 then
-          local noize = (1+math.random(10)/100)
-          local px = center_x + r * noize * cos(i/70) * -1
-          local py = center_y + r * noize * sin(i/70)
+          local noize = (1 + math.random(10) / 100)
+          local px = center_x + r * noize * cos(i / 70) * -1
+          local py = center_y + r * noize * sin(i / 70)
           screen.pixel(px, py)
         end
       end
@@ -197,7 +191,7 @@ function redraw()
   screen.color(table.unpack(color_scale(COL_RIPPLE, COL_DETECTOR_BG, math.min(pct_bang / FADE_T_RIPPLES, 1))))
   for _, r in pairs(ripples) do
     local angle, offset, radius = table.unpack(r)
-    local r = radius * outer_r * 3/4
+    local r = radius * outer_r * 3 / 4
     local ax = center_x + (offset * outer_r) * cos(angle) * -1
     local ay = center_y + (offset * outer_r) * sin(angle)
 
@@ -206,12 +200,14 @@ function redraw()
     --   screen.circle(radius * outer_r * 3/4)
     -- end
 
-    for i=1,100 do
+    for i = 1, 100 do
       if math.random(3) > 1 then
-        local px = ax + r * cos(i/100) * -1
-        local py = ay + r * sin(i/100)
-        if point_in_circle(center_x, center_y, outer_r, px, py)
-          and not point_in_circle(center_x, center_y, inner_r, px, py) then
+        local px = ax + r * cos(i / 100) * -1
+        local py = ay + r * sin(i / 100)
+        if
+          point_in_circle(center_x, center_y, outer_r, px, py)
+          and not point_in_circle(center_x, center_y, inner_r, px, py)
+        then
           screen.pixel(px, py)
         end
       end
@@ -225,8 +221,8 @@ function redraw()
     local bx = center_x + outer_r * cos(angle) * -1
     local by = center_y + outer_r * sin(angle)
 
-    local midx = center_x + outer_r/2 * cos(angle + angle2 * dir) * -1
-    local midy = center_y + outer_r/2 * sin(angle + angle2 * dir)
+    local midx = center_x + outer_r / 2 * cos(angle + angle2 * dir) * -1
+    local midy = center_y + outer_r / 2 * sin(angle + angle2 * dir)
 
     screen.curve(midx, midy, midx, midy, bx, by)
   end
@@ -264,8 +260,8 @@ function redraw()
   screen.move(center_x, center_y)
   screen.color(table.unpack(color_scale(COL_MUON, COL_BG, pct_bang / FADE_T_MUONS)))
   for _, angle in pairs(muons) do
-    local bx = center_x + (screen_w/2) * cos(angle) * -1
-    local by = center_y + (screen_w/2) * sin(angle)
+    local bx = center_x + (screen_w / 2) * cos(angle) * -1
+    local by = center_y + (screen_w / 2) * sin(angle)
     screen.line(bx, by)
   end
 
