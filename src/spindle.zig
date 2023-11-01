@@ -81,6 +81,7 @@ pub fn init(prefix: []const u8, config: []const u8, time: std.time.Timer) !void 
     register_seamstress("screen_get_text_size", ziglua.wrap(screen_get_text_size));
     register_seamstress("screen_set_size", ziglua.wrap(screen_set_size));
     register_seamstress("screen_set_fullscreen", ziglua.wrap(screen_set_fullscreen));
+    register_seamstress("screen_set_position", ziglua.wrap(screen_set_position));
 
     register_seamstress("metro_start", ziglua.wrap(metro_start));
     register_seamstress("metro_stop", ziglua.wrap(metro_stop));
