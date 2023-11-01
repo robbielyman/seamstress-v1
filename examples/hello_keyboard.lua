@@ -4,6 +4,7 @@
 -- for a fully-developed script example, run 'seamstress -e plasma'
 
 function init()
+  screen.set_size(120,56)
   data = {
     modifier = "none",
     char = "none",
