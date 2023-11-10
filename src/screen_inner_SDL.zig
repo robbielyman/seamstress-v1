@@ -571,7 +571,7 @@ pub fn set_position(x: i32, y: i32) void {
 pub fn get_text_size(str: [*:0]const u8) screen.Size {
     var w: i32 = undefined;
     var h: i32 = undefined;
-    sdl_call(c.TTF_SizeText(font, str, &w, &h), "screen.get_text_size()");
+    sdl_call(c.TTF_SizeUTF8(font, str, &w, &h), "screen.get_text_size()");
     return .{ .w = w, .h = h };
 }
 

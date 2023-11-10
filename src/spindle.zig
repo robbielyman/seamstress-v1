@@ -908,7 +908,6 @@ fn screen_texture_dimensions(l: *Lua) i32 {
 // @function screen_render_texture
 fn screen_render_texture(l: *Lua) i32 {
     check_num_args(l, 4);
-    l.checkType(1, .light_userdata);
     const texture = l.checkInteger(1);
     const x = l.checkNumber(2) - 1;
     const y = l.checkNumber(3) - 1;
@@ -935,7 +934,6 @@ fn screen_render_texture(l: *Lua) i32 {
 // @function screen_render_texture_extended
 fn screen_render_texture_extended(l: *Lua) i32 {
     check_num_args(l, 7);
-    l.checkType(1, .light_userdata);
     const texture = l.checkInteger(1);
     const x = l.checkNumber(2) - 1;
     const y = l.checkNumber(3) - 1;
