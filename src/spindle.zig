@@ -453,9 +453,7 @@ fn monome_intensity(l: *Lua) i32 {
 // @function screen_refresh
 fn screen_refresh(l: *Lua) i32 {
     check_num_args(l, 0);
-    screen.post(.{
-        .Refresh = {},
-    });
+    screen.refresh();
     return 0;
 }
 
@@ -469,13 +467,7 @@ fn screen_move(l: *Lua) i32 {
     check_num_args(l, 2);
     const x = l.checkNumber(1);
     const y = l.checkNumber(2);
-    screen.post(.{
-        .Move = .{
-            .rel = false,
-            .x = @intFromFloat(x - 1),
-            .y = @intFromFloat(y - 1),
-        },
-    });
+    screen.move(@intFromFloat(x - 1), @intFromFloat(y - 1));
     l.setTop(0);
     return 0;
 }
@@ -490,13 +482,7 @@ fn screen_move_rel(l: *Lua) i32 {
     check_num_args(l, 2);
     const x = l.checkNumber(1);
     const y = l.checkNumber(2);
-    screen.post(.{
-        .Move = .{
-            .rel = true,
-            .x = @intFromFloat(x),
-            .y = @intFromFloat(y),
-        },
-    });
+    screen.move_rel(@intFromFloat(x), @intFromFloat(y));
     l.setTop(0);
     return 0;
 }
@@ -511,12 +497,7 @@ fn screen_pixel(l: *Lua) i32 {
     check_num_args(l, 2);
     const x = l.checkNumber(1);
     const y = l.checkNumber(2);
-    screen.post(.{
-        .Pixel = .{
-            .x = @intFromFloat(x - 1),
-            .y = @intFromFloat(y - 1),
-        },
-    });
+    screen.pixel(@intFromFloat(x - 1), @intFromFloat(y - 1));
     l.setTop(0);
     return 0;
 }
@@ -527,9 +508,7 @@ fn screen_pixel(l: *Lua) i32 {
 // @function screen_pixel_rel
 fn screen_pixel_rel(l: *Lua) i32 {
     check_num_args(l, 0);
-    screen.post(.{
-        .PixelRel = {},
-    });
+    screen.pixel_rel();
     return 0;
 }
 
@@ -543,13 +522,7 @@ fn screen_line(l: *Lua) i32 {
     check_num_args(l, 2);
     const bx = l.checkNumber(1);
     const by = l.checkNumber(2);
-    screen.post(.{
-        .Line = .{
-            .rel = false,
-            .x = @intFromFloat(bx - 1),
-            .y = @intFromFloat(by - 1),
-        },
-    });
+    screen.line(@intFromFloat(bx - 1), @intFromFloat(by - 1));
     l.setTop(0);
     return 0;
 }
@@ -564,13 +537,7 @@ fn screen_line_rel(l: *Lua) i32 {
     check_num_args(l, 2);
     const bx = l.checkNumber(1);
     const by = l.checkNumber(2);
-    screen.post(.{
-        .Line = .{
-            .rel = true,
-            .x = @intFromFloat(bx),
-            .y = @intFromFloat(by),
-        },
-    });
+    screen.line_rel(@intFromFloat(bx), @intFromFloat(by));
     l.setTop(0);
     return 0;
 }
@@ -593,16 +560,7 @@ fn screen_curve(l: *Lua) i32 {
     const y2 = l.checkNumber(4);
     const x3 = l.checkNumber(5);
     const y3 = l.checkNumber(6);
-    screen.post(.{
-        .Curve = .{
-            .x1 = x1,
-            .x2 = x2,
-            .x3 = x3,
-            .y1 = y1,
-            .y2 = y2,
-            .y3 = y3,
-        },
-    });
+    screen.curve(x1, y1, x2, y2, x3, y3);
     l.setTop(0);
     return 0;
 }
@@ -617,13 +575,7 @@ fn screen_rect(l: *Lua) i32 {
     check_num_args(l, 2);
     const w = l.checkNumber(1);
     const h = l.checkNumber(2);
-    screen.post(.{
-        .Rect = .{
-            .fill = false,
-            .w = @intFromFloat(w),
-            .h = @intFromFloat(h),
-        },
-    });
+    screen.rect(@intFromFloat(w), @intFromFloat(h));
     l.setTop(0);
     return 0;
 }
@@ -638,13 +590,7 @@ fn screen_rect_fill(l: *Lua) i32 {
     check_num_args(l, 2);
     const w = l.checkNumber(1);
     const h = l.checkNumber(2);
-    screen.post(.{
-        .Rect = .{
-            .fill = true,
-            .w = @intFromFloat(w),
-            .h = @intFromFloat(h),
-        },
-    });
+    screen.rect_fill(@intFromFloat(w), @intFromFloat(h));
     l.setTop(0);
     return 0;
 }
@@ -657,14 +603,7 @@ fn screen_rect_fill(l: *Lua) i32 {
 fn screen_text(l: *Lua) i32 {
     check_num_args(l, 1);
     const words = l.checkString(1);
-    const allocator = std.heap.raw_c_allocator;
-    screen.post(.{
-        .Text = .{
-            .alignment = .Left,
-            .allocator = allocator,
-            .words = allocator.dupeZ(u8, std.mem.span(words)) catch @panic("OOM!"),
-        },
-    });
+    screen.text(std.mem.span(words));
     l.setTop(0);
     return 0;
 }
@@ -677,14 +616,7 @@ fn screen_text(l: *Lua) i32 {
 fn screen_text_center(l: *Lua) i32 {
     check_num_args(l, 1);
     const words = l.checkString(1);
-    const allocator = std.heap.raw_c_allocator;
-    screen.post(.{
-        .Text = .{
-            .alignment = .Center,
-            .allocator = allocator,
-            .words = allocator.dupeZ(u8, std.mem.span(words)) catch @panic("OOM!"),
-        },
-    });
+    screen.text_center(std.mem.span(words));
     l.setTop(0);
     return 0;
 }
@@ -697,14 +629,7 @@ fn screen_text_center(l: *Lua) i32 {
 fn screen_text_right(l: *Lua) i32 {
     check_num_args(l, 1);
     const words = l.checkString(1);
-    const allocator = std.heap.raw_c_allocator;
-    screen.post(.{
-        .Text = .{
-            .alignment = .Right,
-            .allocator = allocator,
-            .words = allocator.dupeZ(u8, std.mem.span(words)) catch @panic("OOM!"),
-        },
-    });
+    screen.text_right(std.mem.span(words));
     l.setTop(0);
     return 0;
 }
@@ -721,13 +646,7 @@ fn screen_arc(l: *Lua) i32 {
     const radius = l.checkNumber(1);
     const theta_1 = l.checkNumber(2);
     const theta_2 = l.checkNumber(3);
-    screen.post(.{
-        .Arc = .{
-            .radius = @intFromFloat(radius),
-            .theta_1 = theta_1,
-            .theta_2 = theta_2,
-        },
-    });
+    screen.arc(@intFromFloat(radius), theta_1, theta_2);
     l.setTop(0);
     return 0;
 }
@@ -740,12 +659,7 @@ fn screen_arc(l: *Lua) i32 {
 fn screen_circle(l: *Lua) i32 {
     check_num_args(l, 1);
     const radius = l.checkNumber(1);
-    screen.post(.{
-        .Circle = .{
-            .fill = false,
-            .radius = @intFromFloat(radius),
-        },
-    });
+    screen.circle(@intFromFloat(radius));
     l.setTop(0);
     return 0;
 }
@@ -758,12 +672,7 @@ fn screen_circle(l: *Lua) i32 {
 fn screen_circle_fill(l: *Lua) i32 {
     check_num_args(l, 1);
     const radius = l.checkNumber(1);
-    screen.post(.{
-        .Circle = .{
-            .fill = true,
-            .radius = @intFromFloat(radius),
-        },
-    });
+    screen.circle_fill(@intFromFloat(radius));
     l.setTop(0);
     return 0;
 }
@@ -780,26 +689,20 @@ fn screen_circle_fill(l: *Lua) i32 {
 // @function screen_triangle
 fn screen_triangle(l: *Lua) i32 {
     check_num_args(l, 6);
-    const allocator = std.heap.raw_c_allocator;
-    const vertices = allocator.alloc(screen.Vertex, 3) catch @panic("OOM!");
-    const indices = allocator.alloc(usize, 3) catch @panic("OOM!");
-    for (vertices, 0..) |*vertex, i| {
-        indices[i] = i;
-        vertex.color = .{};
-        vertex.position = .{
-            .x = @floatCast(l.checkNumber(@intCast(2 * i + 1))),
-            .y = @floatCast(l.checkNumber(@intCast(2 * i + 2))),
-        };
-        vertex.tex_coord = .{};
-    }
-    screen.post(.{
-        .DefineGeometry = .{
-            .allocator = allocator,
-            .indices = indices,
-            .texture = null,
-            .vertices = vertices,
-        },
-    });
+    const ax = l.checkNumber(1);
+    const ay = l.checkNumber(2);
+    const bx = l.checkNumber(3);
+    const by = l.checkNumber(4);
+    const cx = l.checkNumber(5);
+    const cy = l.checkNumber(6);
+    screen.triangle(
+        @floatCast(ax),
+        @floatCast(ay),
+        @floatCast(bx),
+        @floatCast(by),
+        @floatCast(cx),
+        @floatCast(cy),
+    );
     return 0;
 }
 
@@ -817,25 +720,24 @@ fn screen_triangle(l: *Lua) i32 {
 // @function screen_quad
 fn screen_quad(l: *Lua) i32 {
     check_num_args(l, 8);
-    const allocator = std.heap.raw_c_allocator;
-    const vertices = allocator.alloc(screen.Vertex, 4) catch @panic("OOM!");
-    const indices: []const usize = &.{ 0, 1, 2, 2, 3, 0 };
-    for (vertices, 0..) |*vertex, i| {
-        vertex.color = .{};
-        vertex.position = .{
-            .x = @floatCast(l.checkNumber(@intCast(2 * i + 1))),
-            .y = @floatCast(l.checkNumber(@intCast(2 * i + 2))),
-        };
-        vertex.tex_coord = .{};
-    }
-    screen.post(.{
-        .DefineGeometry = .{
-            .allocator = allocator,
-            .indices = allocator.dupe(usize, indices) catch @panic("OOM!"),
-            .texture = null,
-            .vertices = vertices,
-        },
-    });
+    const ax = l.checkNumber(1);
+    const ay = l.checkNumber(2);
+    const bx = l.checkNumber(3);
+    const by = l.checkNumber(4);
+    const cx = l.checkNumber(5);
+    const cy = l.checkNumber(6);
+    const dx = l.checkNumber(7);
+    const dy = l.checkNumber(8);
+    screen.quad(
+        @floatCast(ax),
+        @floatCast(ay),
+        @floatCast(bx),
+        @floatCast(by),
+        @floatCast(cx),
+        @floatCast(cy),
+        @floatCast(dx),
+        @floatCast(dy),
+    );
     return 0;
 }
 
@@ -843,21 +745,22 @@ fn screen_quad(l: *Lua) i32 {
 // users should use `screen.new_texture` instead
 // @param width width in pixels
 // @param height height in pixels
-// @return texture number representing texture
+// @return texture opaque pointer to texture
 // @see screen.new_texture
 // @function screen_new_texture
 fn screen_new_texture(l: *Lua) i32 {
     check_num_args(l, 2);
     const width = l.checkNumber(1);
     const height = l.checkNumber(2);
-    const texture = screen.next_texture_idx();
-    screen.post(.{
-        .NewTexture = .{
-            .width = @intFromFloat(width),
-            .height = @intFromFloat(height),
-        },
-    });
-    l.pushInteger(@intCast(texture));
+    const texture = screen.new_texture(
+        @intFromFloat(width),
+        @intFromFloat(height),
+    ) catch {
+        l.raiseErrorStr("unable to create texture!", .{});
+        l.pushNil();
+        return 1;
+    };
+    l.pushLightUserdata(texture);
     return 1;
 }
 
@@ -870,15 +773,12 @@ fn screen_new_texture(l: *Lua) i32 {
 fn screen_new_texture_from_file(l: *Lua) i32 {
     check_num_args(l, 1);
     const filename = l.checkString(1);
-    const allocator = std.heap.raw_c_allocator;
-    const texture = screen.next_texture_idx();
-    screen.post(.{
-        .NewTextureFromFile = .{
-            .allocator = allocator,
-            .filename = allocator.dupeZ(u8, std.mem.span(filename)) catch @panic("OOM!"),
-        },
-    });
-    l.pushInteger(@intCast(texture));
+    const texture = screen.new_texture_from_file(std.mem.span(filename)) catch {
+        l.raiseErrorStr("unable to create texture!", .{});
+        l.pushNil();
+        return 1;
+    };
+    l.pushLightUserdata(texture);
     return 1;
 }
 
@@ -889,13 +789,10 @@ fn screen_new_texture_from_file(l: *Lua) i32 {
 // @function screen_texture_dimensions
 fn screen_texture_dimensions(l: *Lua) i32 {
     check_num_args(l, 1);
-    const texture: usize = @intCast(l.checkInteger(1));
-    const size = screen.get_texture_size(texture) catch {
-        l.raiseErrorStr("unknown texture!", .{});
-        return 0;
-    };
-    l.pushInteger(size.w);
-    l.pushInteger(size.h);
+    l.checkType(1, .light_userdata);
+    const texture = l.toUserdata(screen.Texture, 1) catch unreachable;
+    l.pushInteger(texture.width);
+    l.pushInteger(texture.height);
     return 2;
 }
 
@@ -908,18 +805,14 @@ fn screen_texture_dimensions(l: *Lua) i32 {
 // @function screen_render_texture
 fn screen_render_texture(l: *Lua) i32 {
     check_num_args(l, 4);
-    const texture = l.checkInteger(1);
+    l.checkType(1, .light_userdata);
+    const texture = l.toUserdata(screen.Texture, 1) catch unreachable;
     const x = l.checkNumber(2) - 1;
     const y = l.checkNumber(3) - 1;
     const zoom = l.checkNumber(4);
-    screen.post(.{
-        .RenderTexture = .{
-            .x = @intFromFloat(x),
-            .y = @intFromFloat(y),
-            .zoom = zoom,
-            .texture = @intCast(texture),
-        },
-    });
+    screen.render_texture(texture, @intFromFloat(x), @intFromFloat(y), zoom) catch {
+        l.raiseErrorStr("unable to render texture!", .{});
+    };
     return 0;
 }
 /// renders texture at given coordinates with rotation and flip
@@ -934,7 +827,8 @@ fn screen_render_texture(l: *Lua) i32 {
 // @function screen_render_texture_extended
 fn screen_render_texture_extended(l: *Lua) i32 {
     check_num_args(l, 7);
-    const texture = l.checkInteger(1);
+    l.checkType(1, .light_userdata);
+    const texture = l.toUserdata(screen.Texture, 1) catch unreachable;
     const x = l.checkNumber(2) - 1;
     const y = l.checkNumber(3) - 1;
     const zoom = l.checkNumber(4);
@@ -942,17 +836,15 @@ fn screen_render_texture_extended(l: *Lua) i32 {
     const deg = std.math.radiansToDegrees(f64, theta);
     const flip_h = l.toBoolean(6);
     const flip_v = l.toBoolean(7);
-    screen.post(.{
-        .RenderTexture = .{
-            .x = @intFromFloat(x),
-            .y = @intFromFloat(y),
-            .zoom = zoom,
-            .texture = @intCast(texture),
-            .flip_h = flip_h,
-            .flip_v = flip_v,
-            .deg = deg,
-        },
-    });
+    screen.render_texture_extended(
+        texture,
+        @intFromFloat(x),
+        @intFromFloat(y),
+        zoom,
+        deg,
+        flip_h,
+        flip_v,
+    ) catch l.raiseErrorStr("unable to render texture!", .{});
     return 0;
 }
 
@@ -965,14 +857,16 @@ fn screen_render_texture_extended(l: *Lua) i32 {
 // @param indices (optional) a list of indices into the vertices list
 // @param texture (optional) a texture to draw from
 fn screen_geometry(l: *Lua) i32 {
-    const allocator = std.heap.raw_c_allocator;
+    var sfba = std.heap.stackFallback(8 * 1024, std.heap.raw_c_allocator);
+    const allocator = sfba.get();
     const num_args = l.getTop();
     const texture = if (num_args >= 3) blk: {
-        break :blk l.checkInteger(3);
+        break :blk l.toUserdata(screen.Texture, 3) catch unreachable;
     } else null;
     l.checkType(1, ziglua.LuaType.table);
     const len = l.rawLen(1);
     var verts = allocator.alloc(screen.Vertex, len) catch @panic("OOM!");
+    defer allocator.free(verts);
     for (verts, 0..) |*v, i| {
         const t = l.getIndex(1, @intCast(i + 1));
         if (t != .table) l.argError(1, "vertices should be a list of lists");
@@ -998,14 +892,8 @@ fn screen_geometry(l: *Lua) i32 {
         }
         break :blk ind;
     } else null;
-    screen.post(.{
-        .DefineGeometry = .{
-            .allocator = allocator,
-            .indices = indices,
-            .texture = if (texture) |txt| @intCast(txt) else null,
-            .vertices = verts,
-        },
-    });
+    defer if (indices) |i| allocator.free(i);
+    screen.define_geometry(texture, verts, indices);
     l.setTop(0);
     return 0;
 }
@@ -1092,14 +980,12 @@ fn screen_color(l: *Lua) i32 {
     const g: i32 = @intFromFloat(l.checkNumber(2));
     const b: i32 = @intFromFloat(l.checkNumber(3));
     const a: i32 = @intFromFloat(l.checkNumber(4));
-    screen.post(.{
-        .Color = .{
-            .r = @min(@max(0, r), 255),
-            .g = @min(@max(0, g), 255),
-            .b = @min(@max(0, b), 255),
-            .a = @min(@max(0, a), 255),
-        },
-    });
+    screen.color(
+        @min(@max(0, r), 255),
+        @min(@max(0, g), 255),
+        @min(@max(0, b), 255),
+        @min(@max(0, a), 255),
+    );
     l.setTop(0);
     return 0;
 }
@@ -1110,9 +996,7 @@ fn screen_color(l: *Lua) i32 {
 // @function screen_clear
 fn screen_clear(l: *Lua) i32 {
     check_num_args(l, 0);
-    screen.post(.{
-        .Clear = {},
-    });
+    screen.clear();
     return 0;
 }
 
@@ -1122,9 +1006,7 @@ fn screen_set(l: *Lua) i32 {
     check_num_args(l, 1);
     const value: usize = @intCast(l.checkInteger(1));
     if (value - 1 > 1 or value - 1 < 0) return 0;
-    screen.post(.{
-        .Set = value - 1,
-    });
+    screen.set(value - 1);
     return 0;
 }
 
@@ -1132,9 +1014,7 @@ fn screen_set(l: *Lua) i32 {
 // @function screen_show
 fn screen_show(l: *Lua) i32 {
     check_num_args(l, 0);
-    screen.post(.{
-        .Show = 1,
-    });
+    screen.show(1);
     return 0;
 }
 
@@ -1173,13 +1053,7 @@ fn screen_set_size(l: *Lua) i32 {
     const w: i32 = @intFromFloat(l.checkNumber(1));
     const h: i32 = @intFromFloat(l.checkNumber(2));
     const z: i32 = @intFromFloat(l.checkNumber(3));
-    screen.post(.{
-        .SetSize = .{
-            .w = w,
-            .h = h,
-            .z = z,
-        },
-    });
+    screen.set_size(w, h, z);
     l.setTop(0);
     return 0;
 }
@@ -1192,9 +1066,7 @@ fn screen_set_size(l: *Lua) i32 {
 fn screen_set_fullscreen(l: *Lua) i32 {
     check_num_args(l, 1);
     const is_fullscreen = l.toBoolean(1);
-    screen.post(.{
-        .Fullscreen = is_fullscreen,
-    });
+    screen.set_fullscreen(is_fullscreen);
     l.setTop(0);
     return 0;
 }
@@ -1209,12 +1081,7 @@ fn screen_set_position(l: *Lua) i32 {
     check_num_args(l, 2);
     const x: i32 = @intFromFloat(l.checkNumber(1));
     const y: i32 = @intFromFloat(l.checkNumber(2));
-    screen.post(.{
-        .SetPosition = .{
-            .x = x,
-            .y = y,
-        },
-    });
+    screen.set_position(x, y);
     l.setTop(0);
     return 0;
 }
