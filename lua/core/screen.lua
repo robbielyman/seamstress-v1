@@ -226,12 +226,12 @@ function screen.get_text_size(text)
   return _seamstress.screen_get_text_size(text)
 end
 
---- returns the size of the current window.
+--- returns the size of the main window.
 -- @treturn integer w width in pixels
 -- @treturn integer h height in pixels
 -- @function screen.get_size
 function screen.get_size()
-  return _seamstress.screen_get_size()
+  return screen.width, screen.height
 end
 
 --- sets the size of the current window
