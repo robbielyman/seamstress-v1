@@ -123,12 +123,14 @@ pub fn init(prefix: []const u8, config: []const u8, time: std.time.Timer, versio
     }
 
     {
-        const versionZ = try std.fmt.allocPrintZ(alloc, "{d}.{d}.{d}", .{
-            version.major, version.minor, version.patch,
-        });
-        defer alloc.free(versionZ);
-        _ = lvm.pushString(versionZ);
-        lvm.setField(-2, "version_string");
+        lvm.createTable(3, 0);
+        lvm.pushInteger(@intCast(version.major));
+        lvm.setIndex(-2, 1);
+        lvm.pushInteger(@intCast(version.minor));
+        lvm.setIndex(-2, 2);
+        lvm.pushInteger(@intCast(version.patch));
+        lvm.setIndex(-2, 3);
+        lvm.setField(-2, "version");
     }
 
     lvm.setGlobal("_seamstress");
