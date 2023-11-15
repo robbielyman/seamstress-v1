@@ -26,6 +26,7 @@ print = _seamstress.print
 seamstress = {}
 
 seamstress.state = require("core/state")
+seamstress.version_required = nil
 
 _menu.timer = metro[36]
 
@@ -104,7 +105,42 @@ _startup = function(script_file)
   end
 
   clock.add_params()
-  init()
+  local version_match = true
+  if seamstress.version_required ~= nil then
+    local parsed_required_version = {}
+    for str in string.gmatch(seamstress.version_required, "([^.]+)") do
+      table.insert(parsed_required_version, tonumber(str))
+    end
+    if parsed_required_version[1] > _seamstress.version[1] then
+      version_match = false
+      goto finished
+    elseif parsed_required_version[1] < _seamstress.version[1] then
+      goto finished
+    end
+    if parsed_required_version[2] > _seamstress.version[2] then
+      version_match = false
+      goto finished
+    elseif parsed_required_version[2] <= _seamstress.version[2] then
+      if parsed_required_version[3] == nil then
+        goto finished
+      elseif parsed_required_version[3] > _seamstress.version[3] then
+        version_match = false
+        goto finished
+      end
+    end
+  end
+  ::finished::
+  if version_match then
+    init()
+  else
+    print(
+      "!!! this script ("
+        .. seamstress.state.name
+        .. ") requires seamstress version "
+        .. seamstress.version_required
+    )
+    print("!!! script not initialized, please update seamstress")
+  end
   paramsMenu.init()
   pmap.read()
   if seamstress.state.path then
