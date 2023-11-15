@@ -71,7 +71,7 @@ pub fn main() !void {
         defer clocks.deinit();
 
         logger.info("init spindle", .{});
-        try spindle.init(prefix, config, timer);
+        try spindle.init(prefix, config, timer, VERSION);
 
         logger.info("init MIDI", .{});
         try midi.init();

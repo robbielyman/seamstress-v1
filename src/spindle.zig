@@ -20,7 +20,7 @@ const logger = std.log.scoped(.spindle);
 var stdout = std.io.getStdOut().writer();
 var timer: std.time.Timer = undefined;
 
-pub fn init(prefix: []const u8, config: []const u8, time: std.time.Timer) !void {
+pub fn init(prefix: []const u8, config: []const u8, time: std.time.Timer, version: std.SemanticVersion) !void {
     interpreter_alloc = fallback_allocator.get();
     save_buf = std.ArrayList(u8).init(interpreter_alloc);
     timer = time;
@@ -115,20 +115,31 @@ pub fn init(prefix: []const u8, config: []const u8, time: std.time.Timer) !void 
     var buffer: [8 * 1024]u8 = undefined;
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
     var alloc = fba.allocator();
-    const prefixZ = try alloc.dupeZ(u8, prefix);
-    defer alloc.free(prefixZ);
-    _ = lvm.pushString(prefixZ);
-    lvm.setField(-2, "prefix");
+    {
+        const prefixZ = try alloc.dupeZ(u8, prefix);
+        defer alloc.free(prefixZ);
+        _ = lvm.pushString(prefixZ);
+        lvm.setField(-2, "prefix");
+    }
+
+    {
+        const versionZ = try std.fmt.allocPrintZ(alloc, "{d}.{d}.{d}", .{
+            version.major, version.minor, version.patch,
+        });
+        defer alloc.free(versionZ);
+        _ = lvm.pushString(versionZ);
+        lvm.setField(-2, "version_string");
+    }
 
     lvm.setGlobal("_seamstress");
-
-    const cwd = std.process.getCwdAlloc(alloc) catch @panic("OOM!");
-    defer alloc.free(cwd);
-    const lua_cwd = alloc.dupeZ(u8, cwd) catch @panic("OOM!");
-    defer alloc.free(lua_cwd);
-    _ = lvm.pushString(lua_cwd);
-    lvm.setGlobal("_pwd");
-
+    {
+        const cwd = std.process.getCwdAlloc(alloc) catch @panic("OOM!");
+        defer alloc.free(cwd);
+        const lua_cwd = alloc.dupeZ(u8, cwd) catch @panic("OOM!");
+        defer alloc.free(lua_cwd);
+        _ = lvm.pushString(lua_cwd);
+        lvm.setGlobal("_pwd");
+    }
     const cmd = try std.fmt.allocPrint(alloc, "dofile(\"{s}\")\n", .{config});
     defer alloc.free(cmd);
     try run_code(cmd);
