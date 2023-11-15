@@ -120,7 +120,9 @@ _startup = function(script_file)
       version_match = false
       goto finished
     elseif parsed_required_version[2] <= _seamstress.version[2] then
-      if parsed_required_version[3] > _seamstress.version[3] then
+      if parsed_required_version[3] == nil then
+        goto finished
+      elseif parsed_required_version[3] > _seamstress.version[3] then
         version_match = false
         goto finished
       end
