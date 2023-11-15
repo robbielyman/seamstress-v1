@@ -26,6 +26,7 @@ print = _seamstress.print
 seamstress = {}
 
 seamstress.state = require("core/state")
+seamstress.version_required = nil
 
 _menu.timer = metro[36]
 
