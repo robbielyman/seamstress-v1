@@ -18,7 +18,7 @@ pub const Vertex = extern struct {
 };
 pub var quit = false;
 
-const Queue = std.fifo.LinearFifo(ScreenEvent, .{ .Static = 1000 });
+const Queue = std.fifo.LinearFifo(ScreenEvent, .{ .Static = 5000 });
 var queue: Queue = undefined;
 
 pub var response: ?ScreenResponse = null;
