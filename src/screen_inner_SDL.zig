@@ -406,9 +406,7 @@ pub fn text(words: [:0]const u8, alignment: screen.Alignment, allocator: std.mem
 pub fn arc(radius: i32, theta_1: f64, theta_2: f64) void {
     var sfba = std.heap.stackFallback(8 * 1024, std.heap.raw_c_allocator);
     const allocator = sfba.get();
-    std.debug.assert(0 <= theta_1);
-    std.debug.assert(theta_1 <= theta_2);
-    std.debug.assert(theta_2 <= std.math.tau);
+    if (theta_1 < 0 or theta_2 < theta_1 or std.math.tau < theta_2) return;
     const angle_length = (theta_2 - theta_1) * @as(f64, @floatFromInt(radius));
     const perimeter_estimate: usize = 2 * @as(usize, @intFromFloat(angle_length)) + 9;
     const gui = windows[current];
