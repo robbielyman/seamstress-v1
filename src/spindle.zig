@@ -1806,7 +1806,7 @@ fn message_handler(l: *Lua) i32 {
         .string => {
             const msg = l.toBytes(1) catch unreachable;
             l.pop(1);
-            l.traceback(l, msg, 6);
+            l.traceback(l, msg, 1);
         },
         else => {
             const msg = std.fmt.allocPrintZ(
@@ -1815,7 +1815,7 @@ fn message_handler(l: *Lua) i32 {
                 .{l.typeName(t)},
             ) catch @panic("OOM!");
             l.pop(1);
-            l.traceback(l, msg, 6);
+            l.traceback(l, msg, 1);
         },
     }
     return 1;
