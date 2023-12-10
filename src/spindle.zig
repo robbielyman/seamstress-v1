@@ -729,6 +729,9 @@ fn screen_arc(l: *Lua) i32 {
     const radius = l.checkNumber(1);
     const theta_1 = l.checkNumber(2);
     const theta_2 = l.checkNumber(3);
+    if (theta_1 < 0 or theta_2 < theta_1 or std.math.tau < theta_2) {
+        l.argError(2, "theta_1 and theta_2 must satisfy 0 <= theta_1 <= theta_2 <= 2*pi");
+    }
     screen.post(.{
         .Arc = .{
             .radius = @intFromFloat(radius),
@@ -1009,7 +1012,7 @@ fn screen_geometry(l: *Lua) i32 {
     } else null;
     l.checkType(1, ziglua.LuaType.table);
     const len = l.rawLen(1);
-    var verts = allocator.alloc(screen.Vertex, len) catch @panic("OOM!");
+    const verts = allocator.alloc(screen.Vertex, len) catch @panic("OOM!");
     for (verts, 0..) |*v, i| {
         const t = l.getIndex(1, @intCast(i + 1));
         if (t != .table) l.argError(1, "vertices should be a list of lists");
@@ -1025,7 +1028,7 @@ fn screen_geometry(l: *Lua) i32 {
     const indices = if (num_args >= 2) blk: {
         l.checkType(2, ziglua.LuaType.table);
         const indlen = l.rawLen(2);
-        var ind = allocator.alloc(usize, indlen) catch @panic("OOM!");
+        const ind = allocator.alloc(usize, indlen) catch @panic("OOM!");
         for (ind, 0..) |*idx, i| {
             l.pushInteger(@intCast(i + 1));
             _ = l.getTable(2);
