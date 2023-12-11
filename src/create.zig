@@ -2,14 +2,11 @@ const std = @import("std");
 const args = @import("args.zig");
 const c = @import("input.zig").c;
 
-var buf: [8 * 1024]u8 = undefined;
-var allocator: std.mem.Allocator = undefined;
+var gpa: std.heap.GeneralPurposeAllocator(.{}) = .{};
 var location: []const u8 = undefined;
 var to_be_freed: ?[]const u8 = null;
 
 pub fn init(option: args.CreateOptions, loc: []const u8) !void {
-    var fba = std.heap.FixedBufferAllocator.init(&buf);
-    allocator = fba.allocator();
     location = loc;
     _ = c.rl_initialize();
     c.rl_prep_terminal(1);
@@ -23,6 +20,7 @@ pub fn init(option: args.CreateOptions, loc: []const u8) !void {
 }
 
 fn script() !void {
+    const allocator = gpa.allocator();
     const stdout_file = std.io.getStdOut().writer();
     var bw = std.io.bufferedWriter(stdout_file);
     const stdout = bw.writer();
@@ -83,7 +81,7 @@ fn script() !void {
     if (try_again) {
         try stdout.print("a file with that name already exists! overwrite it?\n", .{});
         try bw.flush();
-        var c_confirm = c.readline("['yes' to overwrite] > ");
+        const c_confirm = c.readline("['yes' to overwrite] > ");
         const c_slice = std.mem.span(c_confirm);
         if (!std.mem.eql(u8, c_slice, "yes")) {
             try stdout.print("did not receive 'yes': goodbye!\n", .{});
@@ -114,6 +112,7 @@ fn script() !void {
 }
 
 fn example() !void {
+    const allocator = gpa.allocator();
     const stdout_file = std.io.getStdOut().writer();
     var bw = std.io.bufferedWriter(stdout_file);
     const stdout = bw.writer();
@@ -163,7 +162,7 @@ fn example() !void {
         if (try_again) {
             try stdout.print("a file with that name already exists! overwrite it?\n", .{});
             try bw.flush();
-            var c_confirm = c.readline("['yes' to overwrite'] > ");
+            const c_confirm = c.readline("['yes' to overwrite'] > ");
             const c_slice = std.mem.sliceTo(c_confirm, 0);
             if (!std.mem.eql(u8, c_slice, "yes")) {
                 try stdout.print("did not receive 'yes': goodbye!\n", .{});
@@ -197,6 +196,7 @@ fn example() !void {
 }
 
 fn project(is_norns: bool) !void {
+    const allocator = gpa.allocator();
     const stdout_file = std.io.getStdOut().writer();
     var bw = std.io.bufferedWriter(stdout_file);
     const stdout = bw.writer();
@@ -326,5 +326,7 @@ fn get_project_name(name: []const u8) []const u8 {
 }
 
 pub fn deinit() void {
+    const allocator = gpa.allocator();
     if (to_be_freed) |mem| allocator.free(mem);
+    _ = gpa.deinit();
 }
