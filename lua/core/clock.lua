@@ -107,6 +107,12 @@ function clock.get_sec_per_beat()
   return 60 / bpm
 end
 
+--- alias to get_sec_per_beat, for norns compatibility
+-- @treturn number seconds
+function clock.get_beat_sec()
+  return clock.get_sec_per_beat()
+end
+
 --- sets the clock source
 -- @tparam string source "internal" or "midi"
 clock.set_source = function(source)
