@@ -403,9 +403,10 @@ fn arc_set_led(l: *Lua) i32 {
     l.checkType(1, ziglua.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
     const ring: u8 = @intFromFloat(l.checkNumber(2) - 1);
-    const led: u8 = @intFromFloat(l.checkNumber(3) - 1);
+    const led: i32 = @intFromFloat(l.checkNumber(3) - 1);
+    const u8_led: u8 = @mod(led, 64);
     const val: u8 = @intFromFloat(l.checkNumber(4));
-    md.arc_set_led(ring, led, val);
+    md.arc_set_led(ring, u8_led, val);
     l.setTop(0);
     return 0;
 }

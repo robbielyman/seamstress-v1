@@ -87,7 +87,7 @@ function Arc.remove(dev) end
 -- @tparam integer val level (0-15)
 -- @function arc:led
 function Arc:led(ring, x, val)
-  _seamstress.arc_set_led(self.dev, ring, util.wrap(x, 1, 64), val)
+  _seamstress.arc_set_led(self.dev, ring, x, val)
 end
 
 --- set all leds.
