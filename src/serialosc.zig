@@ -192,7 +192,7 @@ pub fn send(
                 const blob = c.lo_blob_new(@intCast(a.len), a.ptr);
                 _ = c.lo_message_add_blob(message, blob);
             },
-            .Lo_Int64 => |a| _ = c.lo_message_add_int64(message, a),
+            .Lo_Int64 => |a| _ = c.lo_message_add_int32(message, @intCast(a)),
             .Lo_Double => |a| _ = c.lo_message_add_double(message, a),
             .Lo_Symbol => |a| _ = c.lo_message_add_symbol(message, a.ptr),
             .Lo_Midi => |a| _ = c.lo_message_add_midi(message, @as([*c]u8, @ptrCast(@constCast(a[0..4])))),
