@@ -676,6 +676,7 @@ pub fn init(width: u16, height: u16, resources: []const u8) !void {
 
 pub fn loop() void {
     while (!screen.quit) {
+        std.time.sleep(std.time.ns_per_ms);
         screen.process();
         var ev: c.SDL_Event = undefined;
         while (c.SDL_PollEvent(&ev) != 0) {
