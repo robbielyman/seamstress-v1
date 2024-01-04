@@ -8,10 +8,8 @@ var timer: std.time.Timer = undefined;
 
 const Thread = struct {
     pid: std.Thread = undefined,
-    name: []const u8,
     quit: bool = false,
     fn cancel(self: *Thread) void {
-        allocator.free(self.name);
         self.quit = true;
         self.pid.detach();
     }
@@ -29,9 +27,6 @@ const Metro = struct {
     thread: ?Thread = null,
     stage_lock: std.Thread.Mutex = .{},
     status_lock: std.Thread.Mutex = .{},
-    fn set_time(self: *Metro) void {
-        self.time = std.time.nanoTimestamp();
-    }
     fn stop(self: *Metro) void {
         self.status_lock.lock();
         self.status = Status.Stopped;
@@ -50,7 +45,6 @@ const Metro = struct {
         self.count = count;
         self.thread = .{
             .quit = false,
-            .name = try std.fmt.allocPrint(allocator, "metro_thread_{d}", .{self.id}),
             .pid = try std.Thread.spawn(.{}, loop, .{self}),
         };
     }
@@ -83,8 +77,7 @@ pub fn start(idx: u8, seconds: f64, count: i64, stage: i64) !void {
         logger.warn("invalid index; not added. max count of metros is {d}", .{max_num_metros});
         return;
     }
-    var metro = &metros[idx];
-    metro.time = timer.read();
+    const metro = &metros[idx];
     metro.status_lock.lock();
     if (metro.status == Status.Running) {
         metro.status_lock.unlock();
@@ -108,26 +101,18 @@ pub fn set_period(idx: u8, seconds: f64) void {
 }
 
 const max_num_metros = 36;
-var metros: []Metro = undefined;
-var gpa: std.heap.GeneralPurposeAllocator(.{}) = undefined;
-var allocator: std.mem.Allocator = undefined;
+var metros: [max_num_metros]Metro = undefined;
 
 pub fn init(time: std.time.Timer) !void {
     timer = time;
-    gpa = .{};
-    allocator = gpa.allocator();
-    metros = try allocator.alloc(Metro, max_num_metros);
-    for (metros, 0..) |*metro, idx| {
+    for (&metros, 0..) |*metro, idx| {
         metro.* = .{ .id = @intCast(idx) };
     }
 }
 
 pub fn deinit() void {
-    defer _ = gpa.deinit();
-    defer allocator.free(metros);
-    for (metros) |*metro| {
+    for (&metros) |*metro| {
         if (metro.thread) |*pid| {
-            allocator.free(pid.name);
             pid.quit = true;
             pid.pid.join();
         }
@@ -135,18 +120,12 @@ pub fn deinit() void {
 }
 
 fn loop(self: *Metro) void {
-    self.thread.?.pid.setName(self.thread.?.name) catch {};
     self.status_lock.lock();
     self.status = Status.Running;
     self.status_lock.unlock();
-    pthread.set_priority(90);
+    self.time = timer.read();
     while (!self.thread.?.quit) {
         self.wait();
-        self.stage_lock.lock();
-        if (self.stage >= self.count and self.count > 0) {
-            self.thread.?.quit = true;
-        }
-        self.stage_lock.unlock();
         self.status_lock.lock();
         if (self.status == Status.Stopped) {
             self.thread.?.quit = true;
@@ -156,6 +135,9 @@ fn loop(self: *Metro) void {
         self.bang();
         self.stage_lock.lock();
         self.stage += 1;
+        if (self.stage >= self.count and self.count > 0) {
+            self.thread.?.quit = true;
+        }
         self.stage_lock.unlock();
     }
 }
