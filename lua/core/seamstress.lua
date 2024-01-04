@@ -105,31 +105,7 @@ _startup = function(script_file)
   end
 
   clock.add_params()
-  local version_match = true
-  if seamstress.version_required ~= nil then
-    local parsed_required_version = {}
-    for str in string.gmatch(seamstress.version_required, "([^.]+)") do
-      table.insert(parsed_required_version, tonumber(str))
-    end
-    if parsed_required_version[1] > _seamstress.version[1] then
-      version_match = false
-      goto finished
-    elseif parsed_required_version[1] < _seamstress.version[1] then
-      goto finished
-    end
-    if parsed_required_version[2] > _seamstress.version[2] then
-      version_match = false
-      goto finished
-    elseif parsed_required_version[2] <= _seamstress.version[2] then
-      if parsed_required_version[3] == nil then
-        goto finished
-      elseif parsed_required_version[3] > _seamstress.version[3] then
-        version_match = false
-        goto finished
-      end
-    end
-  end
-  ::finished::
+  local version_match = (seamstress.version_required == nil) or util.version_compare(seamstress.version_required, _seamstress.version) <= 0
   if version_match then
     init()
   else

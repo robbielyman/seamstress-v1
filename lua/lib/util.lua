@@ -292,4 +292,41 @@ function util.wrap_max(n, min, max)
   return util.wrap(n, min, max)
 end
 
+--- parse a version string into a list of ints
+-- @tparam string v
+-- @treturn table
+function util.version_parse(v)
+  local parsed = {}
+  for str in string.gmatch(v, "([^.]+)") do
+    table.insert(parsed, tonumber(str))
+  end
+  return parsed
+end
+
+--- compare versions v1 and v2
+-- @tparam string v1
+-- @tparam string v2
+-- @treturn integer
+function util.version_compare(v1, v2)
+  if type(v1) == "string" then
+    v1 = util.version_parse(v1)
+  end
+  if type(v2) == "string" then
+    v2 = util.version_parse(v2)
+  end
+
+  if #v1 ~= #v2 then
+    return nil
+  end
+
+  for i=1,#v1 do
+    if v1[i] ~= v2[i] then
+      return (v1[i] > v2[i]) and 1 or -1
+    end
+  end
+
+  return 0
+end
+
+
 return util
