@@ -34,7 +34,7 @@ pub const Monome = struct {
         c.lo_message_free(message);
     }
     fn get_size(self: *Monome) void {
-        var message = c.lo_message_new();
+        const message = c.lo_message_new();
         _ = c.lo_message_add_string(message, "localhost");
         _ = c.lo_message_add_int32(message, self.from_port);
         _ = c.lo_send_message(self.addr, "/sys/info", message);
@@ -46,23 +46,19 @@ pub const Monome = struct {
         self.dirty[idx] = true;
     }
     pub fn grid_all_led(self: *Monome, val: u8) void {
-        var idx: u8 = 0;
-        while (idx < self.quads) : (idx += 1) {
-            var i: u8 = 0;
-            while (i < 64) : (i += 1) {
-                self.data[idx][i] = val;
-            }
+        inline for (0..4) |idx| {
+            @memset(&self.data[idx], val);
             self.dirty[idx] = true;
         }
     }
     pub fn set_rotation(self: *Monome, rotation: u16) void {
-        var message = c.lo_message_new();
+        const message = c.lo_message_new();
         _ = c.lo_message_add_int32(message, rotation);
         _ = c.lo_send_message(self.addr, "/sys/rotation", message);
         c.lo_message_free(message);
     }
     pub fn tilt_set(self: *Monome, sensor: u8, enabled: u8) void {
-        var message = c.lo_message_new();
+        const message = c.lo_message_new();
         _ = c.lo_message_add_int32(message, sensor);
         _ = c.lo_message_add_int32(message, enabled);
         _ = c.lo_send_message(self.addr, "/monome/tilt/set", message);
@@ -73,16 +69,13 @@ pub const Monome = struct {
         self.dirty[ring] = true;
     }
     pub fn arc_all_led(self: *Monome, val: u8) void {
-        var idx: u8 = 0;
-        while (idx < 4) : (idx += 1) {
-            for (self.data[idx]) |*datum| {
-                datum = val;
-            }
+        inline for (0..4) |idx| {
+            @memset(&self.data[idx], val);
             self.dirty[idx] = true;
         }
     }
     pub fn intensity(self: *Monome, level: u8) void {
-        var message = c.lo_message_new();
+        const message = c.lo_message_new();
         _ = c.lo_message_add_int32(message, level);
         _ = c.lo_send_message(self.addr, "/monome/grid/led/intensity", message);
         c.lo_message_free(message);
@@ -90,10 +83,9 @@ pub const Monome = struct {
     pub fn refresh(self: *Monome) void {
         const xoff = [4]u8{ 0, 8, 0, 8 };
         const yoff = [4]u8{ 0, 0, 8, 8 };
-        var idx: usize = 0;
-        while (idx < self.quads) : (idx += 1) {
+        for (0..4) |idx| {
             if (!self.dirty[idx]) continue;
-            var message = c.lo_message_new();
+            const message = c.lo_message_new();
             switch (self.m_type) {
                 .Grid => {
                     _ = c.lo_message_add_int32(message, xoff[idx]);
@@ -157,7 +149,7 @@ pub fn add(name: []const u8, dev_type: []const u8, port: i32) void {
         }
     }
     if (free) |device| {
-        var name_copy = allocator.dupeZ(u8, name) catch @panic("OOM!");
+        const name_copy = allocator.dupeZ(u8, name) catch @panic("OOM!");
         device.name = name_copy;
         const port_str = std.fmt.allocPrintZ(allocator, "{d}", .{port}) catch unreachable;
         device.to_port = port_str;
