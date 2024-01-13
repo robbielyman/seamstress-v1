@@ -24,12 +24,29 @@ function osc.event(path, args, from) end
 -- @tparam string path an osc path `/like/this`
 -- @tparam[opt] table args an array of arguments to the OSC message
 function osc.send(to, path, args)
-  if not to then
+  if not args then args = {} end
+  if not path then
+    path = to
+    to = { "localhost", _seamstress.remote_port }
+  end
+  if type(to) == "string" then
+    if path then
+      args = path
+    end
+    path = to
     to = { "localhost", _seamstress.remote_port }
   end
   _seamstress.osc_send(to, path, args)
 end
 
+--- registers OSC handler
+-- an alternative to complex `osc.event` functions;
+-- register a lua function that will respond to only the given path
+-- (and, optionally, args matching the typespec)
+-- @tparam string path an osc path `/like/this`
+-- @tparam function fn a lua function that handles messages matching the path
+-- @tparam[opt] string typespec a list of characters specifying the types expected by fn
+-- eg. `"iifs"` for two integers, a floating point number and a string
 function osc.register(path, fn, typespec)
   local idx
   if typespec then
