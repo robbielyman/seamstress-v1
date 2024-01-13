@@ -7,9 +7,9 @@
   rewritten for seamstress by @ryleelyman April 30, 2023
 ]]
 
-local OSC = {}
-
-OSC.__index = OSC
+local osc = {
+  methods = {}
+}
 
 --- callback executed when seamstress receives OSC
 -- overwrite in user scripts
@@ -17,17 +17,27 @@ OSC.__index = OSC
 -- @tparam table args arguments from the OSC message
 -- @tparam {host,port} from table containing sender information
 -- @function osc.event
-function OSC.event(path, args, from) end
+function osc.event(path, args, from) end
 
 --- send OSC message
 -- @tparam[opt] {host,port} to address (both strings)
 -- @tparam string path an osc path `/like/this`
 -- @tparam[opt] table args an array of arguments to the OSC message
-function OSC.send(to, path, args)
+function osc.send(to, path, args)
   if not to then
     to = { "localhost", _seamstress.remote_port }
   end
   _seamstress.osc_send(to, path, args)
+end
+
+function osc.register(path, fn, typespec)
+  local idx
+  if typespec then
+    idx = _seamstress.osc_register(path, typespec)
+  else
+    idx = _seamstress.osc_register(path)
+  end
+  osc.methods[idx] = fn
 end
 
 _seamstress.osc = {}
@@ -68,11 +78,17 @@ local function param_handler(path, args)
 end
 
 function _seamstress.osc.event(path, args, from)
-  if OSC.event ~= nil then
-    OSC.event(path, args, from)
+  if osc.event ~= nil then
+    osc.event(path, args, from)
   end
   if util.string_starts(path, "/param") then
     param_handler(path, args)
+  end
+end
+
+function _seamstress.osc.method(index, ...)
+  if osc.methods[index] ~= nil then
+    osc.methods[index](...)
   end
 end
 

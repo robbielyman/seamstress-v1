@@ -27,7 +27,7 @@ pub fn init(local_port: [:0]const u8) !void {
     // _ = c.DNSServiceRegister(&dnssd_ref, 0, 0, "seamstress", "_osc._udp", null, null, state.port, 0, null, null, null);
     _ = c.lo_server_thread_start(server_thread);
     try monome.init(allocator, localport);
-    var message = c.lo_message_new();
+    const message = c.lo_message_new();
     _ = c.lo_message_add_string(message, localhost);
     _ = c.lo_message_add_int32(message, localport);
     _ = c.lo_send_message(serialosc_addr, "/serialosc/list", message);
@@ -40,6 +40,77 @@ pub fn deinit() void {
     monome.deinit();
     c.lo_server_thread_free(server_thread);
     c.lo_address_free(serialosc_addr);
+}
+
+var method_nr: usize = 1;
+pub fn add_method(path: [:0]const u8, typespec: ?[:0]const u8) usize {
+    const ptr: ?[*:0]const u8 = if (typespec) |t| t.ptr else null;
+    _ = c.lo_server_thread_add_method(server_thread, path.ptr, ptr, handler, @ptrFromInt(method_nr));
+    defer method_nr += 1;
+    return method_nr;
+}
+
+fn getArgs(types: [*:0]const u8, argv: [*]?*c.lo_arg, argc: usize) ![]Lo_Arg {
+    const msg = try allocator.alloc(Lo_Arg, argc);
+    for (msg, 0..argc) |*m, i| {
+        switch (types[i]) {
+            c.LO_INT32 => m.* = .{ .Lo_Int32 = argv[i].?.i },
+            c.LO_FLOAT => m.* = .{ .Lo_Float = argv[i].?.f },
+            c.LO_STRING => {
+                const ptr: [*:0]const u8 = @ptrCast(&argv[i].?.s);
+                const copy = try allocator.dupeZ(u8, std.mem.sliceTo(ptr, 0));
+                m.* = .{ .Lo_String = copy };
+            },
+            c.LO_BLOB => {
+                const arg: c.lo_blob = @ptrCast(argv[i].?);
+                const len: usize = @intCast(c.lo_blob_datasize(arg));
+                const ptr: [*]const u8 = @ptrCast(c.lo_blob_dataptr(arg));
+                const blob = try allocator.alloc(u8, len);
+                @memcpy(blob, ptr);
+                m.* = .{ .Lo_Blob = blob };
+            },
+            c.LO_INT64 => m.* = .{ .Lo_Int64 = argv[i].?.h },
+            c.LO_DOUBLE => m.* = .{ .Lo_Double = argv[i].?.d },
+            c.LO_SYMBOL => {
+                const ptr: [*:0]const u8 = @ptrCast(&argv[i].?.S);
+                const copy = try allocator.dupeZ(u8, std.mem.sliceTo(ptr, 0));
+                m.* = .{ .Lo_Symbol = copy };
+            },
+            c.LO_MIDI => {
+                m.* = .{ .Lo_Midi = argv[i].?.m };
+            },
+            c.LO_TRUE => m.* = .{ .Lo_True = true },
+            c.LO_FALSE => m.* = .{ .Lo_False = false },
+            c.LO_NIL => m.* = .{ .Lo_Nil = false },
+            c.LO_INFINITUM => m.* = .{ .Lo_Infinitum = true },
+            else => {
+                logger.err("unknown osc typetag: {c}", .{types[i]});
+                m.* = .{ .Lo_Nil = false };
+            },
+        }
+    }
+    return msg;
+}
+
+fn handler(
+    path: ?[*:0]const u8,
+    types: ?[*:0]const u8,
+    argv: ?[*]?*c.lo_arg,
+    argc: c_int,
+    msg: c.lo_message,
+    user_data: ?*anyopaque,
+) callconv(.C) c_int {
+    _ = path;
+    _ = msg;
+    const idx = @intFromPtr(user_data orelse return 1);
+    const message = getArgs(types.?, argv.?, @intCast(argc)) catch @panic("OOM!");
+    const event = .{ .OSC_Method = .{
+        .index = idx,
+        .msg = message,
+        .allocator = allocator,
+    } };
+    events.post(event);
+    return 0;
 }
 
 pub fn lo_error_handler(
@@ -62,7 +133,7 @@ inline fn unwrap_string(str: *u8) [:0]u8 {
 }
 
 pub fn send_notify() void {
-    var message = c.lo_message_new();
+    const message = c.lo_message_new();
     _ = c.lo_message_add_string(message, localhost);
     _ = c.lo_message_add_int32(message, localport);
     _ = c.lo_send_message(serialosc_addr, "/serialosc/notify", message);
@@ -94,69 +165,13 @@ fn osc_receive(
 ) callconv(.C) c_int {
     _ = user_data;
     const arg_size = @as(usize, @intCast(argc));
-    var message: []Lo_Arg = allocator.alloc(Lo_Arg, arg_size) catch @panic("OOM!");
-
-    for (0..@intCast(argc)) |i| {
-        switch (types[i]) {
-            c.LO_INT32 => {
-                message[i] = .{ .Lo_Int32 = argv[i].*.i };
-            },
-            c.LO_FLOAT => {
-                message[i] = .{ .Lo_Float = argv[i].*.f };
-            },
-            c.LO_STRING => {
-                const slice: [*:0]const u8 = @ptrCast(&argv[i].*.s);
-                const slice_copy = allocator.dupeZ(u8, std.mem.sliceTo(slice, 0)) catch @panic("OOM!");
-                message[i] = .{ .Lo_String = slice_copy };
-            },
-            c.LO_BLOB => {
-                const arg: c.lo_blob = @ptrCast(argv[i]);
-                const len: usize = @intCast(c.lo_blob_datasize(arg));
-                const ptr: [*]const u8 = @ptrCast(c.lo_blob_dataptr(arg));
-                var blobby = allocator.alloc(u8, len) catch @panic("OOM!");
-                @memcpy(blobby, ptr);
-                message[i] = .{
-                    .Lo_Blob = blobby,
-                };
-            },
-            c.LO_INT64 => {
-                message[i] = .{ .Lo_Int64 = argv[i].*.h };
-            },
-            c.LO_DOUBLE => {
-                message[i] = .{ .Lo_Double = argv[i].*.d };
-            },
-            c.LO_SYMBOL => {
-                const slice: [*:0]const u8 = @ptrCast(&argv[i].*.S);
-                const slice_copy = allocator.dupeZ(u8, std.mem.sliceTo(slice, 0)) catch @panic("OOM!");
-                message[i] = .{ .Lo_Symbol = slice_copy };
-            },
-            c.LO_MIDI => {
-                message[i] = .{ .Lo_Midi = argv[i].*.m };
-            },
-            c.LO_TRUE => {
-                message[i] = .{ .Lo_True = true };
-            },
-            c.LO_FALSE => {
-                message[i] = .{ .Lo_False = false };
-            },
-            c.LO_NIL => {
-                message[i] = .{ .Lo_Nil = false };
-            },
-            c.LO_INFINITUM => {
-                message[i] = .{ .Lo_Infinitum = true };
-            },
-            else => {
-                logger.err("unknown osc typetag: {c}", .{types[i]});
-                message[i] = .{ .Lo_Nil = false };
-            },
-        }
-    }
+    const message = getArgs(types, argv, arg_size) catch @panic("OOM!");
     const path_copy = allocator.dupeZ(u8, std.mem.span(path)) catch @panic("OOM!");
     const source = c.lo_message_get_source(msg);
     const host = std.mem.span(c.lo_address_get_hostname(source));
-    var host_copy = allocator.dupeZ(u8, host) catch @panic("OOM!");
+    const host_copy = allocator.dupeZ(u8, host) catch @panic("OOM!");
     const port = std.mem.span(c.lo_address_get_port(source));
-    var port_copy = allocator.dupeZ(u8, port) catch @panic("OOM!");
+    const port_copy = allocator.dupeZ(u8, port) catch @panic("OOM!");
 
     const event = .{ .OSC = .{
         .msg = message,
@@ -181,7 +196,7 @@ pub fn send(
         return;
     }
     defer c.lo_address_free(address);
-    var message: c.lo_message = c.lo_message_new();
+    const message: c.lo_message = c.lo_message_new();
     defer c.lo_message_free(message);
     for (msg) |m| {
         switch (m) {
