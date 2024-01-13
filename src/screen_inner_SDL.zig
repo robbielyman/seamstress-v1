@@ -83,7 +83,7 @@ var font: *c.TTF_Font = undefined;
 pub fn define_geometry(texture_id: ?usize, vertices: []const screen.Vertex, indices: ?[]const usize) void {
     var sfba = std.heap.stackFallback(8 * 1024, std.heap.raw_c_allocator);
     const allocator = sfba.get();
-    var verts = allocator.alloc(c.SDL_Vertex, vertices.len) catch @panic("OOM!");
+    const verts = allocator.alloc(c.SDL_Vertex, vertices.len) catch @panic("OOM!");
     defer allocator.free(verts);
     for (vertices, verts) |v, *w| {
         w.* = .{
@@ -113,7 +113,7 @@ pub fn define_geometry(texture_id: ?usize, vertices: []const screen.Vertex, indi
         };
     } else null;
     const ind = if (indices) |i| blk: {
-        var list = allocator.alloc(c_int, i.len) catch @panic("OOM!");
+        const list = allocator.alloc(c_int, i.len) catch @panic("OOM!");
         for (list, 0..) |*l, j| {
             l.* = @intCast(i[j]);
         }
@@ -136,7 +136,7 @@ pub fn new_texture(width: u16, height: u16) !usize {
     var sfba = std.heap.stackFallback(8 * 1024, std.heap.raw_c_allocator);
     const allocator = sfba.get();
     const n: usize = @as(usize, width * windows[current].zoom) * @as(usize, height * windows[current].zoom) * 4;
-    var pixels = allocator.alloc(u8, n) catch @panic("OOM!");
+    const pixels = allocator.alloc(u8, n) catch @panic("OOM!");
     defer allocator.free(pixels);
     sdl_call(c.SDL_RenderReadPixels(
         windows[current].render,
@@ -165,7 +165,7 @@ pub fn new_texture(width: u16, height: u16) !usize {
     };
     _ = c.SDL_memcpy(surf.pixels, pixels.ptr, @intCast(surf.h * surf.pitch));
     const ret = textures.items.len;
-    var texture = textures.addOne() catch @panic("OOM!");
+    const texture = textures.addOne() catch @panic("OOM!");
     texture.* = .{
         .surface = surf,
         .width = width,
@@ -180,10 +180,10 @@ pub fn new_texture_from_file(filename: [:0]const u8) !usize {
         logger.err("{s}: error: {s}", .{ "screen.new_texture_from_file()", c.IMG_GetError() });
         return error.Fail;
     };
-    var width: i32 = surf.w;
-    var height: i32 = surf.h;
+    const width: i32 = surf.w;
+    const height: i32 = surf.h;
     const ret = textures.items.len;
-    var texture = textures.addOne() catch @panic("OOM!");
+    const texture = textures.addOne() catch @panic("OOM!");
     texture.* = .{
         .surface = surf,
         .width = @intCast(width),
@@ -356,7 +356,7 @@ pub fn text(words: [:0]const u8, alignment: screen.Alignment, allocator: std.mem
     var a: u8 = undefined;
     const gui = windows[current];
     _ = c.SDL_GetRenderDrawColor(gui.render, &r, &g, &b, &a);
-    var col: c.SDL_Color = .{ .r = r, .g = g, .b = b, .a = a };
+    const col: c.SDL_Color = .{ .r = r, .g = g, .b = b, .a = a };
     const surf = wordsurfs.getOrPut(.{
         .words = words,
         .color = col,
@@ -416,37 +416,38 @@ pub fn arc(radius: i32, theta_1: f64, theta_2: f64) void {
     var offset_y: i32 = radius;
     var d = radius - 1;
     while (offset_y >= offset_x) {
-        const pts = [8]c.SDL_Point{ .{
-            .x = gui.x + offset_x,
-            .y = gui.y + offset_y,
-        }, .{
-            .x = gui.x + offset_y,
-            .y = gui.y + offset_x,
-        }, .{
-            .x = gui.x - offset_x,
-            .y = gui.y + offset_y,
-        }, .{
-            .x = gui.x - offset_y,
-            .y = gui.y + offset_x,
-        }, .{
-            .x = gui.x + offset_x,
-            .y = gui.y - offset_y,
-        }, .{
-            .x = gui.x + offset_y,
-            .y = gui.y - offset_x,
-        }, .{
-            .x = gui.x - offset_x,
-            .y = gui.y - offset_y,
-        }, .{
-            .x = gui.x - offset_y,
-            .y = gui.y - offset_x,
-        } };
-        for (pts) |pt| {
-            const num: f64 = @floatFromInt(pt.x);
-            const denom: f64 = @floatFromInt(pt.y);
-            const theta = std.math.atan(num / denom);
+        const offsets: [8][2]i32 = .{
+            .{ offset_x, offset_y },
+            .{ offset_y, offset_x },
+            .{ -offset_x, offset_y },
+            .{ -offset_y, offset_x },
+            .{ offset_x, -offset_y },
+            .{ offset_y, -offset_x },
+            .{ -offset_x, -offset_y },
+            .{ -offset_y, -offset_x },
+        };
+        for (offsets) |pt| {
+            const num: f64 = @floatFromInt(if (pt[0] < 0) -pt[0] else pt[0]);
+            const denom: f64 = @floatFromInt(if (pt[1] < 0) -pt[1] else pt[1]);
+            const quad_theta = std.math.atan(num / denom);
+            const theta = blk: {
+                if (pt[0] <= 0) {
+                    if (pt[1] <= 0)
+                        break :blk -quad_theta
+                    else
+                        break :blk std.math.pi - quad_theta;
+                } else {
+                    if (pt[1] <= 0)
+                        break :blk 2.0 * std.math.pi - quad_theta
+                    else
+                        break :blk std.math.pi + quad_theta;
+                }
+            };
             if (theta_1 <= theta and theta <= theta_2) {
-                points.appendAssumeCapacity(pt);
+                points.appendAssumeCapacity(.{
+                    .x = gui.x + pt[0],
+                    .y = gui.y + pt[1],
+                });
             }
         }
         if (d >= 2 * offset_x) {
@@ -625,7 +626,7 @@ pub fn init(width: u16, height: u16, resources: []const u8) !void {
 
     const filename = try std.fmt.allocPrintZ(allocator, "{s}/04b03.ttf", .{resources});
     defer allocator.free(filename);
-    var f = c.TTF_OpenFont(filename, 8);
+    const f = c.TTF_OpenFont(filename, 8);
     font = f orelse {
         logger.err("screen.init(): {s}", .{c.TTF_GetError()});
         return error.Fail;
@@ -633,7 +634,7 @@ pub fn init(width: u16, height: u16, resources: []const u8) !void {
 
     for (0..2) |i| {
         const z: c_int = if (i == 0) 4 else 3;
-        var w = c.SDL_CreateWindow(
+        const w = c.SDL_CreateWindow(
             if (i == 0) "seamstress" else "seamstress_params",
             @intCast(i * width * 4),
             @intCast(i * height * 4),
@@ -641,12 +642,12 @@ pub fn init(width: u16, height: u16, resources: []const u8) !void {
             height * z,
             c.SDL_WINDOW_SHOWN | c.SDL_WINDOW_RESIZABLE,
         );
-        var window = w orelse {
+        const window = w orelse {
             logger.err("screen.init(): {s}", .{c.SDL_GetError()});
             return error.Fail;
         };
-        var r = c.SDL_CreateRenderer(window, 0, 0);
-        var render = r orelse {
+        const r = c.SDL_CreateRenderer(window, 0, 0);
+        const render = r orelse {
             logger.err("screen.init(): {s}", .{c.SDL_GetError()});
             return error.Fail;
         };
