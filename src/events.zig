@@ -23,6 +23,11 @@ pub const Data = union(enum) {
         msg: []osc.Lo_Arg,
         allocator: std.mem.Allocator,
     },
+    OSC_Method: struct {
+        index: usize,
+        msg: []const osc.Lo_Arg,
+        allocator: std.mem.Allocator,
+    },
     Monome_Add: struct {
         dev: *monome.Monome,
     },
@@ -175,6 +180,17 @@ pub fn free(event: Data) void {
             }
             e.allocator.free(e.msg);
         },
+        .OSC_Method => |e| {
+            for (e.msg) |a| {
+                switch (a) {
+                    .Lo_Symbol => |s| e.allocator.free(s),
+                    .Lo_String => |s| e.allocator.free(s),
+                    .Lo_Blob => |s| e.allocator.free(s),
+                    else => {},
+                }
+            }
+            e.allocator.free(e.msg);
+        },
         .Exec_Code_Line => |e| {
             e.allocator.free(e.line);
         },
@@ -237,6 +253,7 @@ fn handle(event: Data) !void {
         },
         .Exec_Code_Line => |e| try spindle.exec_code_line(e.line),
         .OSC => |e| try spindle.osc_event(e.from_host, e.from_port, e.path, e.msg),
+        .OSC_Method => |e| try spindle.osc_method(e.index, e.msg),
         .Monome_Add => |e| try spindle.monome_add(e.dev),
         .Monome_Remove => |e| try spindle.monome_remove(e.id),
         .Grid_Key => |e| try spindle.grid_key(e.id, e.x, e.y, e.state),

@@ -34,6 +34,7 @@ pub fn init(prefix: []const u8, config: []const u8, time: std.time.Timer, versio
     register_seamstress("reset_lvm", ziglua.wrap(reset_lvm));
 
     register_seamstress("osc_send", ziglua.wrap(osc_send));
+    register_seamstress("osc_register", ziglua.wrap(osc_register));
 
     register_seamstress("grid_set_led", ziglua.wrap(grid_set_led));
     register_seamstress("grid_all_led", ziglua.wrap(grid_all_led));
@@ -195,8 +196,24 @@ fn reset_lvm(l: *Lua) i32 {
     return 0;
 }
 
+/// registers a new OSC handler.
+// users should use `osc.register` instead
+// @param path a string representing an OSC path `/like/this`
+// @param types (optional) a string representing the arg types that the function expects
+// @see osc.register
+// @function osc_register
+fn osc_register(l: *Lua) i32 {
+    const num_args = l.getTop();
+    if (num_args < 1) return 0;
+    const path = l.checkBytes(1);
+    const types: ?[:0]const u8 = if (num_args < 2) null else l.checkBytes(2);
+    const nr = osc.add_method(path, types);
+    l.pushInteger(@intCast(nr));
+    return 1;
+}
+
 /// sends OSC to specified address.
-// users should use `osc:send` instead.
+// users should use `osc.send` instead.
 // @param address a table of the form `{host, port}`, both strings
 // @param path a string representing an OSC path `/like/this`
 // @param args an array whose data will be passed to OSC as arguments
@@ -1543,6 +1560,37 @@ inline fn push_lua_func(field: [:0]const u8, func: [:0]const u8) !void {
 
 pub fn exec_code_line(line: [:0]const u8) !void {
     try handle_line(&lvm, line);
+}
+
+pub fn osc_method(index: usize, msg: []const osc.Lo_Arg) !void {
+    try push_lua_func("osc", "method");
+    // no conversion from 1-indexing because we're already 1-indexed!
+    lvm.pushInteger(@intCast(index));
+    for (msg) |m| {
+        switch (m) {
+            .Lo_Int32 => |a| lvm.pushInteger(a),
+            .Lo_Float => |a| lvm.pushNumber(a),
+            .Lo_String => |a| {
+                _ = lvm.pushString(a);
+            },
+            .Lo_Blob => |a| {
+                _ = lvm.pushBytes(a);
+            },
+            .Lo_Int64 => |a| lvm.pushInteger(a),
+            .Lo_Double => |a| lvm.pushNumber(a),
+            .Lo_Symbol => |a| {
+                _ = lvm.pushString(a);
+            },
+            .Lo_Midi => |a| {
+                _ = lvm.pushBytes(&a);
+            },
+            .Lo_True => lvm.pushBoolean(true),
+            .Lo_False => lvm.pushBoolean(false),
+            .Lo_Nil => lvm.pushNil(),
+            .Lo_Infinitum => lvm.pushNumber(std.math.inf(f64)),
+        }
+    }
+    try docall(&lvm, @intCast(msg.len + 1), 0);
 }
 
 pub fn osc_event(
