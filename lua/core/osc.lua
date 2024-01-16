@@ -24,19 +24,15 @@ function osc.event(path, args, from) end
 -- @tparam string path an osc path `/like/this`
 -- @tparam[opt] table args an array of arguments to the OSC message
 function osc.send(to, path, args)
-  if not args then args = {} end
-  if not path then
-    path = to
-    to = { "localhost", _seamstress.remote_port }
+  if path == nil and args == nil then
+    _seamstress.osc_send({"127.0.0.1", _seamstress.remote_port}, to, {})
+  elseif args == nil and type(to) == "string" then
+    _seamstress.osc_send({"127.0.0.1", _seamstress.remote_port}, to, path)
+  elseif args == nil then
+    _seamstress.osc_send(to, path, {})
+  else
+    _seamstress.osc_send(to, path, args)
   end
-  if type(to) == "string" then
-    if path then
-      args = path
-    end
-    path = to
-    to = { "localhost", _seamstress.remote_port }
-  end
-  _seamstress.osc_send(to, path, args)
 end
 
 --- registers OSC handler
