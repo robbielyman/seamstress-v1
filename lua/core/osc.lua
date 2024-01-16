@@ -105,4 +105,4 @@ function _seamstress.osc.method(index, ...)
   end
 end
 
-return OSC
+return osc
