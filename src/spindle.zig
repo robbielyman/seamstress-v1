@@ -23,6 +23,7 @@ var timer: std.time.Timer = undefined;
 pub fn init(prefix: []const u8, config: []const u8, time: std.time.Timer, version: std.SemanticVersion) !void {
     interpreter_alloc = fallback_allocator.get();
     save_buf = std.ArrayList(u8).init(interpreter_alloc);
+    children = std.ArrayList(std.process.Child).init(interpreter_alloc);
     timer = time;
     logger.info("starting lua vm", .{});
     lvm = try Lua.init(std.heap.raw_c_allocator);
@@ -35,6 +36,9 @@ pub fn init(prefix: []const u8, config: []const u8, time: std.time.Timer, versio
 
     register_seamstress("osc_send", ziglua.wrap(osc_send));
     register_seamstress("osc_register", ziglua.wrap(osc_register));
+    register_seamstress("osc_delete", ziglua.wrap(osc_delete));
+
+    register_seamstress("child_process", ziglua.wrap(child_process));
 
     register_seamstress("grid_set_led", ziglua.wrap(grid_set_led));
     register_seamstress("grid_all_led", ziglua.wrap(grid_all_led));
@@ -163,6 +167,10 @@ pub fn deinit() void {
     _ = lvm.getField(-1, "cleanup");
     lvm.remove(-2);
     docall(&lvm, 0, 0) catch unreachable;
+    for (children.items) |*child| {
+        _ = child.kill() catch unreachable;
+    }
+    children.deinit();
 }
 
 pub fn startup(script: []const u8, buffer: []u8) !?[:0]const u8 {
@@ -196,6 +204,41 @@ fn reset_lvm(l: *Lua) i32 {
     return 0;
 }
 
+var children: std.ArrayList(std.process.Child) = undefined;
+
+/// starts child process
+// @param command a string for the command to start
+// @param args an array of strings for the command line arguments
+// @function child_process
+fn child_process(l: *Lua) i32 {
+    const num_args = l.getTop();
+    if (num_args < 1) return 0;
+    const command = l.checkBytes(1);
+    if (num_args < 2) {
+        var child = std.process.Child.init(&.{command}, std.heap.raw_c_allocator);
+        child.spawn() catch |err| {
+            l.raiseErrorStr("child_process %s failed with errror %s!", .{ command.ptr, @errorName(err).ptr });
+        };
+        children.append(child) catch @panic("OOM!");
+        return 0;
+    }
+    l.checkType(2, .table);
+    const len: usize = @intCast(l.rawLen(2));
+    const child_args = std.heap.raw_c_allocator.alloc([:0]const u8, len + 1) catch @panic("OOM!");
+    defer std.heap.raw_c_allocator.free(child_args);
+    child_args[0] = command;
+    for (1..len + 1) |i| {
+        _ = l.rawGetIndex(2, @intCast(i));
+        child_args[i] = l.toBytes(-1) catch l.raiseErrorStr("child_process argument not convertible to a string!", .{});
+    }
+    var child = std.process.Child.init(child_args, std.heap.raw_c_allocator);
+    child.spawn() catch |err| {
+        l.raiseErrorStr("child_process %s failed with error %s!", .{ command.ptr, @errorName(err).ptr });
+    };
+    children.append(child) catch @panic("OOM!");
+    return 0;
+}
+
 /// registers a new OSC handler.
 // users should use `osc.register` instead
 // @param path a string representing an OSC path `/like/this`
@@ -210,6 +253,21 @@ fn osc_register(l: *Lua) i32 {
     const nr = osc.add_method(path, types);
     l.pushInteger(@intCast(nr));
     return 1;
+}
+
+/// unregisters OSC handlers matching the given path (and typespec if provided)
+// users should use `osc.delete` instead
+// @param path a string representing an OSC path `/like/this`
+// @param types (optional) a string representing the arg types that the function expects
+// @function osc_delete
+fn osc_delete(l: *Lua) i32 {
+    const num_args = l.getTop();
+    defer l.setTop(0);
+    if (num_args < 1) return 0;
+    const path = l.checkBytes(1);
+    const types: ?[:0]const u8 = if (num_args < 2) null else l.checkBytes(2);
+    osc.delete_method(path, types);
+    return 0;
 }
 
 /// sends OSC to specified address.

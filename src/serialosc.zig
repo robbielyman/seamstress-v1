@@ -50,6 +50,11 @@ pub fn add_method(path: [:0]const u8, typespec: ?[:0]const u8) usize {
     return method_nr;
 }
 
+pub fn delete_method(path: [:0]const u8, typespec: ?[:0]const u8) void {
+    const ptr: ?[*:0]const u8 = if (typespec) |t| t.ptr else null;
+    _ = c.lo_server_thread_del_method(server_thread, path.ptr, ptr);
+}
+
 fn getArgs(types: [*:0]const u8, argv: [*]?*c.lo_arg, argc: usize) ![]Lo_Arg {
     const msg = try allocator.alloc(Lo_Arg, argc);
     for (msg, 0..argc) |*m, i| {
