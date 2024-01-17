@@ -53,6 +53,18 @@ function osc.register(path, fn, typespec)
   osc.methods[idx] = fn
 end
 
+--- unregisters OSC handler
+-- unregisters ALL functions that match the given path (or typespec); use responsibly :)
+-- @tparam string path an osc path `/like/this`
+-- @tparam[opt] string typespec a list of characters specifying the types expected by the function.
+function osc.delete(path, typespec)
+  if typespec then
+    _seamstress.osc_delete(path, typespec)
+  else
+    _seamstress.osc_delete(path)
+  end
+end
+
 _seamstress.osc = {}
 
 local function param_handler(path, args)
