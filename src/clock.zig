@@ -125,7 +125,7 @@ const Fabric = struct {
             self.lock.lock();
             self.do_tick();
             self.lock.unlock();
-            std.time.sleep(1000);
+            std.time.sleep(std.time.ns_per_us * 100);
         }
     }
     fn do_tick(self: *Fabric) void {
@@ -189,8 +189,6 @@ const Link_Beat_Reference = struct {
     fn loop(self: *@This()) void {
         self.thread.setName("link_clock_thread") catch {};
         while (!self.quit) {
-            std.time.sleep(std.time.ns_per_s);
-
             c.abl_link_capture_audio_session_state(fabric.link, fabric.state);
             self.lock.lock();
             self.beat.last_beat_time = timer.read();
@@ -211,7 +209,7 @@ const Link_Beat_Reference = struct {
             }
             if (last > beat) reschedule_sync_events();
             c.abl_link_commit_audio_session_state(fabric.link, fabric.state);
-            std.time.sleep(1000);
+            std.time.sleep(std.time.ns_per_us * 100);
         }
     }
 };
