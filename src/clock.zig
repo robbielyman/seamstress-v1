@@ -125,7 +125,7 @@ const Fabric = struct {
             self.lock.lock();
             self.do_tick();
             self.lock.unlock();
-            std.time.sleep(1000);
+            std.time.sleep(std.time.ns_per_us * 100);
         }
     }
     fn do_tick(self: *Fabric) void {
@@ -209,7 +209,7 @@ const Link_Beat_Reference = struct {
             }
             if (last > beat) reschedule_sync_events();
             c.abl_link_commit_audio_session_state(fabric.link, fabric.state);
-            std.time.sleep(1000);
+            std.time.sleep(std.time.ns_per_us * 100);
         }
     }
 };
