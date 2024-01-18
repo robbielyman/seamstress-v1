@@ -189,6 +189,8 @@ const Link_Beat_Reference = struct {
     fn loop(self: *@This()) void {
         self.thread.setName("link_clock_thread") catch {};
         while (!self.quit) {
+            std.time.sleep(std.time.ns_per_s);
+
             c.abl_link_capture_audio_session_state(fabric.link, fabric.state);
             self.lock.lock();
             self.beat.last_beat_time = timer.read();
