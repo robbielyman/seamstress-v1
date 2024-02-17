@@ -1882,7 +1882,7 @@ fn lua_print(l: *Lua) i32 {
     l.checkStackErr(2, "too many results to print");
     _ = l.getGlobal("_old_print") catch unreachable;
     l.insert(1);
-    l.call(n, 0);
+    docall(l, n, 0) catch unreachable;
     if (input.readline) {
         _ = c.rl_clear_visible_line();
         _ = c.rl_set_prompt("> ");

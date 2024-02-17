@@ -105,15 +105,13 @@ _startup = function(script_file)
   end
 
   clock.add_params()
-  local version_match = (seamstress.version_required == nil) or util.version_compare(seamstress.version_required, _seamstress.version) <= 0
+  local version_match = (seamstress.version_required == nil)
+    or util.version_compare(seamstress.version_required, _seamstress.version) <= 0
   if version_match then
     init()
   else
     print(
-      "!!! this script ("
-        .. seamstress.state.name
-        .. ") requires seamstress version "
-        .. seamstress.version_required
+      "!!! this script (" .. seamstress.state.name .. ") requires seamstress version " .. seamstress.version_required
     )
     print("!!! script not initialized, please update seamstress")
   end

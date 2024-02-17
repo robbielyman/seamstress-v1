@@ -8,7 +8,7 @@
 ]]
 
 local osc = {
-  methods = {}
+  methods = {},
 }
 
 --- callback executed when seamstress receives OSC
@@ -25,9 +25,9 @@ function osc.event(path, args, from) end
 -- @tparam[opt] table args an array of arguments to the OSC message
 function osc.send(to, path, args)
   if path == nil and args == nil then
-    _seamstress.osc_send({"127.0.0.1", _seamstress.remote_port}, to, {})
+    _seamstress.osc_send({ "127.0.0.1", _seamstress.remote_port }, to, {})
   elseif args == nil and type(to) == "string" then
-    _seamstress.osc_send({"127.0.0.1", _seamstress.remote_port}, to, path)
+    _seamstress.osc_send({ "127.0.0.1", _seamstress.remote_port }, to, path)
   elseif args == nil then
     _seamstress.osc_send(to, path, {})
   else

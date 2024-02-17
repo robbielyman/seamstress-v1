@@ -319,7 +319,7 @@ function util.version_compare(v1, v2)
     return nil
   end
 
-  for i=1,#v1 do
+  for i = 1, #v1 do
     if v1[i] ~= v2[i] then
       return (v1[i] > v2[i]) and 1 or -1
     end
@@ -327,6 +327,5 @@ function util.version_compare(v1, v2)
 
   return 0
 end
-
 
 return util

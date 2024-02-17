@@ -22,7 +22,7 @@ local softcut = {}
   rewritten for seamstress by @ryleelyman Jan 16, 2024
 ]]
 
-local controlspec = require 'controlspec'
+local controlspec = require("controlspec")
 
 -------
 -- @section constants
@@ -38,10 +38,11 @@ softcut.SOFTCUT_PORT = "9999"
 
 -- sends to softcut over OSC
 local function s(path, args)
-  if args == nil then args = {} end
+  if args == nil then
+    args = {}
+  end
   osc.send({ "127.0.0.1", softcut.SOFTCUT_PORT }, path, args)
 end
-
 
 ------
 -- @section setters
@@ -329,7 +330,9 @@ end
 -- @tparam int port OSC port number for the poll to be sent to
 -- (defaults to seamstress's listening port)
 softcut.poll_start_phase = function(port)
-  if port == nil then port = _seamstress.local_port end
+  if port == nil then
+    port = _seamstress.local_port
+  end
   s("/poll/start/cut/phase", { port })
 end
 
@@ -337,10 +340,11 @@ end
 -- @tparam int port OSC port number for the poll to be sent to
 -- (defaults to seamstress's listening port)
 softcut.poll_start_vu = function(port)
-  if port == nil then port = _seamstress.local_port end
+  if port == nil then
+    port = _seamstress.local_port
+  end
   s("/poll/start/vu", { port })
 end
-
 
 --- stop phase poll
 softcut.poll_stop_phase = function()
@@ -351,7 +355,6 @@ end
 softcut.poll_stop_vu = function()
   s("/poll/stop/vu")
 end
-
 
 --- set voice enable
 -- @tparam int voice voice number
@@ -394,8 +397,10 @@ end
 -- @tparam int ch_src : soundfile channel to read
 -- @tparam int ch_dst : buffer channel to write
 softcut.buffer_read_mono = function(file, start_src, start_dst, dur, ch_src, ch_dst)
-  s("/softcut/buffer/read_mono",
-    { file, start_src or 0, start_dst or 0, dur or -1, ch_src and ch_src - 1 or 0, ch_dst and ch_dst - 1 or 0 })
+  s(
+    "/softcut/buffer/read_mono",
+    { file, start_src or 0, start_dst or 0, dur or -1, ch_src and ch_src - 1 or 0, ch_dst and ch_dst - 1 or 0 }
+  )
 end
 
 --- read stereo soundfile to an arbitrary region in both buffers
@@ -436,7 +441,6 @@ softcut.event_vu = function(func)
   osc.register("/poll/softcut/vu", func, "ff")
 end
 
-
 -------
 -- @section utilities
 
@@ -446,8 +450,12 @@ end
 -- @tparam int p port number (defaults to softcut.SOFTCUT_PORT)
 -- @tparam string c command to execute (defaults to "softcut-client")
 function softcut.init(i, o, p, c)
-  if c == nil then c = "softcut-client" end
-  if p == nil then p = softcut.SOFTCUT_PORT end
+  if c == nil then
+    c = "softcut-client"
+  end
+  if p == nil then
+    p = softcut.SOFTCUT_PORT
+  end
   _seamstress.child_process(c, { "-i", i, "-o", o, "-p", p })
 end
 
@@ -533,49 +541,58 @@ function softcut.params()
       enable = { type = "number", min = 0, max = 1, default = 0 },
       -- levels
       -- @fixme: use dB / taper?
-      level = { type = "control", controlspec = controlspec.new(0, 0, 'lin', 0, 0.25, "") },
-      pan = { type = "control", controlspec = controlspec.new(-1, 1, 'lin', 0, 0, "") },
-      level_input_cut = { type = "control", controlspec = controlspec.new(0, 1, 'lin', 0, 0.5, "") },
-      level_cut_cut = { type = "control", controlspec = controlspec.new(0, 1, 'lin', 0, 0, "") },
+      level = { type = "control", controlspec = controlspec.new(0, 0, "lin", 0, 0.25, "") },
+      pan = { type = "control", controlspec = controlspec.new(-1, 1, "lin", 0, 0, "") },
+      level_input_cut = { type = "control", controlspec = controlspec.new(0, 1, "lin", 0, 0.5, "") },
+      level_cut_cut = { type = "control", controlspec = controlspec.new(0, 1, "lin", 0, 0, "") },
       -- timing
-      rate = { type = "control", controlspec = controlspec.new(-8, 8, 'lin', 0, 0, "") },
-      loop_start = { type = "control", controlspec = controlspec.new(0, softcut.BUFFER_SIZE, 'lin', 0, voice * 2.5, "sec") },
-      loop_end = { type = "control", controlspec = controlspec.new(0, softcut.BUFFER_SIZE, 'lin', 0, voice * 2.5 + 2, "sec") },
+      rate = { type = "control", controlspec = controlspec.new(-8, 8, "lin", 0, 0, "") },
+      loop_start = {
+        type = "control",
+        controlspec = controlspec.new(0, softcut.BUFFER_SIZE, "lin", 0, voice * 2.5, "sec"),
+      },
+      loop_end = {
+        type = "control",
+        controlspec = controlspec.new(0, softcut.BUFFER_SIZE, "lin", 0, voice * 2.5 + 2, "sec"),
+      },
       loop = { type = "number", min = 0, max = 1, default = 1 },
-      fade_time = { type = "control", controlspec = controlspec.new(0, 1, 'lin', 0, 0, "") },
+      fade_time = { type = "control", controlspec = controlspec.new(0, 1, "lin", 0, 0, "") },
       -- recording parameters
-      rec_level = { type = "control", controlspec = controlspec.new(0, 1, 'lin', 0, 0, "") },
-      pre_level = { type = "control", controlspec = controlspec.new(0, 1, 'lin', 0, 0, "") },
+      rec_level = { type = "control", controlspec = controlspec.new(0, 1, "lin", 0, 0, "") },
+      pre_level = { type = "control", controlspec = controlspec.new(0, 1, "lin", 0, 0, "") },
       play = { type = "number", min = 0, max = 1, default = 1 },
       rec = { type = "number", min = 0, max = 1, default = 1 },
       rec_offset = { type = "number", min = -100, max = 100, default = -8 },
       -- jump to position
-      position = { type = "control", controlspec = controlspec.new(0, softcut.BUFFER_SIZE, 'lin', 0, voice * 2.5, "sec") },
+      position = {
+        type = "control",
+        controlspec = controlspec.new(0, softcut.BUFFER_SIZE, "lin", 0, voice * 2.5, "sec"),
+      },
       -- pre filter
-      pre_filter_fc = { type = "control", controlspec = controlspec.new(10, 12000, 'exp', 1, 12000, "Hz") },
-      pre_filter_fc_mod = { type = "control", controlspec = controlspec.new(0, 1, 'lin', 0, 1, "") },
-      pre_filter_rq = { type = "control", controlspec = controlspec.new(0.0005, 8.0, 'exp', 0, 2.0, "") },
+      pre_filter_fc = { type = "control", controlspec = controlspec.new(10, 12000, "exp", 1, 12000, "Hz") },
+      pre_filter_fc_mod = { type = "control", controlspec = controlspec.new(0, 1, "lin", 0, 1, "") },
+      pre_filter_rq = { type = "control", controlspec = controlspec.new(0.0005, 8.0, "exp", 0, 2.0, "") },
       -- @fixme use dB / taper?
-      pre_filter_lp = { type = "control", controlspec = controlspec.new(0, 1, 'lin', 0, 1, "") },
-      pre_filter_hp = { type = "control", controlspec = controlspec.new(0, 1, 'lin', 0, 0, "") },
-      pre_filter_bp = { type = "control", controlspec = controlspec.new(0, 1, 'lin', 0, 0, "") },
-      pre_filter_br = { type = "control", controlspec = controlspec.new(0, 1, 'lin', 0, 0, "") },
-      pre_filter_dry = { type = "control", controlspec = controlspec.new(0, 1, 'lin', 0, 0, "") },
+      pre_filter_lp = { type = "control", controlspec = controlspec.new(0, 1, "lin", 0, 1, "") },
+      pre_filter_hp = { type = "control", controlspec = controlspec.new(0, 1, "lin", 0, 0, "") },
+      pre_filter_bp = { type = "control", controlspec = controlspec.new(0, 1, "lin", 0, 0, "") },
+      pre_filter_br = { type = "control", controlspec = controlspec.new(0, 1, "lin", 0, 0, "") },
+      pre_filter_dry = { type = "control", controlspec = controlspec.new(0, 1, "lin", 0, 0, "") },
       -- post filter
-      post_filter_fc = { type = "control", controlspec = controlspec.new(10, 12000, 'exp', 1, 12000, "Hz") },
-      post_filter_rq = { type = "control", controlspec = controlspec.new(0.0005, 8.0, 'exp', 0, 2.0, "") },
+      post_filter_fc = { type = "control", controlspec = controlspec.new(10, 12000, "exp", 1, 12000, "Hz") },
+      post_filter_rq = { type = "control", controlspec = controlspec.new(0.0005, 8.0, "exp", 0, 2.0, "") },
       -- @fixme use dB / taper?
-      post_filter_lp = { type = "control", controlspec = controlspec.new(0, 1, 'lin', 0, 1, "") },
-      post_filter_hp = { type = "control", controlspec = controlspec.new(0, 1, 'lin', 0, 0, "") },
-      post_filter_bp = { type = "control", controlspec = controlspec.new(0, 1, 'lin', 0, 0, "") },
-      post_filter_br = { type = "control", controlspec = controlspec.new(0, 1, 'lin', 0, 0, "") },
-      post_filter_dry = { type = "control", controlspec = controlspec.new(0, 1, 'lin', 0, 0, "") },
+      post_filter_lp = { type = "control", controlspec = controlspec.new(0, 1, "lin", 0, 1, "") },
+      post_filter_hp = { type = "control", controlspec = controlspec.new(0, 1, "lin", 0, 0, "") },
+      post_filter_bp = { type = "control", controlspec = controlspec.new(0, 1, "lin", 0, 0, "") },
+      post_filter_br = { type = "control", controlspec = controlspec.new(0, 1, "lin", 0, 0, "") },
+      post_filter_dry = { type = "control", controlspec = controlspec.new(0, 1, "lin", 0, 0, "") },
 
       -- slew times
-      level_slew_time = { type = "control", controlspec = controlspec.new(0, 8, 'lin', 0, 0, "") },
-      rate_slew_time = { type = "control", controlspec = controlspec.new(0, 8, 'lin', 0, 0, "") },
+      level_slew_time = { type = "control", controlspec = controlspec.new(0, 8, "lin", 0, 0, "") },
+      rate_slew_time = { type = "control", controlspec = controlspec.new(0, 8, "lin", 0, 0, "") },
       -- poll quantization unit
-      phase_quant = { type = "control", controlspec = controlspec.new(0, 8, 'lin', 0, 0.125, "") },
+      phase_quant = { type = "control", controlspec = controlspec.new(0, 8, "lin", 0, 0.125, "") },
     }
     -- assign name, id and action
     for k, v in pairs(spec) do
@@ -586,7 +603,9 @@ function softcut.params()
       if act == nil then
         print("warning: didn't find SoftCut voice method: " .. k)
       end
-      spec[k].action = function(x) act(z, x) end
+      spec[k].action = function(x)
+        act(z, x)
+      end
     end
     specs[voice] = spec
     voice = voice + 1

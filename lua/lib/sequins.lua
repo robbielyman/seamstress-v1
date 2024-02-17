@@ -3,6 +3,8 @@
 -- written as crow's sequins.lua
 -- crow sequins.lua first committed by @trentgill and @tehn June 30, 2021
 
+--- sequins
+
 local S = {}
 
 -- convert a string to a table of chars
@@ -299,10 +301,10 @@ function S:reset()
 end
 
 ------------------------------
--- metamethods
+--- metamethods
+
 -- calling the sequins library will create a new sequins object (S:new)
 -- calling a sequins object will produce a new value (S:next)
-
 S.__call = function(self, ...)
   return (self == S) and S.new(...) or S.next(self)
 end
@@ -339,6 +341,9 @@ S.__newindex = function(self, ix, v)
 end
 
 S.__tostring = function(t)
+  if t.length == nil then
+    return ""
+  end
   -- data
   local st = {}
   for i = 1, t.length do
