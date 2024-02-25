@@ -18,8 +18,9 @@ pub const Vertex = extern struct {
 };
 pub var quit = false;
 
-const Queue = std.fifo.LinearFifo(ScreenEvent, .{ .Static = 5000 });
+const Queue = std.fifo.LinearFifo(ScreenEvent, .{ .Dynamic = {} });
 var queue: Queue = undefined;
+var arena: std.heap.ArenaAllocator = undefined;
 
 pub var response: ?ScreenResponse = null;
 const logger = std.log.scoped(.screen);
@@ -230,15 +231,17 @@ pub const Size = struct {
 };
 
 pub fn init(width: u16, height: u16, resources: []const u8) !void {
+    arena = std.heap.ArenaAllocator.init(std.heap.raw_c_allocator);
     quit = false;
     try inner.init(width, height, resources);
-    queue = Queue.init();
+    queue = Queue.init(arena.allocator());
 }
 
 pub fn deinit() void {
     inner.deinit();
     queue.deinit();
     response = null;
+    arena.deinit();
 }
 
 pub fn loop() void {
