@@ -28,7 +28,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install \
             libnotcurses-core-dev lua5.4
-      - name Set up homebrew
+      - name: Set up homebrew
         id: set-up-homebrew
         uses: Homebrew/actions/setup-homebrew@master
         if: $${{ startsWith(matrix.os, 'macos') }}
