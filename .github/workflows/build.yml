@@ -21,7 +21,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
-      - name: goto-bus-stop/setup-zig@v2
+      - uses: goto-bus-stop/setup-zig@v2
       - name: install dependencies (apt)
         if: ${{ startsWith(matrix.os, 'ubuntu') }}
         run: |
