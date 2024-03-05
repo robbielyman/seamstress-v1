@@ -11,45 +11,34 @@ jobs:
   build:
     strategy:
       matrix:
-        include:
-          - os: macos-latest
-            arch: macos-x86_64
-          - os: macos-14
-            arch: macos-aarch64
-          - os: ubuntu-latest
-            arch: linux-x86_64
+        os: [macos-latest ubuntu-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
       - uses: goto-bus-stop/setup-zig@v2
       - name: install dependencies (apt)
-        if: ${{ startsWith(matrix.os, 'ubuntu') }}
+        if: ${{ startsWith(${{ matrix.os }}, 'ubuntu') }}
         run: |
           sudo apt-get update
           sudo apt-get install \
             libnotcurses-core-dev lua5.4
       - name: Set up homebrew
+        if: $${{ startsWith(${{ matrix.os }}, 'macos') }}
         id: set-up-homebrew
         uses: Homebrew/actions/setup-homebrew@master
-        if: $${{ startsWith(matrix.os, 'macos') }}
       - name: install dependencies (homebrew)
-        if: $${{ startsWith(matrix.os, 'macos') }}
+        if: $${{ startsWith(${{ matrix.os }}, 'macos') }}
         run: |
           brew install pkg-config lua notcurses
-      - name: build seamstress (linux)
-        if: $${{ startsWith(matrix.os, 'ubuntu') }}
-        run: |
-          zig build -Doptimize=ReleaseSafe -Dcpu=x86_64 --summary all
-      - name: build seamstress (macos)
-        if: $${{ startsWith(matrix.os, 'macos') }}
+      - name: build seamstress
         run: |
           zig build -Doptimize=ReleaseSafe --summary all
       - name: zip artifact
         run: |
-          cd zig-out/ && tar -czvf ../seamstress-${{ matrix.arch }}-${{ github.ref_name }}.tar.gz .
+          cd zig-out/ && tar -czvf ../seamstress-${{ matrix.os }}-x86_64-${{ github.ref_name }}.tar.gz .
       - uses: actions/upload-artifact@v2
         with:
-          name: ${{ matrix.arch }}-${{ github.ref_name }}
+          name: ${{ matrix.os }}-${{ github.ref_name }}
           path: |
             ./*.tar.gz
   release:
@@ -63,6 +52,5 @@ jobs:
         with:
           draft: true
           files: |
-            ./macos-aarch64-${{ github.ref_name }}/*.tar.gz
-            ./macos-x86_64-${{ github.ref_name }}/*.tar.gz
-            ./linux-x86_64-${{ github.ref_name }}/*.tar.gz
+            ./macos-latest-x86_64-${{ github.ref_name }}/*.tar.gz
+            ./ubuntu-latest-x86_64-${{ github.ref_name }}/*.tar.gz
