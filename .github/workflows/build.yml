@@ -8,72 +8,53 @@ on:
   workflow_dispatch:
 
 jobs:
-  linux-x86_64:
-    runs-on: ubuntu-latest
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            arch: macos-x86_64
+          - os: macos-14
+            arch: macos-aarch64
+          - os: ubuntu-latest
+            arch: linux-x86_64
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v2
-      - name: restore zig-cache
-        id: cache-zig-restore
-        uses: actions/cache/restore@v3
-        with:
-          path: |
-            zig-cache
-          key: ${{ runner.os }}-zig-cache-${{ github.run_id }}
-          restore-keys: |
-            ${{ runner.os }}-zig-cache
-      - name: build seamstress
+      - name: goto-bus-stop/setup-zig@v2
+      - name: install dependencies (apt)
+        if: ${{ startsWith(matrix.os, 'ubuntu') }}
         run: |
-          bash ci/ubuntu.sh
-      - name: save zig-cache
-        id: cache-zig-save
-        uses: actions/cache/save@v3
-        with:
-          path: |
-            zig-cache
-          key: ${{ runner.os }}-zig-cache-${{ github.run_id }}
+          sudo apt-get update
+          sudo apt-get install \
+            libnotcurses-core-dev lua5.4
+      - name Set up homebrew
+        id: set-up-homebrew
+        uses: Homebrew/actions/setup-homebrew@master
+        if: $${{ startsWith(matrix.os, 'macos') }}
+      - name: install dependencies (homebrew)
+        if: $${{ startsWith(matrix.os, 'macos') }}
+        run: |
+          brew install pkg-config lua notcurses
+      - name: build seamstress (linux)
+        if: $${{ startsWith(matrix.os, 'ubuntu') }}
+        run: |
+          zig build -Doptimize=ReleaseSafe -Dcpu=x86_64 --summary all
+      - name: build seamstress (macos)
+        if: $${{ startsWith(matrix.os, 'macos') }}
+        run: |
+          zig build -Doptimize=ReleaseSafe --summary all
       - name: zip artifact
         run: |
-          cd zig-out/ && tar -czvf ../seamstress-linux-x86_64-${{ github.ref_name }}.tar.gz .
+          cd zig-out/ && tar -czvf ../seamstress-${{ matrix.arch }}-${{ github.ref_name }}.tar.gz .
       - uses: actions/upload-artifact@v2
         with:
-          name: linux-x86_64-${{ github.ref_name }}
+          name: ${{ matrix.arch }}-${{ github.ref_name }}
           path: |
             ./*.tar.gz
-  macos-x86_64:
-    runs-on: macos-latest
-    steps:
-      - uses: actions/checkout@v2
-      - uses: Homebrew/actions/setup-homebrew@master
-      - name: restore zig-cache
-        id: cache-zig-restore
-        uses: actions/cache/restore@v3
-        with:
-          path: |
-            zig-cache
-          key: ${{ runner.os }}-zig-cache-${{ github.run_id }}
-          restore-keys: |
-            ${{ runner.os }}-zig-cache
-      - name: build seamstress
-        run: |
-          bash ci/macos-11.sh
-      - name: save zig-cache
-        id: cache-zig-save
-        uses: actions/cache/save@v3
-        with:
-          path: |
-            zig-cache
-          key: ${{ runner.os }}-zig-cache-${{ github.run_id }}
-      - name: zip artifact
-        run: |
-          cd zig-out/ && zip -r9 ../seamstress-macos-x86_64-${{ github.ref_name }}.zip .
-      - uses: actions/upload-artifact@v2
-        with:
-          name: macos-x86_64-${{ github.ref_name }}
-          path: |
-            ./*.zip
   release:
     runs-on: ubuntu-latest
-    needs: [macos-x86_64,linux-x86_64]
+    needs: [build]
     steps:
       - uses: actions/checkout@v3
       - uses: actions/download-artifact@v3
@@ -82,5 +63,6 @@ jobs:
         with:
           draft: true
           files: |
-            ./macos-x86_64-${{ github.ref_name }}/*.zip
+            ./macos-aarch64-${{ github.ref_name }}/*.tar.gz
+            ./macos-x86_64-${{ github.ref_name }}/*.tar.gz
             ./linux-x86_64-${{ github.ref_name }}/*.tar.gz

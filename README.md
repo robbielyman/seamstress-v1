@@ -1,42 +1,28 @@
-# seamstress
+# seamstress 2
 
 *seamstress* is a Lua scripting environment
 for communicating with music, visuals and data.
 
-## usage
+seamstress version 2 is pre-alpha software.
 
-seamstress is run from the command line. 
-invoke it with `seamstress` or `seamstress <filename>`
-(`seamstress -h` lists optional command-line arguments).
-on startup, seamstress will search for a user-provided script file 
-named `<filename>.lua` (defaulting to `script.lua`) to run.
-this file may either be found in the current directory of your command-line prompt
-or in `~/seamstress` (that is, a folder named `seamstress` under your `$HOME` directory,
-which is typically `/Users/<username>` on macOS and `/home/<username>` on Linux).
+## discussion
 
-on startup, seamstress creates two OS windows
-and commandeers the command-line prompt as a Lua
-REPL (short for **r**ead **e**valuate **p**rint **l**oop).
-one of these windows is reserved for seamstress's `params` system,
-while the other (the main window)
-is available for scripts to draw to using seamstress's `screen` module.
-to exit seamstress, close the main window or enter `quit` in to the REPL.
-
-## scripting 
-
-seamstress scripts are written in Lua,
-an embeddable, extensible scripting language.
-as of 1.0.0, seamstress supports Lua version 5.4.x.
-[Lua.org](https://www.lua.org) has resources for programming in Lua.
-additionally, [monome](https://monome.org) has studies for scripting in Lua for
-[norns](https://monome.org/docs/norns/studies/) and [seamstress](https://monome.org/docs/grid/studies/seamstress/) to get you off the ground.
+if you'd like to help brainstorm (or develop!) seamstress version 2,
+please consider joining the conversation [here](https://llllllll.co/t/seamstress-devlog/62356).
+that link will contain a summary of seamstress 2's current capabilities.
 
 ## installation
 
-seamstress requires `freetype2`, `harfbuzz` and `ncurses`. on macOS do
+seamstress requires `lua` and `notcurses`. on macOS do
 
 ```bash
-brew install freetype2 harfbuzz ncurses
+brew install lua notcurses pkg-config
+```
+
+on ubuntu (for example) do
+
+```bash
+sudo apt-get install liblua5.4-dev libnotcurses-core-dev
 ```
 
 alternatively to install with homebrew, do
@@ -45,24 +31,11 @@ brew tap ryleelyman/seamstress
 brew install seamstress
 ```
 
-on linux, additional requirements include `alsa`.
-each release comes with a binary for `x86_64` linux and macOS,
-as well as `aarch64` (Apple silicon) macOS.
-download the appropriate file, unzip it and 
-(technically optionally) add it to your PATH.
-
-if you'd like to use [monome](https://monome.org) devices with seamstress,
-you'll need to install [serialosc](https://github.com/monome/serialosc).
-
-NB: `seamstress` expects the file structure found inside the zipped folder
-and will not work as expected if you move only the binary to a different folder.
-
 ## building from source
 
 
-building seamstress from source requires version 0.11.0 of [zig](https://github.com/ziglang/zig).
+building seamstress from source requires the master (nightly) version of [zig](https://github.com/ziglang/zig).
 the easiest way to get zig is to download a binary from [here](https://ziglang.org/download/) and add it to your PATH.
-seamstress follows releases of zig.
 to build seamstress, install the dependencies listed above (as well as `pkg-config`) and invoke
 
 ```bash
@@ -74,26 +47,6 @@ you can change this
 by passing `-Doptimize=ReleaseFast` or `-Doptimize=ReleaseSafe` to the build command.
 
 NB: `seamstress` will be built as `zig-out/bin/seamstress`; you can add this to your PATH to have it available as `seamstress`.
-
-if you previously built seamstress with `sudo`, you may want to run `sudo zig build uninstall -p /usr/local` to remove the old binary.
-you may also have to delete `~/.cache/zig` as well as `zig-cache` in the relevant directories.
-
-## docs
-
-the lua API is documented [here](https://ryleealanza.org/docs/index.html).
-to regenerate docs, you'll need [LDoc](https://github.com/lunarmodules/ldoc),
-which requires Penlight.
-with both installed, running `ldoc .` in the base directory of seamstress will
-regenerate documentation.
-
-## style
-
-lua formatting is done with [stylua](https://github.com/JohnnyMorganz/StyLua),
-while zig formatting is done with `zig fmt`.
-a `stylua.toml` is provided, so if you feel like matching seamstress's "house lua style",
-simply run `stylua .` in the root of the repo.
-similarly, you can run `zig fmt filename.zig` to format `filename.zig`.
-(this is not a requirement for contributing.)
 
 ## acknowledgments
 
