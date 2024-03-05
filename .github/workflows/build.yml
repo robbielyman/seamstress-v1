@@ -17,17 +17,17 @@ jobs:
       - uses: actions/checkout@v2
       - uses: goto-bus-stop/setup-zig@v2
       - name: install dependencies (apt)
-        if: ${{ startsWith(${{ matrix.os }}, 'ubuntu') }}
+        if: ${{ startsWith(matrix.os, 'ubuntu') }}
         run: |
           sudo apt-get update
           sudo apt-get install \
             libnotcurses-core-dev lua5.4
       - name: Set up homebrew
-        if: $${{ startsWith(${{ matrix.os }}, 'macos') }}
+        if: $${{ ! startsWith(matrix.os, 'ubuntu') }}
         id: set-up-homebrew
         uses: Homebrew/actions/setup-homebrew@master
       - name: install dependencies (homebrew)
-        if: $${{ startsWith(${{ matrix.os }}, 'macos') }}
+        if: $${{ ! startsWith(matrix.os, 'ubuntu') }}
         run: |
           brew install pkg-config lua notcurses
       - name: build seamstress
