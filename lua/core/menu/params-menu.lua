@@ -324,13 +324,22 @@ m.key = function(char, modifiers, is_repeat, state)
       d = m.fine and (d / 20) or (m.coarse and d * 10 or d)
 
       if m.map_pos == 1 then
+        local to_remove = tab.key(pmap.rev[pm.dev][pm.ch][pm.cc], n)
+        table.remove(pmap.rev[pm.dev][pm.ch][pm.cc], to_remove)
         pm.cc = util.clamp(pm.cc + d, 0, 127)
+        table.insert(pmap.rev[pm.dev][pm.ch][pm.cc], n)
         pmap.data[n].cc = pm.cc
       elseif m.map_pos == 2 then
+        local to_remove = tab.key(pmap.rev[pm.dev][pm.ch][pm.cc], n)
+        table.remove(pmap.rev[pm.dev][pm.ch][pm.cc], to_remove)
         pm.ch = util.clamp(pm.ch + d, 1, 16)
+        table.insert(pmap.rev[pm.dev][pm.ch][pm.cc], n)
         pmap.data[n].ch = pm.ch
       elseif m.map_pos == 3 then
+        local to_remove = tab.key(pmap.rev[pm.dev][pm.ch][pm.cc], n)
+        table.remove(pmap.rev[pm.dev][pm.ch][pm.cc], to_remove)
         pm.dev = util.clamp(pm.dev + d, 1, #midi.vports)
+        table.insert(pmap.rev[pm.dev][pm.ch][pm.cc], n)
         pmap.data[n].dev = pm.dev
       elseif m.map_pos == 4 or m.map_pos == 5 then
         local param = params:lookup_param(n)
