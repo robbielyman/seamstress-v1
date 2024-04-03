@@ -1,14 +1,16 @@
 .{
     .name = "seamstress",
-    .version = "2.0.0",
+    .version = "2.0.0-prealpha-0",
     .paths = .{ "build.zig.zon", "build.zig", "src" },
     .dependencies = .{
-        .notcurses = .{
-            .path = "deps/notcurses",
-        },
         .ziglua = .{
-            .url = "https://github.com/natecraddock/ziglua/archive/effbedc64ab51d5a98ac263abefc1da4b8742929.tar.gz",
-            .hash = "122033ec0f8f8645f69991c187f34c4674b8785bdb64c8a60524e8e49841faf79b92",
+            .url = "https://github.com/natecraddock/ziglua/archive/ac577d622333f1695922f2974e81c503edb306ca.tar.gz",
+            .hash = "12208b6cc8a794f8e743b592500a9f1220f041fb454c7e9fba939cfa0d06b1026657",
+        },
+        .libvaxis = .{ .path = "deps/vaxis" },
+        .gap_buffer = .{
+            .url = "https://github.com/ryleelyman/GapBuffer.zig/archive/04f349e2bab5fbc8989051288adb1a55a56d09c1.tar.gz",
+            .hash = "12209365353b5a3d538e9ae5223534eb497c163518f8ec168d9580bc43c3a7948386",
         },
     },
 }

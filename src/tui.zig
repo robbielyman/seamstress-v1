@@ -1,31 +1,103 @@
-const Module = @import("module.zig");
-const Spindle = @import("spindle.zig");
-const Seamstress = @import("seamstress.zig");
-const Error = Seamstress.Error;
-const Cleanup = Seamstress.Cleanup;
-const Io = @import("io.zig");
+/// TUI mode terminal interaction
 
-const std = @import("std");
-const nc = @import("notcurses");
+// the main struct for interacting with the terminal window
+pub const Tui = struct {
+    pid: ?std.Thread = null,
+    vx: Vaxis,
+    state: State,
+    print_ctx: Spindle.PrintContext,
+    writers: Writers,
+    pool: std.heap.MemoryPoolExtra(State.KeyEvent, .{}),
 
-const logger = std.log.scoped(.tui);
+    fn create(vm: *Spindle) Error!*Tui {
+        const self = try vm.allocator.create(Tui);
+        self.* = .{
+            .vx = Vaxis.init(.{}) catch return error.TUIFailed,
+            .state = undefined,
+            .print_ctx = undefined,
+            .writers = undefined,
+            .pool = try std.heap.MemoryPoolExtra(State.KeyEvent, .{}).initPreheated(vm.allocator, 128),
+        };
+        try self.state.init(&self.vx, vm);
+        self.writers = .{
+            .stderr_writer = self.state.stderr.writer(vm.allocator),
+            .ev_writer = eventWriter(&self.vx),
+            .old_writer = undefined,
+        };
+        self.print_ctx = .{
+            .ready = self.writers.ev_writer.any(),
+            .stdout = self.state.stdout_writer.any(),
+        };
+        return self;
+    }
 
-// TODO: should this be its own file?
-pub const Tuio = struct {
-    io: *Io,
-    stderr: Io.bwm.BufferedWriterMutex(4096, std.ArrayListUnmanaged(u8).Writer),
-    stdout: Io.bwm.BufferedWriterMutex(4096, std.ArrayListUnmanaged(u8).Writer),
-
-    pub fn init(io: *Io, stderr: std.ArrayListUnmanaged(u8).Writer, stdout: std.ArrayListUnmanaged(u8).Writer) Tuio {
-        return .{
-            .io = io,
-            .stderr = io.bufferedWriterMutex(stderr),
-            .stdout = io.bufferedWriterMutex(stdout),
+    // short that we can use `try` in the actual loop
+    fn replLoop(self: *Tui, vm: *Spindle) void {
+        self.inner(vm) catch |err| {
+            // FIXME: this error usually doesn't make it to the screen lol
+            logger.err("error: {}", .{err});
+            vm.panic(error.TUIFailed);
         };
     }
+
+    // the real TUI loop
+    fn inner(self: *Tui, vm: *Spindle) !void {
+        try self.vx.queryTerminal();
+        try self.vx.enterAltScreen();
+        defer self.vx.exitAltScreen() catch {};
+
+        while (true) {
+            // wait till the next event; wake up this thread with a `quit` or `render` event
+            const ev = self.vx.nextEvent();
+            switch (ev) {
+                // exits
+                .quit => return,
+                // renders
+                .render => try self.render(vm),
+                // resizes the window
+                .winsize => |ws| {
+                    try self.vx.resize(vm.allocator, ws);
+                    self.vx.queueRefresh();
+                    self.vx.postEvent(.render);
+                },
+                // parses input
+                .key_press => |k| {
+                    // special case: ctrl+c should quit
+                    if (k.matches('c', .{ .ctrl = true })) {
+                        vm.quit();
+                        return;
+                    }
+                    // process other keys on the main thread so they can go through Lua
+                    // if the state of the tui demands it
+                    try self.postKeyEvent(vm, k);
+                },
+            }
+        }
+    }
+
+    // just passes the call to our state struct
+    fn render(self: *Tui, vm: *Spindle) !void {
+        try self.state.render(&self.vx, vm);
+    }
+
+    fn postKeyEvent(self: *Tui, vm: *Spindle, key: vaxis.Key) !void {
+        const ev = try self.pool.create();
+        ev.* = .{
+            .tui = self,
+            .vm = vm,
+            .key = key,
+        };
+        vm.events.submit(&ev.node);
+    }
+
+    const Writers = struct {
+        ev_writer: EventWriter,
+        old_writer: std.io.AnyWriter,
+        stderr_writer: std.ArrayListUnmanaged(u8).Writer,
+    };
 };
 
-// returns the module interface
+// returns th emodule interface
 pub fn module() Module {
     return .{
         .vtable = &.{
@@ -36,216 +108,131 @@ pub fn module() Module {
     };
 }
 
-// sets up the TUI (actaully, enters TUI mode), hooking it up to the Lua VM
+// sets up the TUI module; monkey-patches our logger
 fn init(m: *Module, vm: *Spindle) Error!void {
-    const self = try vm.allocator.create(Tui);
-    self.* = .{
-        // undefined so we can grab a clean pointer from stderr and stdout
-        .tuio = undefined,
-        // same here
-        .reader = undefined,
-        .stdin_buf = std.fifo.LinearFifo(u8, .Dynamic).init(vm.allocator),
-        .nc = try Tui.NC.init(vm),
-    };
-    // see?
-    self.tuio = Tuio.init(
-        vm.io,
-        self.stderr_buf.writer(vm.allocator),
-        self.stdout_buf.writer(vm.allocator),
-    );
-    self.reader = self.stdin_buf.reader();
+    // creates using vm.allocator
+    const self = try Tui.create(vm);
+    // grab the old writer
+    const old_writer = vm.io.replaceUnderlyingStream(self.writers.stderr_writer.any());
+    // save it
+    self.writers.old_writer = old_writer;
     m.self = self;
+    vm.registerSeamstress("_print", Spindle.printFn, &self.print_ctx);
     vm.hello = .{
         .ctx = self,
         .hello_fn = hello,
     };
-    // just one function to register
-    // TODO: actually there will be many more!
-    vm.registerSeamstress("_print", printFn, self);
+    @import("main.zig").panic_closure = .{
+        .ctx = self,
+        .panic_fn = panic,
+    };
 }
 
-// cleans up the TUI thread
+// shuts down the TUI module
 fn deinit(m: *const Module, vm: *Spindle, cleanup: Cleanup) void {
-    // nothing to clean up
     const self: *Tui = @ptrCast(@alignCast(m.self orelse return));
-    self.quit = true;
-    // wake up the thread if it's sleeping
-    self.tuio.io.cond.signal();
-
-    blk: {
-        const pid = self.pid orelse break :blk;
+    // stop getting from stdin
+    self.vx.stopReadThread();
+    // FIXME: is this too silly?
+    _ = self.print_ctx.ready.write("q") catch {};
+    // stop processing tui events
+    if (self.pid) |p| {
         switch (cleanup) {
-            // TODO: detaching on panic is probably faster and fine right?
-            .panic => pid.detach(),
-            .clean, .full => pid.join(),
+            .clean, .full => p.join(),
+            .panic => p.detach(),
         }
     }
-    self.nc.deinit(vm, cleanup);
-    if (cleanup != .full) return;
-
-    vm.allocator.destroy(self);
+    // deinit our vaxis instance
+    self.vx.deinit(if (cleanup == .full) vm.allocator else null);
+    // put back the old stderr logger
+    // the next call flushes our new stderr buffer to it
+    _ = vm.io.replaceUnderlyingStream(self.writers.old_writer);
+    // cleans up the tui state
+    self.state.deinit(vm, cleanup);
+    switch (cleanup) {
+        .full => {
+            self.pool.deinit();
+            vm.allocator.destroy(self);
+        },
+        .clean, .panic => {},
+    }
 }
 
+// starts the IO read thread and the TUI thread
 fn launch(m: *const Module, vm: *Spindle) Error!void {
     const self: *Tui = @ptrCast(@alignCast(m.self orelse return error.LaunchFailed));
-    self.pid = std.Thread.spawn(.{}, Tui.replLoop, .{ self, vm }) catch {
-        logger.err("unable to start CLI thread!", .{});
-        return error.LaunchFailed;
-    };
+    self.vx.startReadThread() catch return error.LaunchFailed;
+    self.pid = std.Thread.spawn(.{}, Tui.replLoop, .{ self, vm }) catch return error.LaunchFailed;
 }
 
-const Tui = struct {
-    tuio: Tuio,
-    stderr_buf: std.ArrayListUnmanaged(u8) = .{},
-    stdout_buf: std.ArrayListUnmanaged(u8) = .{},
-    stdin_buf: std.fifo.LinearFifo(u8, .Dynamic),
-    reader: std.fifo.LinearFifo(u8, .Dynamic).Reader,
-    continuing: bool = false,
-    nc: NC,
-    pid: ?std.Thread = null,
-    quit: bool = false,
-
-    // contains all of the Notcurses aspects of Tui
-    const NC = struct {
-        // the main struct; used to create others
-        notcurses: nc.Notcurses,
-        // contains the main planes used for displaying the repl
-        io_plane: IoPlane,
-        // contains planes requested and managed by the script author / user
-        display_planes: std.ArrayListUnmanaged(DisplayPlane) = .{},
-
-        fn init(vm: *Spindle) error{NotCursesFailed}!NC {
-            _ = vm; // autofix
-            const notcurses = nc.Notcurses.coreInit(.{
-                .flags = .{},
-            }, null) catch return error.NotCursesFailed;
-            const io_plane = IoPlane.init(notcurses);
-            return .{
-                .notcurses = notcurses,
-                .io_plane = io_plane,
-            };
-        }
-
-        fn deinit(self: *NC, vm: *Spindle, cleanup: Cleanup) void {
-            self.notcurses.stop() catch return;
-            if (cleanup != .full) return;
-            for (self.display_planes.items) |*dp| {
-                dp.deinit(vm);
-            }
-            self.io_plane.deinit(vm);
-        }
-
-        const DisplayPlane = struct {
-            fn deinit(self: *DisplayPlane, vm: *Spindle) void {
-                _ = self; // autofix
-                _ = vm; // autofix
-            }
-        };
-
-        const IoPlane = struct {
-            fn init(notcurses: nc.Notcurses) IoPlane {
-                _ = notcurses; // autofix
-                return .{};
-            }
-
-            fn deinit(self: *IoPlane, vm: *Spindle) void {
-                _ = self; // autofix
-                _ = vm; // autofix
-            }
-        };
-    };
-
-    // the main REPL / display loop from the point of view of the TUI input handler
-    fn replLoop(self: *Tui, vm: *Spindle) void {
-        // grab a file to poll for input
-        var poller = std.io.poll(vm.allocator, enum { stdin }, .{ .stdin = self.nc.notcurses.inputReadyFd() });
-        defer poller.deinit();
-        while (!self.quit) {
-            // begin by rendering
-            self.render(vm);
-            // poll until there's input
-            const ready = poller.poll() catch |err| blk: {
-                logger.err("error while polling stdin! {s}, stopping input...", .{@errorName(err)});
-                break :blk false;
-            };
-            // poll returns false when the file descriptor is no longer available
-            if (!ready) {
-                self.quit = true;
-                continue;
-            }
-
-            self.tuio.io.mtx.lock();
-            defer self.tuio.io.mtx.unlock();
-            // this might call wait if we're waiting for seamstress to process our input
-            self.processInput(vm);
-        }
-    }
-
-    // TODO
-    fn processInput(self: *Tui, vm: *Spindle) void {
-        _ = vm; // autofix
-        self.tuio.io.cond.wait(&self.tuio.io.mtx);
-    }
-
-    // TODO
-    fn render(self: *Tui, vm: *Spindle) void {
-        _ = self; // autofix
-        _ = vm; // autofix
-    }
-};
-
-/// prints using the TUI interface
-/// replaces `print` under TUI operation
-fn printFn(l: *Spindle.Lua) i32 {
-    // how many things are we printing?
-    const n = l.getTop();
-    // get our closed-over value
-    const idx = Spindle.Lua.upvalueIndex(1);
-    const self = l.toUserdata(Tui, idx) catch return 0;
-    // grab stdout
-    const writer = self.tuio.stdout.writer();
-    // while loop because for loops are limited to `usize` in zig
-    var i: i32 = 1;
-    while (i <= n) : (i += 1) {
-        // grab a value from the stack
-        const bytes = l.toBytes(i) catch |err| {
-            logger.err("error while printing: {s}", .{@errorName(err)});
-            return 0;
-        };
-        // write it out
-        _ = writer.write(bytes) catch {};
-        // separate multiple values with tabs
-        // finish out with a newline
-        if (i < n)
-            _ = writer.write("\t") catch {}
-        else
-            _ = writer.write("\n") catch {};
-    }
-    // don't forget to flush!
-    // (triggers a TUI render)
-    self.tuio.stdout.flush() catch {};
-    // nothing to return
-    return 0;
-}
-
-// closure to print hello using the TUI interface
-// using formatted print because Zig treats curly braces special
-// and hey, I wanna demonstrate the syntax ;)
+// pretty prints a hello message
 fn hello(ctx: *anyopaque) void {
     const self: *Tui = @ptrCast(@alignCast(ctx));
-    const stdout = self.tuio.stdout.writer().any();
-    stdout.print("{s}S{s}E{s}{s}A{s}M{s}S{s}T{s}R{s}E{s}S{s}S{s}\n", .{
-        "{pink}",            "{/pink}{red}",
-        "{/red}{orange}",    "{/orange}{yellow}",
-        "{/yellow}{green}",  "{/green}{teal}",
-        "{/teal}{blue}",     "{/blue}{indigo}",
-        "{/indigo}{purple}", "{/purple}{white}",
-        "{/white}{brown}",   "{/brown}",
-    }) catch return;
-    stdout.print("{s}seamstress version:{s} {s}{}{s}\n", .{
-        "{pink}",  "{/pink}",
-        "{blue}",  @import("main.zig").VERSION,
-        "{/blue}",
-    }) catch return;
-    self.tuio.stdout.flush() catch return;
+    const seamstress = "SEAMSTRESS";
+    const colors: [10]u8 = .{
+        224, 222, 220, 148, 150, 152, 153, 189, 188, 186,
+    };
+    for (seamstress, &colors) |letter, idx| {
+        self.state.stdout.current_style.fg = .{ .index = idx };
+        self.print_ctx.stdout.print("{c}", .{letter}) catch {};
+    }
+    self.state.stdout.current_style.fg = .default;
+    self.print_ctx.stdout.print("\n", .{}) catch {};
+    self.state.stdout.current_style.fg = .{ .index = 45 };
+    self.print_ctx.stdout.print("seamstress version: ", .{}) catch {};
+    self.state.stdout.current_style.fg = .{ .index = 79 };
+    self.print_ctx.stdout.print("{}\n", .{@import("main.zig").VERSION}) catch {};
+    self.state.stdout.current_style.fg = .default;
+    _ = self.print_ctx.ready.write("r") catch {};
 }
+
+test "ref" {
+    std.testing.refAllDecls(@This());
+}
+
+const EventWriter = std.io.GenericWriter(*Vaxis, error{BadInput}, eventWriteFn);
+
+fn eventWriter(self: *Vaxis) EventWriter {
+    return .{ .context = self };
+}
+
+// a "write" function for parity with the cli interface
+fn eventWriteFn(vx: *Vaxis, bytes: []const u8) error{BadInput}!usize {
+    if (bytes.len == 0) return 0;
+    switch (bytes[0]) {
+        'q' => vx.postEvent(.quit),
+        'r' => vx.postEvent(.render),
+        else => return error.BadInput,
+    }
+    return bytes.len;
+}
+
+// shuts down the tty when panicking
+fn panic(ctx: ?*anyopaque) void {
+    const tui: *Tui = @ptrCast(@alignCast(ctx orelse return));
+    tui.vx.exitAltScreen() catch {};
+    tui.vx.stopReadThread();
+    tui.vx.deinit(null);
+}
+
+// pub for our nested imports
+pub const logger = std.log.scoped(.tui);
+
+const std = @import("std");
+const Module = @import("module.zig");
+const Spindle = @import("spindle.zig");
+const Seamstress = @import("seamstress.zig");
+const Error = Seamstress.Error;
+const Cleanup = Seamstress.Cleanup;
+const Io = @import("io.zig");
+const State = @import("tui/state.zig");
+const vaxis = @import("vaxis");
+// pub for our nested imports
+pub const Vaxis = vaxis.Vaxis(VxEvent);
+// the events that our vaxis instance responds to
+const VxEvent = union(enum) {
+    winsize: vaxis.Winsize,
+    key_press: vaxis.Key,
+    quit,
+    render,
+};

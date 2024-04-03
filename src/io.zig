@@ -1,13 +1,18 @@
-/// IO mutex and condition
-/// also exposes a variant of std.io.BufferedWriter that uses the mutex
 const std = @import("std");
-pub const bwm = @import("buffered_writer_mutex.zig");
-
-const Io = @This();
 
 mtx: std.Thread.Mutex = .{},
-cond: std.Thread.Condition = .{},
+stderr: std.io.BufferedWriter(4096, std.io.AnyWriter),
 
-pub fn bufferedWriterMutex(self: *Io, underlying_stream: anytype) bwm.BufferedWriterMutex(4096, @TypeOf(underlying_stream)) {
-    return bwm.bufferedWriterMutex(underlying_stream, &self.mtx, &self.cond);
+pub fn replaceUnderlyingStream(self: *@This(), new: std.io.AnyWriter) std.io.AnyWriter {
+    self.mtx.lock();
+    defer self.mtx.unlock();
+    const old = self.stderr.unbuffered_writer;
+    self.stderr.unbuffered_writer = new;
+    return old;
+}
+
+pub fn init(unbuffered_writer: std.io.AnyWriter) @This() {
+    return .{
+        .stderr = std.io.bufferedWriter(unbuffered_writer),
+    };
 }

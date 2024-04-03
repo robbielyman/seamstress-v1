@@ -10,6 +10,7 @@ pub fn build(b: *std.Build) !void {
         .optimize = optimize,
     });
     b.installArtifact(exe);
+    exe.linkLibC();
 
     try addDependencies(&exe.root_module, b, target, optimize);
 
@@ -42,9 +43,15 @@ fn addDependencies(m: *std.Build.Module, b: *std.Build, target: std.Build.Resolv
     m.addImport("ziglua", ziglua.module("ziglua"));
     m.linkSystemLibrary("lua", .{ .needed = true });
 
-    const notcurses = b.dependency("notcurses", .{
+    const vaxis = b.dependency("libvaxis", .{
         .target = target,
         .optimize = optimize,
     });
-    m.addImport("notcurses", notcurses.module("notcurses"));
+    m.addImport("vaxis", vaxis.module("vaxis"));
+
+    const gap_buffer = b.dependency("gap_buffer", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    m.addImport("gap_buffer", gap_buffer.module("gap_buffer"));
 }

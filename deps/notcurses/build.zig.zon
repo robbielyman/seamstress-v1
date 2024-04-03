@@ -1,9 +1,0 @@
-.{
-    .name = "notcurses",
-    .version = "3.0.9",
-    .paths = .{ "build.zig.zon", "build.zig", "main.zig", "c.zig" },
-    .dependencies = .{ .upstream = .{
-        .url = "https://github.com/dankamongmen/notcurses/archive/d88f40b836cd7e93c11e6d3e724b7b1eb43263c0.tar.gz",
-        .hash = "122056c5513fb1d33245f13a5dfb1b19859ea860650fe8da25c071ec2370db8a71ff",
-    } },
-}

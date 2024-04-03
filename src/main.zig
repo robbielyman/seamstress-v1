@@ -4,11 +4,15 @@ const cli = @import("cli.zig");
 const Seamstress = @import("seamstress.zig");
 const Io = @import("io.zig");
 
-// since this is called by logFn, global state is unavoidable
-// defaults to using the CLI writing capabilities
-// but is replaced by the TUI when enabled
-// pub so that it can be altered in tui.zig
-pub var logWriter: ?std.io.AnyWriter = null;
+// since this is called by logFn, global state is unavoidable.
+// only modified (or even available) in this file, which feels like a win
+var logWriter: ?std.io.AnyWriter = null;
+
+// since this is called by panic, global state is unavoidable.
+pub var panic_closure: ?struct {
+    ctx: ?*anyopaque,
+    panic_fn: *const fn (?*anyopaque) void,
+} = null;
 
 // single source of truth about seamstress's version
 // pub so that it can be exposed to lua / printed
@@ -31,23 +35,26 @@ pub const std_options: std.Options = .{
 
 // entry point!
 pub fn main() void {
-    // mutexes for IO
-    var io: Io = .{};
-    // CLI IO interface
-    var clio = cli.Clio.init(&io);
-    // sets up global state
-    logWriter = clio.stderr.writer().any();
+    // grab stderr
+    const stderr = std.io.getStdErr().writer().any();
+    // set up mutexes for IO
+    var io = Io.init(stderr);
+    // sets up global state---only modified here, thanks to Io.replaceUnderlyingStream.
+    logWriter = io.stderr.writer().any();
 
     // TODO: is GPA the best for the Lua VM?
     var gpa: std.heap.GeneralPurposeAllocator(.{}) = .{};
-    defer _ = gpa.deinit();
+    defer {
+        // in case we leaked memory, better not to crash about it
+        logWriter = stderr;
+        _ = gpa.deinit();
+    }
     const allocator = gpa.allocator();
 
     // TODO: does this really need to be on the heap just to have a stable pointer?
     // not a big deal either way for one struct
-    var seamstress = Seamstress.create(&allocator, &io, &clio);
-    // interestingly: in release modes this is never called by the magic of cleanExit
-    defer allocator.destroy(seamstress);
+    var seamstress: Seamstress = undefined;
+    seamstress.init(&allocator, &io);
 
     seamstress.run();
 }
@@ -69,4 +76,12 @@ fn logFn(
     const w = logWriter orelse return;
     const prefix = "[" ++ @tagName(scope) ++ "] " ++ "(" ++ comptime level.asText() ++ "): ";
     w.print(prefix ++ fmt ++ "\n", args) catch return;
+}
+
+// allows us to always shut down vaxis when panicking
+pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_addr: ?usize) noreturn {
+    if (panic_closure) |p| {
+        p.panic_fn(p.ctx);
+    }
+    @call(.always_inline, std.builtin.default_panic, .{ msg, error_return_trace, ret_addr });
 }

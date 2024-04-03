@@ -4,7 +4,6 @@ const std = @import("std");
 const io = std.io;
 const mem = std.mem;
 const Mutex = std.Thread.Mutex;
-const Condition = std.Thread.Condition;
 
 pub fn BufferedWriterMutex(comptime buf_size: usize, WriterType: type) type {
     return struct {
@@ -12,7 +11,6 @@ pub fn BufferedWriterMutex(comptime buf_size: usize, WriterType: type) type {
         buf: [buf_size]u8 = undefined,
         end: usize = 0,
         mutex: *Mutex,
-        condition: *Condition,
 
         pub const Error = WriterType.Error || error{Overflow};
         pub const Writer = io.GenericWriter(*Self, Error, write);
@@ -25,7 +23,6 @@ pub fn BufferedWriterMutex(comptime buf_size: usize, WriterType: type) type {
             defer self.mutex.unlock();
             try self.unbuffered_writer.writeAll(self.buf[0..self.end]);
             self.end = 0;
-            self.condition.broadcast();
         }
 
         pub fn writer(self: *Self) Writer {
@@ -46,10 +43,9 @@ pub fn BufferedWriterMutex(comptime buf_size: usize, WriterType: type) type {
     };
 }
 
-pub fn bufferedWriterMutex(underlying_stream: anytype, mutex: *Mutex, condition: *Condition) BufferedWriterMutex(4096, @TypeOf(underlying_stream)) {
+pub fn bufferedWriterMutex(underlying_stream: anytype, mutex: *Mutex) BufferedWriterMutex(4096, @TypeOf(underlying_stream)) {
     return .{
         .unbuffered_writer = underlying_stream,
         .mutex = mutex,
-        .condition = condition,
     };
 }

@@ -3,100 +3,96 @@ const Seamstress = @import("seamstress.zig");
 const Spindle = @import("spindle.zig");
 const Error = Seamstress.Error;
 
-const Queue = @This();
+const Queue = @import("queue.zig").Queue;
+const Events = @This();
 const logger = std.log.scoped(.events);
 
-// we store a reference to the Lua VM so that we can properly handle events
-parent: *Spindle,
-// the event queue
-queue: std.fifo.LinearFifo(Event, .Dynamic),
-cond: std.Thread.Condition = .{},
-mtx: std.Thread.Mutex = .{},
+queue: Queue(Node) = undefined,
+// we set this ourselves
 quit: bool = false,
+// nodes for quitting
+quit_node: Node = .{
+    .handler = handlerFromClosure(Events, quitImpl, "quit_node"),
+},
+// and panicking
+panic_node: Node = .{
+    .handler = handlerFromClosure(Events, panicImpl, "panic_node"),
+},
+// set when panicking
+err: ?Error = null,
 
-pub const Command = struct {
-    ctx: *anyopaque,
-    // where to read from
-    reader: std.io.AnyReader,
-    // how much to read
-    len: usize,
-    f: *const Handler,
+pub const Node = struct {
+    next: ?*@This() = null,
+    handler: *const fn (*@This()) void,
 
-    pub const Handler = fn (*anyopaque, std.io.AnyReader, usize) void;
+    fn handle(self: *Node) void {
+        self.handler(self);
+    }
 };
 
-pub const Event = union(enum) {
-    panic: Error,
-    quit: void,
-    command: Command,
-};
-
-// posts an event to the queue and wakes up the thread
-pub fn post(self: *Queue, ev: Event) void {
-    self.queue.writeItem(ev) catch {
-        switch (ev) {
-            // not really anything we can do in this situation
-            .panic => @panic("out of memory while attempting to panic!"),
-            else => logger.err("out of memory! unable to post event of type {s}", .{@tagName(ev)}),
-        }
-        return;
-    };
-    self.cond.signal();
+// posts an event to the queue
+pub fn submit(self: *Events, node: *Node) void {
+    self.queue.push(node);
 }
 
 // frees memory in the queue
-pub fn close(self: *Queue) void {
+pub fn close(self: *Events) void {
     // necessary so the event loop exits
     self.quit = true;
-    self.queue.deinit();
 }
 
 // initializes the event queue
-pub fn init(parent: *Spindle, allocator: std.mem.Allocator) Queue {
-    return .{
-        .queue = std.fifo.LinearFifo(Event, .Dynamic).init(allocator),
-        .parent = parent,
-    };
+// since we require a stable pointer, make this a self-init function
+pub fn init(self: *Events) void {
+    self.* = .{};
+    self.queue.init();
 }
 
 // the main event loop; the main thread blocks here until exiting
-pub fn loop(self: *Queue) void {
+pub fn loop(self: *Events) void {
     while (!self.quit) {
         // we try to handle all available events at once
-        while (self.queue.readItem()) |ev| {
-            // unless one of them tells us we should quit
+        while (self.queue.pop()) |node| {
+            node.handle();
             if (self.quit) break;
-            self.handle(&ev);
+        } else {
+            // back off for a bit
+            std.time.sleep(std.time.ns_per_us * 50);
         }
-        if (self.quit) break;
-        self.mtx.lock();
-        defer self.mtx.unlock();
-        // waits for new events
-        self.cond.wait(&self.mtx);
     }
 }
 
 // drains the event queue
-pub fn processAll(self: *Queue) void {
-    while (self.queue.readItem()) |ev| {
-        self.handle(&ev);
+pub fn processAll(self: *Events) void {
+    while (self.queue.pop()) |node| {
+        node.handle();
     }
 }
-// passing the event by reference to avoid a copy; is this useful?
-fn handle(self: *Queue, ev: *const Event) void {
-    switch (ev.*) {
-        .panic => |err| {
-            // shenanigans
-            const seamstress = @fieldParentPtr(Seamstress, "vm", self.parent);
-            seamstress.panic(err);
-        },
-        .quit => {
-            // shenanigans
-            const seamstress = @fieldParentPtr(Seamstress, "vm", self.parent);
-            seamstress.deinit();
-        },
-        .command => |c| {
-            c.f(c.ctx, c.reader, c.len);
-        },
-    }
+
+// used by our quit node to quit
+fn quitImpl(self: *Events) void {
+    const spindle = @fieldParentPtr(Spindle, "events", self);
+    const seamstress = @fieldParentPtr(Seamstress, "vm", spindle);
+    seamstress.deinit();
+    self.quit = true;
+}
+
+// used by our panic node to panic
+fn panicImpl(self: *Events) void {
+    const spindle = @fieldParentPtr(Spindle, "events", self);
+    const seamstress = @fieldParentPtr(Seamstress, "vm", spindle);
+    seamstress.panic(self.err.?);
+    self.quit = true;
+}
+
+/// helper function for constructing a node handler from a closure
+/// `Parent` has a field named `node_field_name` of type `Node`
+pub fn handlerFromClosure(comptime Parent: type, comptime closure: fn (*Parent) void, comptime node_field_name: []const u8) fn (*Node) void {
+    const inner = struct {
+        fn handler(node: *Node) void {
+            const parent = @fieldParentPtr(Parent, node_field_name, node);
+            @call(.always_inline, closure, .{parent});
+        }
+    };
+    return inner.handler;
 }
