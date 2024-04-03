@@ -3,6 +3,9 @@
 --
 -- some filters that could be useful for musical event processing
 
+-- written as norns' filters.lua by @catfact:
+-- norns filters.lua first committed by @catfact March 25, 2020
+
 local f = {}
 f.__index = f
 
