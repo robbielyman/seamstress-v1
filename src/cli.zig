@@ -147,7 +147,7 @@ const Cli = struct {
         fn discard(ctx: *Spindle.ReplContext, _: ?*anyopaque) void {
             ctx.buffer.mtx.lock();
             defer ctx.buffer.mtx.unlock();
-            const this = @fieldParentPtr(ReplEvent, "ctx", ctx);
+            const this: *ReplEvent = @fieldParentPtr("ctx", ctx);
             this.in_use = false;
         }
     };

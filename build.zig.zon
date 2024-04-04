@@ -4,10 +4,13 @@
     .paths = .{ "build.zig.zon", "build.zig", "src" },
     .dependencies = .{
         .ziglua = .{
-            .url = "https://github.com/natecraddock/ziglua/archive/ac577d622333f1695922f2974e81c503edb306ca.tar.gz",
-            .hash = "12208b6cc8a794f8e743b592500a9f1220f041fb454c7e9fba939cfa0d06b1026657",
+            .url = "https://github.com/natecraddock/ziglua/archive/af8f7780c8763a69507d890873bd6d37f2b47947.tar.gz",
+            .hash = "1220a3fe591e1ae8bf828923f3f2d248eedd99341e35e8d9c04e915dee44bf137a1e",
         },
-        .libvaxis = .{ .path = "deps/vaxis" },
+        .libvaxis = .{
+            .url = "https://github.com/rockorager/libvaxis/archive/770f6d1c07281867f94f12a3aa794dac9e47b60c.tar.gz",
+            .hash = "122096a5514d35399cad4d13e51c7dfe5c32c8b69e905d7d6e9f85a5946e256384f0",
+        },
         .gap_buffer = .{
             .url = "https://github.com/ryleelyman/GapBuffer.zig/archive/04f349e2bab5fbc8989051288adb1a55a56d09c1.tar.gz",
             .hash = "12209365353b5a3d538e9ae5223534eb497c163518f8ec168d9580bc43c3a7948386",

@@ -71,16 +71,16 @@ pub fn processAll(self: *Events) void {
 
 // used by our quit node to quit
 fn quitImpl(self: *Events) void {
-    const spindle = @fieldParentPtr(Spindle, "events", self);
-    const seamstress = @fieldParentPtr(Seamstress, "vm", spindle);
+    const spindle: *Spindle = @fieldParentPtr("events", self);
+    const seamstress: *Seamstress = @fieldParentPtr("vm", spindle);
     seamstress.deinit();
     self.quit = true;
 }
 
 // used by our panic node to panic
 fn panicImpl(self: *Events) void {
-    const spindle = @fieldParentPtr(Spindle, "events", self);
-    const seamstress = @fieldParentPtr(Seamstress, "vm", spindle);
+    const spindle: *Spindle = @fieldParentPtr("events", self);
+    const seamstress: *Seamstress = @fieldParentPtr("vm", spindle);
     seamstress.panic(self.err.?);
     self.quit = true;
 }
@@ -90,7 +90,7 @@ fn panicImpl(self: *Events) void {
 pub fn handlerFromClosure(comptime Parent: type, comptime closure: fn (*Parent) void, comptime node_field_name: []const u8) fn (*Node) void {
     const inner = struct {
         fn handler(node: *Node) void {
-            const parent = @fieldParentPtr(Parent, node_field_name, node);
+            const parent: *Parent = @fieldParentPtr(node_field_name, node);
             @call(.always_inline, closure, .{parent});
         }
     };

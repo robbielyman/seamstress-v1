@@ -173,7 +173,7 @@ const ReplEvent = struct {
         }
         ctx.buffer.mtx.lock();
         defer ctx.buffer.mtx.unlock();
-        const this = @fieldParentPtr(ReplEvent, "ctx", ctx);
+        const this: *ReplEvent = @fieldParentPtr("ctx", ctx);
         this.in_use = false;
     }
 };
