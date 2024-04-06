@@ -54,4 +54,10 @@ fn addDependencies(m: *std.Build.Module, b: *std.Build, target: std.Build.Resolv
         .optimize = optimize,
     });
     m.addImport("gap_buffer", gap_buffer.module("gap_buffer"));
+
+    const ziglo = b.dependency("ziglo", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    m.addImport("ziglo", ziglo.module("ziglo"));
 }

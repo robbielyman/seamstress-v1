@@ -8,10 +8,10 @@ const Io = @import("io.zig");
 // only modified (or even available) in this file, which feels like a win
 var logWriter: ?std.io.AnyWriter = null;
 
-// since this is called by panic, global state is unavoidable.
-pub var panic_closure: ?struct {
-    ctx: ?*anyopaque,
-    panic_fn: *const fn (?*anyopaque) void,
+// since this is called by std.debug.panic, global state is unavoidable.
+var panic_closure: ?struct {
+    ctx: *Seamstress,
+    panic_fn: *const fn (*Seamstress) void,
 } = null;
 
 // single source of truth about seamstress's version
@@ -51,10 +51,13 @@ pub fn main() void {
     }
     const allocator = gpa.allocator();
 
-    // TODO: does this really need to be on the heap just to have a stable pointer?
-    // not a big deal either way for one struct
     var seamstress: Seamstress = undefined;
     seamstress.init(&allocator, &io);
+
+    panic_closure = .{
+        .ctx = &seamstress,
+        .panic_fn = Seamstress.panicCleanup,
+    };
 
     seamstress.run();
 }
@@ -78,7 +81,7 @@ fn logFn(
     w.print(prefix ++ fmt ++ "\n", args) catch return;
 }
 
-// allows us to always shut down vaxis when panicking
+// allows us to always shut down cleanly when panicking
 pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_addr: ?usize) noreturn {
     if (panic_closure) |p| {
         p.panic_fn(p.ctx);

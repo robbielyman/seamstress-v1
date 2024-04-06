@@ -36,7 +36,7 @@ pub const Tui = struct {
         self.inner(vm) catch |err| {
             // FIXME: this error usually doesn't make it to the screen lol
             logger.err("error: {}", .{err});
-            vm.panic(error.TUIFailed);
+            lu.panic(vm, error.TUIFailed);
         };
     }
 
@@ -64,7 +64,7 @@ pub const Tui = struct {
                 .key_press => |k| {
                     // special case: ctrl+c should quit
                     if (k.matches('c', .{ .ctrl = true })) {
-                        vm.quit();
+                        lu.quit(vm);
                         return;
                     }
                     // process other keys on the main thread so they can go through Lua
@@ -117,14 +117,10 @@ fn init(m: *Module, vm: *Spindle) Error!void {
     // save it
     self.writers.old_writer = old_writer;
     m.self = self;
-    vm.registerSeamstress("_print", Spindle.printFn, &self.print_ctx);
+    lu.registerSeamstress(vm, "_print", Spindle.printFn, &self.print_ctx);
     vm.hello = .{
         .ctx = self,
         .hello_fn = hello,
-    };
-    @import("main.zig").panic_closure = .{
-        .ctx = self,
-        .panic_fn = panic,
     };
 }
 
@@ -236,3 +232,4 @@ const VxEvent = union(enum) {
     quit,
     render,
 };
+const lu = @import("lua_util.zig");

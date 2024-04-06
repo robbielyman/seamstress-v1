@@ -47,7 +47,7 @@ fn init(m: *Module, vm: *Spindle) Error!void {
     m.self = self;
     vm.hello = .{ .ctx = self, .hello_fn = hello };
     // just one function to register
-    vm.registerSeamstress("_print", Spindle.printFn, &self.print_ctx);
+        lu.registerSeamstress(vm, "_print", Spindle.printFn, &self.print_ctx);
 }
 
 // cleans up the CLI thread
@@ -113,7 +113,7 @@ const Cli = struct {
             while (quit_or_ready.readItem()) |char| {
                 switch (char) {
                     'q' => {
-                        vm.quit();
+                        lu.quit(vm);
                         return;
                     },
                     // our 'hello' function writes here, so we effectively begin by prompting
@@ -129,7 +129,7 @@ const Cli = struct {
                 while (fifo.readableLength() > 0) {
                     const slice = fifo.readableSlice(0);
                     self.stdin_buffer.appendSlice(slice) catch {
-                        vm.panic(error.OutOfMemory);
+                        lu.panic(vm, error.OutOfMemory);
                         return;
                     };
                     fifo.discard(slice.len);
@@ -214,5 +214,6 @@ const Error = Seamstress.Error;
 const Cleanup = Seamstress.Cleanup;
 const Io = @import("io.zig");
 const ThreadSafeBuffer = @import("thread_safe_buffer.zig").ThreadSafeBuffer;
+const lu = @import("lua_util.zig");
 
 const logger = std.log.scoped(.cli);

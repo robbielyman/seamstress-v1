@@ -1,18 +1,11 @@
 /// functions in this file set up, configure and run seamstress
-/// this file should be unaware that the Lua VM exists
+/// this file should be more or less unaware that the Lua VM exists
 /// likewise the Lua VM should be unaware of the other modules
-const std = @import("std");
-const builtin = @import("builtin");
-const Spindle = @import("spindle.zig");
-const Module = @import("module.zig");
-const Events = @import("events.zig");
-const Io = @import("io.zig");
-const cli = @import("cli.zig");
 const Seamstress = @This();
 
 // these are the errors that may be panicked on
 // TODO: do these make sense?
-pub const Error = error{ OutOfMemory, SeamstressCorrupted, TUIFailed, LaunchFailed, LuaCrashed };
+pub const Error = error{ OutOfMemory, SeamstressCorrupted, TUIFailed, LaunchFailed, LuaCrashed, LuaFailed };
 
 // used by modules to determine what and how much to clean up
 // panic: something has gone wrong; clean up the bare minimum so that seamstress is a good citizen
@@ -26,9 +19,9 @@ vm: Spindle,
 // vm stores an allocator, and we just reach in to use that
 modules: std.ArrayListUnmanaged(Module),
 
-// our implementation of panicking
-// pub because it's called by the events queue using @fieldParentPtr
-pub fn panic(self: *Seamstress, err: Error) noreturn {
+// the cleanup done at panic
+// pub so that it can be called from the main file
+pub fn panicCleanup(self: *Seamstress) void {
     @setCold(true);
     // used to, e.g. turn off grid lights so should be called here
     self.vm.cleanup();
@@ -37,11 +30,14 @@ pub fn panic(self: *Seamstress, err: Error) noreturn {
         module.deinit(&self.vm, .panic);
     }
 
-    // if we got here, the cleanup we needed to do is already done
-    @import("main.zig").panic_closure = null;
-
     // let's print any output from stderr we have leftover---maybe it's relevant?
     self.vm.io.stderr.unbuffered_writer.writeAll(self.vm.io.stderr.buf[0..self.vm.io.stderr.end]) catch {};
+}
+
+// our implementation of panicking
+// pub because it's called by the events queue using @fieldParentPtr
+pub fn panic(self: *Seamstress, err: Error) noreturn {
+    self.panicCleanup();
 
     // std.debug.panic exits the program with a message (and a stack trace if we're lucky)
     switch (err) {
@@ -50,6 +46,7 @@ pub fn panic(self: *Seamstress, err: Error) noreturn {
         error.LaunchFailed => std.debug.panic("module launch failed!", .{}),
         error.SeamstressCorrupted => std.debug.panic("_seamstress corrupted!", .{}),
         error.LuaCrashed => std.debug.panic("the LVM crashed!", .{}),
+        error.LuaFailed => std.debug.panic("the LVM failed!", .{}),
     }
 }
 
@@ -116,6 +113,7 @@ pub fn init(self: *Seamstress, allocator: *const std.mem.Allocator, io: *Io) voi
 fn consume(self: *Seamstress, config: Config) Error!void {
     const tui_module = if (config.tui) @import("tui.zig").module() else @import("cli.zig").module();
     try self.modules.append(self.vm.allocator, tui_module);
+    try self.modules.append(self.vm.allocator, @import("osc.zig").module());
 }
 
 // TODO: should this struct be its own file?
@@ -135,3 +133,11 @@ fn sayGoodbye() void {
 fn sayHello(self: *Seamstress) void {
     self.vm.sayHello();
 }
+
+const std = @import("std");
+const builtin = @import("builtin");
+const Spindle = @import("spindle.zig");
+const Module = @import("module.zig");
+const Events = @import("events.zig");
+const Io = @import("io.zig");
+const cli = @import("cli.zig");

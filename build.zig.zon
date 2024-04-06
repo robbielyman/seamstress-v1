@@ -15,5 +15,9 @@
             .url = "https://github.com/ryleelyman/GapBuffer.zig/archive/04f349e2bab5fbc8989051288adb1a55a56d09c1.tar.gz",
             .hash = "12209365353b5a3d538e9ae5223534eb497c163518f8ec168d9580bc43c3a7948386",
         },
+        .ziglo = .{
+            .url = "https://github.com/ryleelyman/ziglo/archive/2f84cec4f7c32606ffffabbe5bbcbe6fd04d601a.tar.gz",
+            .hash = "12206974a4844962a438911024123319ab5ee857779409c2873ac7245d195fc8768f",
+        },
     },
 }
