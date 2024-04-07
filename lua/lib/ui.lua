@@ -169,7 +169,7 @@ function UI.Tabs:click(x, y, state, button)
   if x < MARGIN or x > WIDTH - MARGIN then
     return
   end
-  local idx = util.linlin(MARGIN, WIDTH - MARGIN, 1, #self.titles, x)
+  local idx = util.linlin(MARGIN, WIDTH - MARGIN, 1, #self.titles + 1, x)
   self:set_index(math.floor(idx))
 end
 
