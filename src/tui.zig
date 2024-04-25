@@ -84,7 +84,6 @@ pub const Tui = struct {
         const ev = try self.pool.create();
         ev.* = .{
             .tui = self,
-            .vm = vm,
             .key = key,
         };
         vm.events.submit(&ev.node);

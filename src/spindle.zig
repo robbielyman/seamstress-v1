@@ -32,13 +32,13 @@ pub fn init(self: *Spindle, allocator: *const std.mem.Allocator, io: *Io) Error!
 
     // open lua libraries
     self.lvm.openLibs();
-    self.setUpSeamstress();
+    self.setUpSeamstress() catch return error.LaunchFailed;
 
     _ = self.lvm.atPanic(ziglua.wrap(luaPanic));
 }
 
 // sets up the _seamstress table
-fn setUpSeamstress(self: *Spindle) void {
+fn setUpSeamstress(self: *Spindle) !void {
     // create a new table
     self.lvm.newTable();
     // push ourselves
@@ -48,7 +48,39 @@ fn setUpSeamstress(self: *Spindle) void {
     self.lvm.newTable();
     // assign to the previous one
     self.lvm.setField(-2, "config");
+    {
+        var buf: [16 * 1024]u8 = undefined;
+        var fba: std.heap.FixedBufferAllocator = .{ .buffer = &buf, .end_index = 0 };
+        const a = fba.allocator();
+        const location = try std.fs.selfExeDirPathAlloc(a);
+        defer a.free(location);
+        const path = try std.fs.path.joinZ(a, &.{ location, "..", "share", "seamstress", "lua" });
+        defer a.free(path);
+        const prefix = try std.fs.realpathAlloc(a, path);
+        _ = self.lvm.pushString(prefix);
+        self.lvm.setField(-2, "prefix");
+    }
+    {
+        const version = @import("main.zig").VERSION;
+        self.lvm.createTable(3, 1);
+        self.lvm.pushInteger(@intCast(version.major));
+        self.lvm.setIndex(-2, 1);
+        self.lvm.pushInteger(@intCast(version.minor));
+        self.lvm.setIndex(-2, 2);
+        self.lvm.pushInteger(@intCast(version.patch));
+        self.lvm.setIndex(-2, 3);
+        if (version.pre) |pre| _ = self.lvm.pushString(pre) else self.lvm.pushNil();
+        self.lvm.setField(-2, "pre");
+        self.lvm.setField(-2, "version");
+    }
     self.lvm.setGlobal("_seamstress");
+
+    {
+        const cwd = try std.process.getCwdAlloc(self.allocator);
+        defer self.allocator.free(cwd);
+        _ = self.lvm.pushString(cwd);
+        self.lvm.setGlobal("_pwd");
+    }
 }
 
 fn luaPanic(l: *Lua) i32 {
@@ -63,19 +95,46 @@ pub fn close(self: *Spindle) void {
     self.lvm.close();
 }
 
-// TODO: call init()
+// call init()
 pub fn callInit(self: *Spindle) void {
-    _ = self; // autofix
+    lu.getSeamstress(self.lvm);
+    _ = self.lvm.getField(-1, "prefix");
+    _ = self.lvm.pushString("/config.lua");
+    self.lvm.concat(2);
+    const file_name = self.lvm.toStringEx(-1);
+    self.lvm.doFile(file_name) catch lu.panic(self, error.LaunchFailed);
+    self.lvm.setTop(0);
+
+    lu.getSeamstress(self.lvm);
+    _ = self.lvm.getField(-1, "prefix");
+    _ = self.lvm.pushString("/core/seamstress.lua");
+    self.lvm.concat(2);
+    const file_name2 = self.lvm.toStringEx(-1);
+    self.lvm.doFile(file_name2) catch lu.panic(self, error.LaunchFailed);
+    self.lvm.setTop(0);
+
+    const t = self.lvm.getGlobal("_startup") catch {
+        lu.panic(self, error.LaunchFailed);
+        return;
+    };
+    if (t != .function) lu.panic(self, error.LaunchFailed);
+    lu.doCall(self.lvm, 0, 0);
 }
 
-// TODO: call cleanup()
+// call cleanup()
 pub fn cleanup(self: *Spindle) void {
-    _ = self; // autofix
+    lu.getSeamstress(self.lvm);
+    const t = self.lvm.getField(-1, "cleanup");
+    if (t != .function) return;
+    lu.doCall(self.lvm, 0, 0);
 }
 
 // TODO: parse config
 pub fn parseConfig(self: *Spindle) Error!Config {
-    _ = self; // autofix
+    var iter = std.process.argsWithAllocator(self.allocator) catch return error.LaunchFailed;
+    _ = iter.next();
+    const script = iter.next();
+    try lu.setConfig(self, "script_file", script);
     return .{ .tui = false };
 }
 
@@ -88,7 +147,6 @@ pub fn sayHello(self: *Spindle) void {
 
 // struct for handling REPL input
 pub const ReplContext = struct {
-    spindle: *Spindle,
     buffer: *ThreadSafeBuffer(u8),
     length_to_read: usize = 0,
     node: Events.Node = .{
@@ -102,7 +160,8 @@ pub const ReplContext = struct {
     const max_repl_len = 16 * 1024;
 
     // handler for responding to REPL input
-    fn replHandler(self: *ReplContext) void {
+    fn replHandler(self: *ReplContext, l: *Lua) void {
+        const vm = lu.getVM(l);
         // calculate the length to read
         const length_to_read = @min(self.length_to_read, self.buffer.readableLength());
         if (length_to_read > max_repl_len) {
@@ -116,7 +175,7 @@ pub const ReplContext = struct {
             actual += self.buffer.peekContents(buf[actual..length_to_read], actual);
         }
 
-        if (self.spindle.processChunk(buf[0..length_to_read])) |continuing| {
+        if (vm.processChunk(buf[0..length_to_read])) |continuing| {
             if (!continuing) {
                 // the chunk is no longer needed
                 self.buffer.discard(length_to_read);
@@ -125,7 +184,7 @@ pub const ReplContext = struct {
             // this has the useful side-effect of telling the UI thread to render,
             // regardless of whether we have output.
             // when continuing is true, this is important for the prompt to change
-            _ = lu.luaPrint(self.spindle.lvm);
+            _ = lu.luaPrint(l);
         } // null actually also means the chunk is no longer needed,
         // but it _also_ means we're quitting, so there's no point in discarding it
 

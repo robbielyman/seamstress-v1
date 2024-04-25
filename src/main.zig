@@ -20,7 +20,7 @@ pub const VERSION: std.SemanticVersion = .{
     .major = 2,
     .minor = 0,
     .patch = 0,
-    .pre = "prealpha-0",
+    .pre = "prealpha-1",
 };
 
 // allows functions under std.log (like each file's logger) to use our logging function
@@ -51,14 +51,18 @@ pub fn main() void {
     }
     const allocator = gpa.allocator();
 
+    // stack-allocated, baby!
     var seamstress: Seamstress = undefined;
+    // initialize
     seamstress.init(&allocator, &io);
 
+    // set up our special panic
     panic_closure = .{
         .ctx = &seamstress,
         .panic_fn = Seamstress.panicCleanup,
     };
 
+    // gooooo
     seamstress.run();
 }
 

@@ -52,7 +52,6 @@ pub fn init(self: *State, vx: *Vaxis, vm: *Spindle) !void {
     self.output = .{ .text = .{ .map = &self.map } };
     self.stdout_writer = .{ .allocator = vm.allocator, .self = &self.stdout };
     const ev: ReplEvent = .{ .ctx = .{
-        .spindle = vm,
         .buffer = &self.repl_buffer,
         .data = &self.input,
         .discard = ReplEvent.discard,
@@ -99,14 +98,14 @@ const Output = struct {
 
 pub const KeyEvent = struct {
     tui: *tui.Tui,
-    vm: *Spindle,
     key: vaxis.Key,
     node: Events.Node = .{
         .handler = Events.handlerFromClosure(KeyEvent, handle, "node"),
     },
 
     // TODO: completely handle the key event
-    fn handle(self: *KeyEvent) void {
+    fn handle(self: *KeyEvent, l: *Lua) void {
+        const vm = lu.getVM(l);
         defer self.tui.pool.destroy(self);
         if (self.key.matches(vaxis.Key.enter, .{})) {
             const cursor = self.tui.state.input.cursor;
@@ -120,7 +119,7 @@ pub const KeyEvent = struct {
                     logger.err("error adding text: {s}", .{@errorName(err)});
                 };
                 ev.ctx.length_to_read = self.tui.state.repl_buffer.readableLength();
-                ev.ctx.spindle.events.submit(&ev.ctx.node);
+                vm.events.submit(&ev.ctx.node);
             }
         } else if (self.key.matches(vaxis.Key.backspace, .{})) {
             if (!self.tui.state.input.isEmpty())
@@ -186,6 +185,9 @@ const Cleanup = @import("../seamstress.zig").Cleanup;
 const tui = @import("../tui.zig");
 const Vaxis = tui.Vaxis;
 const logger = tui.logger;
+
+const Lua = @import("ziglua").Lua;
+const lu = @import("../lua_util.zig");
 
 const rt = @import("rich_text.zig");
 const RichTextBuffer = @import("rich_text_buffer.zig");

@@ -33,7 +33,6 @@ fn init(m: *Module, vm: *Spindle) Error!void {
         .stdin_buffer = ThreadSafeBuffer(u8).init(vm.allocator),
     };
     const ev: Cli.ReplEvent = .{ .ctx = .{
-        .spindle = vm,
         .buffer = &self.stdin_buffer,
         .length_to_read = 0,
         .discard = Cli.ReplEvent.discard,
@@ -134,7 +133,7 @@ const Cli = struct {
                     };
                     fifo.discard(slice.len);
                 }
-                self.postReplEvent();
+                self.postReplEvent(vm);
             }
         }
     }
@@ -153,7 +152,7 @@ const Cli = struct {
     };
 
     // posts a REPL event for the seamstress vm to respond to
-    fn postReplEvent(self: *Cli) void {
+        fn postReplEvent(self: *Cli, vm: *Spindle) void {
         const ev: *ReplEvent = ev: {
             self.stdin_buffer.mtx.lock();
             defer self.stdin_buffer.mtx.unlock();
@@ -168,7 +167,7 @@ const Cli = struct {
             return;
         };
         ev.ctx.length_to_read = self.stdin_buffer.readableLength();
-        ev.ctx.spindle.events.submit(&ev.ctx.node);
+        vm.events.submit(&ev.ctx.node);
     }
 
     // if anything is in our buffers, print it out and then prompt

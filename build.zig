@@ -4,13 +4,21 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
     const exe = b.addExecutable(.{
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .name = "seamstress",
         .target = target,
         .optimize = optimize,
     });
     b.installArtifact(exe);
     exe.linkLibC();
+
+    const lua_install = b.addInstallDirectory(.{
+        .include_extensions = &.{".lua"},
+        .install_dir = .{ .custom = "share" },
+        .install_subdir = "seamstress/lua",
+        .source_dir = b.path("lua"),
+    });
+    b.getInstallStep().dependOn(&lua_install.step);
 
     try addDependencies(&exe.root_module, b, target, optimize);
 
@@ -23,7 +31,7 @@ pub fn build(b: *std.Build) !void {
 
     const tests_step = b.step("test", "run seamstress tests");
     const tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -60,4 +68,16 @@ fn addDependencies(m: *std.Build.Module, b: *std.Build, target: std.Build.Resolv
         .optimize = optimize,
     });
     m.addImport("ziglo", ziglo.module("ziglo"));
+
+    const ziglink = b.dependency("zig-abl_link", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    m.addImport("link", ziglink.module("zig-abl_link"));
+
+    const rtmidi_z = b.dependency("rtmidi_z", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    m.addImport("rtmidi", rtmidi_z.module("rtmidi_z"));
 }

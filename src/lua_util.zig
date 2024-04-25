@@ -44,6 +44,18 @@ pub fn getSeamstress(l: *Lua) void {
     std.debug.panic("_seamstress corrupted!", .{});
 }
 
+// attempts to get the method specified by name onto the stack
+pub fn getMethod(l: *Lua, field: [:0]const u8, method: [:0]const u8) void {
+    getSeamstress(l);
+    const t = l.getField(-1, field);
+    // FIXME: again, nothing sensible to do other than panic if something goes wrong
+    if (t != .table) std.debug.panic("_seamstress corrupted!", .{});
+    l.remove(-2);
+    const t2 = l.getField(-1, method);
+    if (t2 != .function) std.debug.panic("_seamstress corrupted!", .{});
+    l.remove(-2);
+}
+
 // attempts to get a reference to the Lua VM
 // pub so that it can be used in module code
 pub fn getVM(l: *Lua) *Spindle {

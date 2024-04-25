@@ -1,9 +1,3 @@
-const std = @import("std");
-const Seamstress = @import("seamstress.zig");
-const Spindle = @import("spindle.zig");
-const Error = Seamstress.Error;
-
-const Queue = @import("queue.zig").Queue;
 const Events = @This();
 const logger = std.log.scoped(.events);
 
@@ -23,10 +17,10 @@ err: ?Error = null,
 
 pub const Node = struct {
     next: ?*@This() = null,
-    handler: *const fn (*@This()) void,
+    handler: *const fn (*@This(), l: *Lua) void,
 
-    fn handle(self: *Node) void {
-        self.handler(self);
+    fn handle(self: *Node, l: *Lua) void {
+        self.handler(self, l);
     }
 };
 
@@ -50,10 +44,12 @@ pub fn init(self: *Events) void {
 
 // the main event loop; the main thread blocks here until exiting
 pub fn loop(self: *Events) void {
+    const vm: *Spindle = @fieldParentPtr("events", self);
+    const l = vm.lvm;
     while (!self.quit) {
         // we try to handle all available events at once
         while (self.queue.pop()) |node| {
-            node.handle();
+            node.handle(l);
             if (self.quit) break;
         } else {
             // back off for a bit
@@ -64,13 +60,15 @@ pub fn loop(self: *Events) void {
 
 // drains the event queue
 pub fn processAll(self: *Events) void {
+    const vm: *Spindle = @fieldParentPtr("events", self);
+    const l = vm.lvm;
     while (self.queue.pop()) |node| {
-        node.handle();
+        node.handle(l);
     }
 }
 
 // used by our quit node to quit
-fn quitImpl(self: *Events) void {
+fn quitImpl(self: *Events, _: *Lua) void {
     const spindle: *Spindle = @fieldParentPtr("events", self);
     const seamstress: *Seamstress = @fieldParentPtr("vm", spindle);
     seamstress.deinit();
@@ -78,7 +76,7 @@ fn quitImpl(self: *Events) void {
 }
 
 // used by our panic node to panic
-fn panicImpl(self: *Events) void {
+fn panicImpl(self: *Events, _: *Lua) void {
     const spindle: *Spindle = @fieldParentPtr("events", self);
     const seamstress: *Seamstress = @fieldParentPtr("vm", spindle);
     seamstress.panic(self.err.?);
@@ -87,12 +85,24 @@ fn panicImpl(self: *Events) void {
 
 /// helper function for constructing a node handler from a closure
 /// `Parent` has a field named `node_field_name` of type `Node`
-pub fn handlerFromClosure(comptime Parent: type, comptime closure: fn (*Parent) void, comptime node_field_name: []const u8) fn (*Node) void {
+pub fn handlerFromClosure(
+    comptime Parent: type,
+    comptime closure: fn (*Parent, *Lua) void,
+    comptime node_field_name: []const u8,
+) fn (*Node, *Lua) void {
     const inner = struct {
-        fn handler(node: *Node) void {
+        fn handler(node: *Node, l: *Lua) void {
             const parent: *Parent = @fieldParentPtr(node_field_name, node);
-            @call(.always_inline, closure, .{parent});
+            @call(.always_inline, closure, .{ parent, l });
         }
     };
     return inner.handler;
 }
+
+const std = @import("std");
+const Seamstress = @import("seamstress.zig");
+const Spindle = @import("spindle.zig");
+const Error = Seamstress.Error;
+const Lua = @import("ziglua").Lua;
+
+const Queue = @import("queue.zig").Queue;

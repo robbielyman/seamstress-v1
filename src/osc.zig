@@ -20,21 +20,28 @@ fn init(m: *Module, vm: *Spindle) Error!void {
         .vm = vm,
         .path_pool = StringPool.init(vm.allocator),
         .event_pool = std.heap.MemoryPool(OscEvent).initPreheated(vm.allocator, 256) catch return error.LaunchFailed,
+        .monome = .{
+            .serialosc_address = lo.Address.new("127.0.0.1", "12002") orelse return error.LaunchFailed,
+            .local_address = lo.Message.new() orelse return error.LaunchFailed,
+            .pool = std.heap.MemoryPoolExtra(Monome.Event, .{}).initPreheated(vm.allocator, 128) catch return error.LaunchFailed,
+        },
     };
+    const real_port = self.server.getPort() catch return error.LaunchFailed;
+    self.monome.local_address.add(.{ "127.0.0.1", @as(i32, @intCast(real_port)) }) catch return error.LaunchFailed;
+    self.monome.init();
     var buf: std.BoundedArray(u8, 1024) = .{};
-    std.fmt.format(
-        buf.writer(),
-        "{d}\x00",
-        .{self.server.getPort() catch return error.LaunchFailed},
-    ) catch unreachable;
+    std.fmt.format(buf.writer(), "{d}\x00", .{real_port}) catch unreachable;
     const slice: [:0]const u8 = buf.slice()[0 .. buf.len - 1 :0];
     try lu.setConfig(vm, "local_port", slice);
     logger.info("local port: {s}", .{slice});
     m.self = self;
 
     _ = self.server.addMethod("/seamstress/quit", null, lo.wrap(Osc.setQuit), self);
-    _ = self.server.addMethod(null, null, lo.wrap(defaultHandler), self);
+
     lu.registerSeamstress(vm, "osc_send", oscSend, self);
+    self.monome.registerLua(vm);
+    self.monome.addMethods();
+    self.resetDefaultHandler();
 }
 
 // starts the OSC server thread
@@ -42,12 +49,14 @@ fn launch(m: *const Module, vm: *Spindle) Error!void {
     _ = vm; // autofix
     const self: *Osc = @ptrCast(@alignCast(m.self orelse return error.LaunchFailed));
     self.pid = std.Thread.spawn(.{}, Osc.loop, .{self}) catch return error.LaunchFailed;
+    self.monome.sendList();
 }
 
 // shuts down the OSC server thread
 fn deinit(m: *const Module, vm: *Spindle, cleanup: Cleanup) void {
     const self: *Osc = @ptrCast(@alignCast(m.self orelse return));
     defer if (cleanup == .full) {
+        self.monome.deinit();
         self.server.free();
         self.event_pool.deinit();
         self.path_pool.deinit();
@@ -89,21 +98,22 @@ fn errHandler(errno: i32, msg: ?[*:0]const u8, path: ?[*:0]const u8) void {
 // pub so submodules like monome.zig can access it
 pub const Osc = struct {
     server: *lo.Server,
+    // needed to be able to post events from OSC handlers
     vm: *Spindle,
     pid: ?std.Thread = null,
     path_pool: StringPool,
     event_pool: std.heap.MemoryPool(OscEvent),
     quit: bool = false,
     monome: Monome,
+    default_handler: ?*lo.Method = null,
 
     // the main OSC loop
     fn loop(self: *Osc) void {
-        const server = self.server;
         while (!self.quit) {
             // TODO: theoretically we could allow an infinite timeout, huh
-            const ready = server.wait(1000);
+            const ready = self.server.wait(1000);
             if (ready) {
-                _ = server.receive() catch {
+                _ = self.server.receive() catch {
                     logger.err("OSC receive failed! shutting down OSC...", .{});
                     return;
                 };
@@ -118,15 +128,22 @@ pub const Osc = struct {
         lu.quit(osc.vm);
         return false;
     }
+
+    // a silly hack to make sure that the default handler is always called last
+    pub fn resetDefaultHandler(self: *Osc) void {
+        if (self.default_handler) |handler|
+            _ = self.server.deleteMethod(handler);
+        self.default_handler = self.server.addMethod(null, null, lo.wrap(defaultHandler), self);
+    }
 };
 
 /// sends an OSC message
 // users should use `osc.send` instead.
-// @tparam address table|string either a table of the form {host,port}
+// @tparam table|string address either a table of the form {host,port}
 // where `host` and `port` are both strings,
 // or a string, in which case `host` is taken to be "localhost" and the string is the port
-// @tparam path string an OSC path `/like/this`
-// @tparam args table a list whose data is passed over OSC as arguments
+// @tparam string path an OSC path `/like/this`
+// @tparam table args a list whose data is passed over OSC as arguments
 // @see osc.send
 // @usage osc.send({"localhost", "777"}, "/send/stuff", {"a", 0, 0.5, nil, true})
 // @function osc_send
@@ -139,9 +156,9 @@ pub fn oscSend(l: *Lua) i32 {
     const hostname, const port = address: {
         switch (l.typeOf(1)) {
             // if we have a string, it's the port number; use what localhost should resolve to as our hostname
-                .string => break :address .{ "127.0.0.1", l.toString(1) catch unreachable },
+            .string => break :address .{ "127.0.0.1", l.toString(1) catch unreachable },
             // if we have a number, it's the port number; use what localhost should resolve to as our hostname
-                .number => break :address .{ "127.0.0.1", l.toString(1) catch unreachable },
+            .number => break :address .{ "127.0.0.1", l.toString(1) catch unreachable },
             // if passed a table, it must specify both host and port
             .table => {
                 if (l.rawLen(1) != 2) l.argError(1, "address should be a table in the form {host, port}");
@@ -163,7 +180,7 @@ pub fn oscSend(l: *Lua) i32 {
         }
     };
     // grab the path
-        const path = l.checkString(2);
+    const path = l.checkString(2);
     // create a lo.Address
     const address = lo.Address.new(hostname.ptr, port.ptr) orelse {
         logger.err("osc.send: unable to create address!", .{});
@@ -193,7 +210,7 @@ pub fn oscSend(l: *Lua) i32 {
                         l.pop(1);
                     },
                     .string => {
-                        msg.add(.{l.toString(-1) catch unreachable }) catch |err| break :err err;
+                        msg.add(.{l.toString(-1) catch unreachable}) catch |err| break :err err;
                         l.pop(1);
                     },
                     .number => {
@@ -229,17 +246,20 @@ fn defaultHandler(path: [:0]const u8, _: []const u8, msg: *lo.Message, ctx: ?*an
         lu.panic(osc.vm, error.OutOfMemory);
         return true;
     };
-    // prevents the message from being freed until oscHandler calls free on it
-    msg.incRef();
+    const source = msg.source() orelse return true;
+    const addr = lo.Address.new(source.getHostname().?, source.getPort().?).?;
     const ev: *OscEvent = osc.event_pool.create() catch {
         lu.panic(osc.vm, error.OutOfMemory);
         return true;
     };
     ev.* = .{
         .msg = msg,
+        .addr = addr,
         .path = interned,
         .osc = osc,
     };
+    // prevents the message from being freed until oscHandler calls free on it
+    msg.incRef();
     osc.vm.events.submit(&ev.node);
     return false;
 }
@@ -248,6 +268,7 @@ fn defaultHandler(path: [:0]const u8, _: []const u8, msg: *lo.Message, ctx: ?*an
 const OscEvent = struct {
     path: [:0]const u8,
     msg: *lo.Message,
+    addr: *lo.Address,
     osc: *Osc,
     node: Events.Node = .{
         .handler = Events.handlerFromClosure(OscEvent, oscHandler, "node"),
@@ -256,10 +277,10 @@ const OscEvent = struct {
     // handles OSC events that aren't intercepted by another module
     // this includes custom functions registered from Lua
     // ah, whose registry we can manage entirely in Lua actually lol, nice
-    fn oscHandler(self: *OscEvent) void {
-        const l = self.osc.vm.lvm;
+    fn oscHandler(self: *OscEvent, l: *Lua) void {
         defer {
             l.setTop(0);
+            self.addr.free();
             self.msg.free();
             self.osc.event_pool.destroy(self);
         }
@@ -290,7 +311,7 @@ const OscEvent = struct {
                 const t2 = l.typeOf(-1);
                 switch (t2) {
                     // if it's a function, call it
-                    .function => keep_going = pushArgsAndCall(l, self.msg, self.path),
+                    .function => keep_going = pushArgsAndCall(l, self.msg, self.addr, self.path),
                     .table => {
                         l.len(-1);
                         // if it's a table, how long is it?
@@ -306,7 +327,7 @@ const OscEvent = struct {
                                 l.pop(1);
                                 continue;
                             }
-                            keep_going = pushArgsAndCall(l, self.msg, self.path);
+                            keep_going = pushArgsAndCall(l, self.msg, self.addr, self.path);
                         }
                     },
                     else => {
@@ -325,13 +346,13 @@ const OscEvent = struct {
             l.remove(-2);
             _ = l.getField(-1, "event");
             l.remove(-2);
-            _ = pushArgsAndCall(l, self.msg, self.path);
+            _ = pushArgsAndCall(l, self.msg, self.addr, self.path);
         }
     }
 
     // pushes the contents of `msg` onto the stack and calls the function at the top of the stack
     // the function will receive the args as `path`, `args` (which may be an empty table) and `{from_hostname, from_port}`
-    fn pushArgsAndCall(l: *Lua, msg: *lo.Message, path: [:0]const u8) bool {
+    fn pushArgsAndCall(l: *Lua, msg: *lo.Message, addr: *lo.Address, path: [:0]const u8) bool {
         const top = l.getTop();
         // push path first
         _ = l.pushString(path);
@@ -396,7 +417,6 @@ const OscEvent = struct {
             return true;
         };
         // should never be null
-        const addr = msg.source().?;
         l.createTable(2, 0);
         // get the address
         if (addr.getHostname()) |host| {
@@ -431,7 +451,7 @@ const StringPool = @import("string_pool.zig").StringPool(0);
 const Events = @import("events.zig");
 const lo = @import("ziglo");
 const std = @import("std");
-const logger = std.log.scoped(.osc);
+pub const logger = std.log.scoped(.osc);
 const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
 const lu = @import("lua_util.zig");

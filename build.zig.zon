@@ -4,20 +4,28 @@
     .paths = .{ "build.zig.zon", "build.zig", "src" },
     .dependencies = .{
         .ziglua = .{
-            .url = "https://github.com/natecraddock/ziglua/archive/af8f7780c8763a69507d890873bd6d37f2b47947.tar.gz",
-            .hash = "1220a3fe591e1ae8bf828923f3f2d248eedd99341e35e8d9c04e915dee44bf137a1e",
+            .url = "https://github.com/natecraddock/ziglua/archive/486f51d3acc61d805783f5f07aee34c75ab59a25.tar.gz",
+            .hash = "12208603e0f51fa6ce7201d8e851c5979b6b78887434623ac87a0f2a5a3dd3e75130",
         },
         .libvaxis = .{
-            .url = "https://github.com/rockorager/libvaxis/archive/770f6d1c07281867f94f12a3aa794dac9e47b60c.tar.gz",
-            .hash = "122096a5514d35399cad4d13e51c7dfe5c32c8b69e905d7d6e9f85a5946e256384f0",
+            .url = "https://github.com/rockorager/libvaxis/archive/bb277b8e3797025eb7f7727493d75c2fa676640b.tar.gz",
+            .hash = "12207b8693461df960e781ca115199f6466a3c4747f1e24bdc774da802b770901d54",
         },
         .gap_buffer = .{
             .url = "https://github.com/ryleelyman/GapBuffer.zig/archive/04f349e2bab5fbc8989051288adb1a55a56d09c1.tar.gz",
             .hash = "12209365353b5a3d538e9ae5223534eb497c163518f8ec168d9580bc43c3a7948386",
         },
         .ziglo = .{
-            .url = "https://github.com/ryleelyman/ziglo/archive/2f84cec4f7c32606ffffabbe5bbcbe6fd04d601a.tar.gz",
-            .hash = "12206974a4844962a438911024123319ab5ee857779409c2873ac7245d195fc8768f",
+            .url = "https://github.com/ryleelyman/ziglo/archive/5e73f7ddbadfc0a43d31c03cedbb5c513fbce863.tar.gz",
+            .hash = "1220249f9f7f5e30061079be6a208172ce674ff8787a1c15ef5fed5aee39918e7953",
+        },
+        .@"zig-abl_link" = .{
+            .url = "https://github.com/ryleelyman/zig-abl_link/archive/766b661b5005ddb4460e64eda59589b76d602dec.tar.gz",
+            .hash = "122054b0fb984f3e190c6406f17169de0776484f25b21c88fbf3faf4693a6bdf5f01",
+        },
+        .rtmidi_z = .{
+            .url = "https://github.com/ryleelyman/rtmidi_z/archive/de7c7a5f9dbdbe84f8792769e72a8347e0cc963f.tar.gz",
+            .hash = "12202255aa378adcdaada18c4f2b3a9b700a530fbf1fdb17b6ba8601c938e8c888e9",
         },
     },
 }

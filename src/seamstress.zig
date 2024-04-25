@@ -114,6 +114,7 @@ fn consume(self: *Seamstress, config: Config) Error!void {
     const tui_module = if (config.tui) @import("tui.zig").module() else @import("cli.zig").module();
     try self.modules.append(self.vm.allocator, tui_module);
     try self.modules.append(self.vm.allocator, @import("osc.zig").module());
+    try self.modules.append(self.vm.allocator, @import("metros.zig").module());
 }
 
 // TODO: should this struct be its own file?
