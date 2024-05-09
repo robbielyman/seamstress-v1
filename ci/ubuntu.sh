@@ -1,9 +1,9 @@
 #!/bin/sh
 
 mkdir /opt/zig
-wget https://ziglang.org/builds/zig-linux-x86_64-0.11.0.tar.xz
-tar -xf zig-linux-x86_64-0.11.0.tar.xz -C /tmp
-cp -R /tmp/zig-linux-x86_64-0.11.0/* /opt/zig
+wget https://ziglang.org/builds/zig-linux-x86_64-0.12.0.tar.xz
+tar -xf zig-linux-x86_64-0.12.0.tar.xz -C /tmp
+cp -R /tmp/zig-linux-x86_64-0.12.0/* /opt/zig
 sudo apt-get update
 sudo apt-get install \
      libncurses-dev libasound2-dev libfreetype-dev \
