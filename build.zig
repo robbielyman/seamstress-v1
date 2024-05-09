@@ -31,45 +31,35 @@ pub fn build(b: *std.Build) void {
     b.getInstallStep().dependOn(&install_lua_files.step);
     b.getInstallStep().dependOn(&install_examples.step);
 
-    const zig_sdl = b.dependency("SDL", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    exe.linkLibrary(zig_sdl.artifact("SDL2"));
-    exe.linkLibrary(zig_sdl.artifact("SDL2_ttf"));
-    exe.linkLibrary(zig_sdl.artifact("SDL_image"));
-
+    exe.linkSystemLibrary("SDL2");
+    exe.linkSystemLibrary("SDL2_image");
+    exe.linkSystemLibrary("SDL2_ttf");
     const zig_lua = b.dependency("Lua", .{
         .target = target,
         .optimize = optimize,
     });
-    exe.addModule("ziglua", zig_lua.module("ziglua"));
-    exe.linkLibrary(zig_lua.artifact("lua"));
+    exe.root_module.addImport("ziglua", zig_lua.module("ziglua"));
+    exe.linkSystemLibrary("lua");
 
     const zig_link = b.dependency("link", .{
         .target = target,
         .optimize = optimize,
     });
+    exe.root_module.addImport("abl_link", zig_link.module("zig-abl_link"));
     exe.linkLibrary(zig_link.artifact("abl_link"));
 
-    const zig_readline = b.dependency("readline", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    exe.linkLibrary(zig_readline.artifact("readline"));
-    exe.linkSystemLibrary("ncurses");
-
-    const zig_liblo = b.dependency("liblo", .{
-        .target = target,
-        .optimize = .ReleaseFast,
-    });
-    exe.linkLibrary(zig_liblo.artifact("liblo"));
-
-    const zig_rtmidi = b.dependency("rtmidi", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    exe.linkLibrary(zig_rtmidi.artifact("rtmidi"));
+    switch (target.result.os.tag) {
+        .macos => {
+            exe.addLibraryPath(.{ .cwd_relative = "/opt/homebrew/opt/readline/lib" });
+            exe.addLibraryPath(.{ .cwd_relative = "/usr/local/opt/readline/lib" });
+            exe.addSystemIncludePath(.{ .cwd_relative = "/opt/homebrew/opt/readline/include" });
+            exe.addSystemIncludePath(.{ .cwd_relative = "/usr/local/opt/readline/include" });
+        },
+        else => {},
+    }
+    exe.linkSystemLibrary("readline");
+    exe.linkSystemLibrary("lo");
+    exe.linkSystemLibrary("rtmidi");
 
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
@@ -78,12 +68,4 @@ pub fn build(b: *std.Build) void {
     }
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
-    const unit_tests = b.addTest(.{
-        .root_source_file = .{ .path = "src/main.zig" },
-        .target = target,
-        .optimize = optimize,
-    });
-    const run_unit_tests = b.addRunArtifact(unit_tests);
-    const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_unit_tests.step);
 }

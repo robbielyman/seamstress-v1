@@ -1,30 +1,21 @@
 .{
+    .paths = .{
+        "src",
+        "lua",
+        "lib",
+        "build.zig",
+        "build.zig.zon",
+    },
     .name = "seamstress",
-    .version = "0.11.0",
+    .version = "1.4.5",
     .dependencies = .{
-        .SDL = .{
-            .url = "https://github.com/ryleelyman/SDL-libs/archive/46fd3c5388faa2a81ce0480243f16694a4867868.tar.gz",
-            .hash = "12205f5dc2be05b70f3446c9180a6f0befed06d014ca338d48d02bf7ef7dcc2154de",
-        },
         .Lua = .{
-            .url = "https://github.com/ryleelyman/ziglua/archive/1f8a76825d3102928903918d6f413fc9613b9927.tar.gz",
-            .hash = "1220ba95132772f7e484cca975e7892addf64a596bfffd10159a9d62ae22b91a2d21",
-        },
-        .readline = .{
-            .url = "https://github.com/ryleelyman/readline/archive/03180f6db9fd9a132df160b08aa90d05cd102913.tar.gz",
-            .hash = "12205b1259604e9aab9b8f56c6c0a3810972ad3a35f1dabf06f10d37f7369b0ef0c0",
-        },
-        .liblo = .{
-            .url = "https://github.com/ryleelyman/liblo/archive/76dccb85b1b1d1d947816feead1b9b980b23cafa.tar.gz",
-            .hash = "12205f33901ad56d24ff6026b33ff098633dde2423f63a06b5685429a0690fec0423",
-        },
-        .rtmidi = .{
-            .url = "https://github.com/ryleelyman/rtmidi/archive/39a98aca52e0a25aa705418ab97a770960d7ebe3.tar.gz",
-            .hash = "12206646a51d34a15873cc1847426c0c03aecb4a71a93036098aabfefcd41eac3e9c",
+            .url = "https://github.com/natecraddock/ziglua/archive/486f51d3acc61d805783f5f07aee34c75ab59a25.tar.gz",
+            .hash = "12208603e0f51fa6ce7201d8e851c5979b6b78887434623ac87a0f2a5a3dd3e75130",
         },
         .link = .{
-            .url = "https://github.com/ryleelyman/link/archive/5aa137502ba2e9d86283ba5c83e31680ee924892.tar.gz",
-            .hash = "122034cab45d6e91dec17fd276c6b53af0b1ec89bfad6a0ce817125350a9073a47ae",
+            .url = "https://github.com/ryleelyman/zig-abl_link/archive/f45fd3eb86e15ca3e28208bd05a894ad359d8857.tar.gz",
+            .hash = "1220204f523f548dd9ef1bfebd0fbb14653d627ca16a950b9d950b8963c91399ce8c",
         },
     },
 }

@@ -104,7 +104,7 @@ pub const ScreenEvent = union(enum) {
         alignment: Alignment,
         allocator: std.mem.Allocator,
     },
-    TextSize: struct {
+    text_size: struct {
         words: [:0]const u8,
         allocator: std.mem.Allocator,
     },
@@ -130,6 +130,7 @@ pub const ScreenEvent = union(enum) {
         x: i32,
         y: i32,
     },
+    nuttin: void,
 };
 
 pub fn process() void {
@@ -166,14 +167,20 @@ fn handle(event: ScreenEvent) void {
             if (response) |r|
                 logger.err("clobbering screen response of type {s}!", .{@tagName(r)});
             const texture: ?usize = inner.new_texture(e.width, e.height) catch null;
-            if (texture) |t| response = .{ .Texture = t } else response = null;
+            if (texture) |t| {
+                const resp: ScreenResponse = .{ .Texture = t };
+                response = resp;
+            } else response = null;
             cond.signal();
         },
         .NewTextureFromFile => |e| {
             if (response) |r|
                 logger.err("clobbering screen response of type {s}!", .{@tagName(r)});
             const texture: ?usize = inner.new_texture_from_file(e.filename) catch null;
-            if (texture) |t| response = .{ .Texture = t } else response = null;
+            if (texture) |t| {
+                const resp: ScreenResponse = .{ .Texture = t };
+                response = resp;
+            } else response = null;
             cond.signal();
         },
         .Pixel => |e| inner.pixel(e.x, e.y),
@@ -188,13 +195,14 @@ fn handle(event: ScreenEvent) void {
         .SetSize => |e| inner.set_size(e.w, e.h, e.z),
         .SetPosition => |e| inner.set_position(e.x, e.y),
         .Text => |e| inner.text(e.words, e.alignment, e.allocator),
-        .TextSize => |e| {
-            if (response) |r|
+        .text_size => |e| {
+            if (response) |r| {
                 logger.err("clobbering screen response of type {s}!", .{@tagName(r)});
-            const size = inner.get_text_size(e.words);
-            response = .{
-                .TextSize = size,
+            }
+            const res: ScreenResponse = .{
+                .TextSize = inner.getTextSize(e.words),
             };
+            response = res;
             cond.signal();
         },
         .TextureSize => |e| {
@@ -206,9 +214,13 @@ fn handle(event: ScreenEvent) void {
                     .h = inner.textures.items[e.texture].height,
                 };
             } else null;
-            if (size) |s| response = .{ .TextureSize = s } else response = null;
+            if (size) |s| {
+                const resp: ScreenResponse = .{ .TextureSize = s };
+                response = resp;
+            } else response = null;
             cond.signal();
         },
+        else => {},
     }
     free(event);
 }
@@ -220,7 +232,7 @@ fn free(event: ScreenEvent) void {
             e.allocator.free(e.vertices);
             if (e.indices) |i| e.allocator.free(i);
         },
-        .TextSize => |e| e.allocator.free(e.words),
+        .text_size => |e| e.allocator.free(e.words),
         else => {},
     }
 }

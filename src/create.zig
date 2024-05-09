@@ -32,7 +32,7 @@ fn script() !void {
     try stdout.print("welcome to SEAMSTRESS\n", .{});
     try stdout.print("creating a script in ~/seamstress; let's name it\n", .{});
     try bw.flush();
-    const c_line = c.readline("[default 'script'] > ");
+    const c_line = std.mem.span(c.readline("[default 'script'] > "));
     var name = std.fmt.allocPrint(
         allocator,
         "{s}",
@@ -43,7 +43,7 @@ fn script() !void {
         name = allocator.dupe(u8, "script") catch @panic("OOM!");
     }
     to_be_freed = name;
-    c.free(c_line);
+    std.heap.raw_c_allocator.free(c_line);
     const suffix = ".lua";
     if (std.mem.endsWith(u8, name, suffix)) {
         name = name[0 .. name.len - suffix.len];
@@ -81,8 +81,7 @@ fn script() !void {
     if (try_again) {
         try stdout.print("a file with that name already exists! overwrite it?\n", .{});
         try bw.flush();
-        const c_confirm = c.readline("['yes' to overwrite] > ");
-        const c_slice = std.mem.span(c_confirm);
+        const c_slice = std.mem.span(c.readline("['yes' to overwrite] > "));
         if (!std.mem.eql(u8, c_slice, "yes")) {
             try stdout.print("did not receive 'yes': goodbye!\n", .{});
             try bw.flush();
@@ -128,7 +127,7 @@ fn example() !void {
     defer allocator.free(prefix);
     var dir = try std.fs.openDirAbsolute(prefix, .{});
     defer dir.close();
-    var iterable = try dir.openIterableDir("examples", .{ .access_sub_paths = false });
+    var iterable = try dir.openDir("examples", .{ .access_sub_paths = false });
     defer iterable.close();
     var walker = try iterable.walk(allocator);
     defer walker.deinit();
@@ -163,7 +162,7 @@ fn example() !void {
             try stdout.print("a file with that name already exists! overwrite it?\n", .{});
             try bw.flush();
             const c_confirm = c.readline("['yes' to overwrite'] > ");
-            const c_slice = std.mem.sliceTo(c_confirm, 0);
+            const c_slice = std.mem.span(c_confirm);
             if (!std.mem.eql(u8, c_slice, "yes")) {
                 try stdout.print("did not receive 'yes': goodbye!\n", .{});
                 try bw.flush();
@@ -208,13 +207,13 @@ fn project(is_norns: bool) !void {
     try stdout.print("welcome to SEAMSTRESS\n", .{});
     try stdout.print("creating a new project; let's choose a name for the folder to put it in\n", .{});
     try bw.flush();
-    const c_line = c.readline("[default 'my-project'] > ");
+    const c_line = std.mem.span(c.readline("[default 'my-project'] > "));
     var name = std.fmt.allocPrint(
         allocator,
         "{s}",
         .{c_line},
     ) catch @panic("OOM!");
-    c.free(c_line);
+    std.heap.raw_c_allocator.free(c_line);
     if (name.len == 0) {
         allocator.free(name);
         name = allocator.dupe(u8, "my-project") catch @panic("OOM!");

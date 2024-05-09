@@ -135,7 +135,7 @@ pub fn define_geometry(texture_id: ?usize, vertices: []const screen.Vertex, indi
 pub fn new_texture(width: u16, height: u16) !usize {
     var sfba = std.heap.stackFallback(8 * 1024, std.heap.raw_c_allocator);
     const allocator = sfba.get();
-    const n: usize = @as(usize, width * windows[current].zoom) * @as(usize, height * windows[current].zoom) * 4;
+    const n: usize = @as(usize, width * windows[current].zoom) * @as(usize, height * windows[current].zoom * 4);
     const pixels = allocator.alloc(u8, n) catch @panic("OOM!");
     defer allocator.free(pixels);
     sdl_call(c.SDL_RenderReadPixels(
@@ -160,10 +160,10 @@ pub fn new_texture(width: u16, height: u16) !usize {
         BITMASK.b,
         BITMASK.a,
     ) orelse {
-        logger.err("{s}: error: {s}", .{ "screen.new_texture()", c.SDL_GetError() });
-        return error.Fail;
+        logger.err("{s} error: {s}", .{ "screen.new_texture()", std.mem.span(c.SDL_GetError()) });
+        return error.Failed;
     };
-    _ = c.SDL_memcpy(surf.pixels, pixels.ptr, @intCast(surf.h * surf.pitch));
+    _ = c.SDL_memcpy(surf.*.pixels.?, pixels.ptr, @intCast(surf.*.h * surf.*.pitch));
     const ret = textures.items.len;
     const texture = textures.addOne() catch @panic("OOM!");
     texture.* = .{
@@ -176,8 +176,9 @@ pub fn new_texture(width: u16, height: u16) !usize {
 }
 
 pub fn new_texture_from_file(filename: [:0]const u8) !usize {
-    const surf: *c.SDL_Surface = c.IMG_Load(filename.ptr) orelse {
-        logger.err("{s}: error: {s}", .{ "screen.new_texture_from_file()", c.IMG_GetError() });
+    const maybe_surf: ?*c.SDL_Surface = c.IMG_Load(filename.ptr);
+    const surf = maybe_surf orelse {
+        logger.err("{s}: error: {s}", .{ "screen.new_texture_from_file()", std.mem.span(c.IMG_GetError()) });
         return error.Fail;
     };
     const width: i32 = surf.w;
@@ -589,7 +590,7 @@ pub fn set_position(x: i32, y: i32) void {
     c.SDL_SetWindowPosition(windows[current].window, x, y);
 }
 
-pub fn get_text_size(str: [:0]const u8) screen.Size {
+pub fn getTextSize(str: [:0]const u8) screen.Size {
     var w: i32 = undefined;
     var h: i32 = undefined;
     const err = c.TTF_SizeUTF8(font, str, &w, &h);
@@ -610,17 +611,17 @@ pub fn init(width: u16, height: u16, resources: []const u8) !void {
     var sfba = std.heap.stackFallback(1024, std.heap.raw_c_allocator);
     const allocator = sfba.get();
     if (c.SDL_Init(c.SDL_INIT_VIDEO) < 0) {
-        logger.err("screen.init(): {s}", .{c.SDL_GetError()});
+        logger.err("screen.init(): {s}", .{std.mem.span(c.SDL_GetError())});
         return error.Fail;
     }
 
     if (c.TTF_Init() < 0) {
-        logger.err("screen.init(): {s}", .{c.TTF_GetError()});
+        logger.err("screen.init(): {s}", .{std.mem.span(c.TTF_GetError())});
         return error.Fail;
     }
 
     if (c.IMG_Init(c.IMG_INIT_JPG | c.IMG_INIT_PNG) == 0) {
-        logger.err("screen.init(): {s}", .{c.IMG_GetError()});
+        logger.err("screen.init(): {s}", .{std.mem.span(c.IMG_GetError())});
         return error.Fail;
     }
 
@@ -628,7 +629,7 @@ pub fn init(width: u16, height: u16, resources: []const u8) !void {
     defer allocator.free(filename);
     const f = c.TTF_OpenFont(filename, 8);
     font = f orelse {
-        logger.err("screen.init(): {s}", .{c.TTF_GetError()});
+        logger.err("screen.init(): {s}", .{std.mem.span(c.TTF_GetError())});
         return error.Fail;
     };
 
@@ -643,12 +644,12 @@ pub fn init(width: u16, height: u16, resources: []const u8) !void {
             c.SDL_WINDOW_SHOWN | c.SDL_WINDOW_RESIZABLE,
         );
         const window = w orelse {
-            logger.err("screen.init(): {s}", .{c.SDL_GetError()});
+            logger.err("screen.init(): {s}", .{std.mem.span(c.SDL_GetError())});
             return error.Fail;
         };
         const r = c.SDL_CreateRenderer(window, 0, 0);
         const render = r orelse {
-            logger.err("screen.init(): {s}", .{c.SDL_GetError()});
+            logger.err("screen.init(): {s}", .{std.mem.span(c.SDL_GetError())});
             return error.Fail;
         };
         c.SDL_SetWindowMinimumSize(window, width, height);
@@ -797,7 +798,7 @@ pub fn deinit() void {
 
 fn sdl_call(err: c_int, name: []const u8) void {
     if (err < 0) {
-        logger.err("{s}: error: {s}", .{ name, c.SDL_GetError() });
+        logger.err("{s}: error: {s}", .{ name, std.mem.span(c.SDL_GetError()) });
     }
 }
 

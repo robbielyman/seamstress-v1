@@ -148,7 +148,7 @@ fn print_examples(location: []const u8) !void {
     defer allocator.free(prefix);
     var dir = try std.fs.openDirAbsolute(prefix, .{});
     defer dir.close();
-    var iterable = try dir.openIterableDir("examples", .{ .access_sub_paths = false });
+    var iterable = try dir.openDir("examples", .{ .access_sub_paths = false });
     defer iterable.close();
     var walker = try iterable.walk(allocator);
     defer walker.deinit();

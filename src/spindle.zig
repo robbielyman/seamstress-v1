@@ -15,7 +15,7 @@ const input = @import("input.zig");
 const c = input.c;
 
 const Lua = ziglua.Lua;
-var lvm: Lua = undefined;
+var lvm: *Lua = undefined;
 const logger = std.log.scoped(.spindle);
 var stdout = std.io.getStdOut().writer();
 var timer: std.time.Timer = undefined;
@@ -26,7 +26,7 @@ pub fn init(prefix: []const u8, config: []const u8, time: std.time.Timer, versio
     children = std.ArrayList(std.process.Child).init(interpreter_alloc);
     timer = time;
     logger.info("starting lua vm", .{});
-    lvm = try Lua.init(std.heap.raw_c_allocator);
+    lvm = try Lua.init(&std.heap.raw_c_allocator);
 
     lvm.openLibs();
 
@@ -166,7 +166,7 @@ pub fn deinit() void {
     _ = lvm.getGlobal("_seamstress") catch unreachable;
     _ = lvm.getField(-1, "cleanup");
     lvm.remove(-2);
-    docall(&lvm, 0, 0) catch unreachable;
+    docall(lvm, 0, 0) catch unreachable;
     for (children.items) |*child| {
         _ = child.kill() catch unreachable;
     }
@@ -186,12 +186,12 @@ pub fn startup(script: []const u8, buffer: []u8) !?[:0]const u8 {
     lvm.insert(base);
     lvm.protectedCall(1, 1, base) catch |err| {
         lvm.remove(base);
-        _ = lua_print(&lvm);
+        _ = lua_print(lvm);
         return err;
     };
     lvm.remove(base);
     var fba = std.heap.FixedBufferAllocator.init(buffer);
-    const ret = lvm.toBytes(-1) catch null;
+    const ret = lvm.toString(-1) catch null;
     if (ret) |r| return try fba.allocator().dupeZ(u8, r) else return null;
 }
 
@@ -213,7 +213,7 @@ var children: std.ArrayList(std.process.Child) = undefined;
 fn child_process(l: *Lua) i32 {
     const num_args = l.getTop();
     if (num_args < 1) return 0;
-    const command = l.checkBytes(1);
+    const command = l.checkString(1);
     if (num_args < 2) {
         var child = std.process.Child.init(&.{command}, std.heap.raw_c_allocator);
         child.spawn() catch |err| {
@@ -229,7 +229,7 @@ fn child_process(l: *Lua) i32 {
     child_args[0] = command;
     for (1..len + 1) |i| {
         _ = l.rawGetIndex(2, @intCast(i));
-        child_args[i] = l.toBytes(-1) catch l.raiseErrorStr("child_process argument not convertible to a string!", .{});
+        child_args[i] = l.toString(-1) catch l.raiseErrorStr("child_process argument not convertible to a string!", .{});
     }
     var child = std.process.Child.init(child_args, std.heap.raw_c_allocator);
     child.spawn() catch |err| {
@@ -248,8 +248,8 @@ fn child_process(l: *Lua) i32 {
 fn osc_register(l: *Lua) i32 {
     const num_args = l.getTop();
     if (num_args < 1) return 0;
-    const path = l.checkBytes(1);
-    const types: ?[:0]const u8 = if (num_args < 2) null else l.checkBytes(2);
+    const path = l.checkString(1);
+    const types: ?[:0]const u8 = if (num_args < 2) null else l.checkString(2);
     const nr = osc.add_method(path, types);
     l.pushInteger(@intCast(nr));
     return 1;
@@ -264,8 +264,8 @@ fn osc_delete(l: *Lua) i32 {
     const num_args = l.getTop();
     defer l.setTop(0);
     if (num_args < 1) return 0;
-    const path = l.checkBytes(1);
-    const types: ?[:0]const u8 = if (num_args < 2) null else l.checkBytes(2);
+    const path = l.checkString(1);
+    const types: ?[:0]const u8 = if (num_args < 2) null else l.checkString(2);
     osc.delete_method(path, types);
     return 0;
 }
@@ -292,7 +292,7 @@ fn osc_send(l: *Lua) i32 {
     l.pushNumber(1);
     _ = l.getTable(1);
     if (l.isString(-1)) {
-        host = l.toBytes(-1) catch unreachable;
+        host = l.toString(-1) catch unreachable;
     } else {
         l.argError(1, "address should be a table in the form {host, port}");
     }
@@ -301,14 +301,14 @@ fn osc_send(l: *Lua) i32 {
     l.pushNumber(2);
     _ = l.getTable(1);
     if (l.isString(-1)) {
-        port = l.toBytes(-1) catch unreachable;
+        port = l.toString(-1) catch unreachable;
     } else {
         l.argError(1, "address should be a table in the form {host, port}");
     }
     l.pop(1);
 
     l.checkType(2, ziglua.LuaType.string);
-    path = l.toBytes(2) catch unreachable;
+    path = l.toString(2) catch unreachable;
 
     var sfb = std.heap.stackFallback(8 * 1024, std.heap.raw_c_allocator);
     const allocator = sfb.get();
@@ -337,7 +337,7 @@ fn osc_send(l: *Lua) i32 {
                 }
             },
             .string => blk: {
-                const str = allocator.dupeZ(u8, l.toBytes(-1) catch unreachable) catch @panic("OOM!");
+                const str = allocator.dupeZ(u8, l.toString(-1) catch unreachable) catch @panic("OOM!");
                 break :blk .{ .Lo_String = str };
             },
             else => {
@@ -743,7 +743,7 @@ fn screen_rect_fill(l: *Lua) i32 {
 // @function screen_text
 fn screen_text(l: *Lua) i32 {
     check_num_args(l, 1);
-    const words = l.toBytes(1) catch unreachable;
+    const words = l.toString(1) catch unreachable;
     screen.post(.{
         .Text = .{
             .alignment = .Left,
@@ -762,7 +762,7 @@ fn screen_text(l: *Lua) i32 {
 // @function screen_text_center
 fn screen_text_center(l: *Lua) i32 {
     check_num_args(l, 1);
-    const words = l.toBytes(1) catch unreachable;
+    const words = l.toString(1) catch unreachable;
     screen.post(.{
         .Text = .{
             .alignment = .Center,
@@ -781,7 +781,7 @@ fn screen_text_center(l: *Lua) i32 {
 // @function screen_text_right
 fn screen_text_right(l: *Lua) i32 {
     check_num_args(l, 1);
-    const words = l.toBytes(1) catch unreachable;
+    const words = l.toString(1) catch unreachable;
     screen.post(.{
         .Text = .{
             .alignment = .Right,
@@ -970,7 +970,7 @@ fn screen_new_texture_from_file(l: *Lua) i32 {
     screen.post(.{
         .NewTextureFromFile = .{
             .allocator = allocator,
-            .filename = allocator.dupeZ(u8, std.mem.span(filename)) catch @panic("OOM!"),
+            .filename = allocator.dupeZ(u8, filename) catch @panic("OOM!"),
         },
     });
     screen.lock.lock();
@@ -1055,7 +1055,7 @@ fn screen_render_texture_extended(l: *Lua) i32 {
     const y = l.checkNumber(3) - 1;
     const zoom = l.checkNumber(4);
     const theta = l.checkNumber(5);
-    const deg = std.math.radiansToDegrees(f64, theta);
+    const deg = std.math.radiansToDegrees(theta);
     const flip_h = l.toBoolean(6);
     const flip_v = l.toBoolean(7);
     screen.post(.{
@@ -1260,10 +1260,10 @@ fn screen_show(l: *Lua) i32 {
 // @function screen_get_text_size
 fn screen_get_text_size(l: *Lua) i32 {
     check_num_args(l, 1);
-    const str = l.toBytes(1) catch unreachable;
+    const str = l.toString(1) catch unreachable;
     const allocator = std.heap.c_allocator;
     const dup = allocator.dupeZ(u8, str) catch @panic("OOM!");
-    screen.post(.{ .TextSize = .{
+    screen.post(.{ .text_size = .{
         .words = dup,
         .allocator = allocator,
     } });
@@ -1617,7 +1617,7 @@ inline fn push_lua_func(field: [:0]const u8, func: [:0]const u8) !void {
 }
 
 pub fn exec_code_line(line: [:0]const u8) !void {
-    try handle_line(&lvm, line);
+    try handle_line(lvm, line);
 }
 
 pub fn osc_method(index: usize, msg: []const osc.Lo_Arg) !void {
@@ -1632,7 +1632,7 @@ pub fn osc_method(index: usize, msg: []const osc.Lo_Arg) !void {
                 _ = lvm.pushString(a);
             },
             .Lo_Blob => |a| {
-                _ = lvm.pushBytes(a);
+                _ = lvm.pushString(a);
             },
             .Lo_Int64 => |a| lvm.pushInteger(a),
             .Lo_Double => |a| lvm.pushNumber(a),
@@ -1640,7 +1640,7 @@ pub fn osc_method(index: usize, msg: []const osc.Lo_Arg) !void {
                 _ = lvm.pushString(a);
             },
             .Lo_Midi => |a| {
-                _ = lvm.pushBytes(&a);
+                _ = lvm.pushString(&a);
             },
             .Lo_True => lvm.pushBoolean(true),
             .Lo_False => lvm.pushBoolean(false),
@@ -1648,7 +1648,7 @@ pub fn osc_method(index: usize, msg: []const osc.Lo_Arg) !void {
             .Lo_Infinitum => lvm.pushNumber(std.math.inf(f64)),
         }
     }
-    try docall(&lvm, @intCast(msg.len + 1), 0);
+    try docall(lvm, @intCast(msg.len + 1), 0);
 }
 
 pub fn osc_event(
@@ -1672,14 +1672,14 @@ pub fn osc_event(
                 _ = lvm.pushString(a);
             },
             .Lo_Blob => |a| {
-                _ = lvm.pushBytes(a);
+                _ = lvm.pushString(a);
             },
             .Lo_Int64 => |a| lvm.pushInteger(a),
             .Lo_Double => |a| lvm.pushNumber(a),
             .Lo_Symbol => |a| {
                 _ = lvm.pushString(a);
             },
-            .Lo_Midi => |a| _ = lvm.pushBytes(&a),
+            .Lo_Midi => |a| _ = lvm.pushString(&a),
             .Lo_True => |a| {
                 _ = a;
                 lvm.pushBoolean(true);
@@ -1709,7 +1709,7 @@ pub fn osc_event(
     defer allocator.free(port_copy);
     _ = lvm.pushString(port_copy);
     lvm.rawSetIndex(-2, 2);
-    try docall(&lvm, 3, 0);
+    try docall(lvm, 3, 0);
 }
 
 pub fn monome_add(dev: *monome.Monome) !void {
@@ -1728,13 +1728,13 @@ pub fn monome_add(dev: *monome.Monome) !void {
     _ = lvm.pushString(port_copy);
     _ = lvm.pushString(name);
     lvm.pushLightUserdata(dev);
-    try docall(&lvm, 4, 0);
+    try docall(lvm, 4, 0);
 }
 
 pub fn monome_remove(id: usize) !void {
     try push_lua_func("monome", "remove");
     lvm.pushInteger(@intCast(id + 1));
-    try docall(&lvm, 1, 0);
+    try docall(lvm, 1, 0);
 }
 
 pub fn grid_key(id: usize, x: i32, y: i32, state: i32) !void {
@@ -1743,7 +1743,7 @@ pub fn grid_key(id: usize, x: i32, y: i32, state: i32) !void {
     lvm.pushInteger(x + 1);
     lvm.pushInteger(y + 1);
     lvm.pushInteger(state);
-    try docall(&lvm, 4, 0);
+    try docall(lvm, 4, 0);
 }
 
 pub fn grid_tilt(id: usize, sensor: i32, x: i32, y: i32, z: i32) !void {
@@ -1753,7 +1753,7 @@ pub fn grid_tilt(id: usize, sensor: i32, x: i32, y: i32, z: i32) !void {
     lvm.pushInteger(x + 1);
     lvm.pushInteger(y + 1);
     lvm.pushInteger(z + 1);
-    try docall(&lvm, 5, 0);
+    try docall(lvm, 5, 0);
 }
 
 pub fn arc_delta(id: usize, ring: i32, delta: i32) !void {
@@ -1761,7 +1761,7 @@ pub fn arc_delta(id: usize, ring: i32, delta: i32) !void {
     lvm.pushInteger(@intCast(id + 1));
     lvm.pushInteger(ring + 1);
     lvm.pushInteger(delta);
-    try docall(&lvm, 3, 0);
+    try docall(lvm, 3, 0);
 }
 
 pub fn arc_key(id: usize, ring: i32, state: i32) !void {
@@ -1769,7 +1769,7 @@ pub fn arc_key(id: usize, ring: i32, state: i32) !void {
     lvm.pushInteger(@intCast(id + 1));
     lvm.pushInteger(ring + 1);
     lvm.pushInteger(state);
-    try docall(&lvm, 3, 0);
+    try docall(lvm, 3, 0);
 }
 
 pub fn screen_key(sym: i32, mod: u16, repeat: bool, state: bool, window: usize) !void {
@@ -1779,7 +1779,7 @@ pub fn screen_key(sym: i32, mod: u16, repeat: bool, state: bool, window: usize) 
     lvm.pushBoolean(repeat);
     lvm.pushInteger(if (state) 1 else 0);
     lvm.pushInteger(@intCast(window));
-    try docall(&lvm, 5, 0);
+    try docall(lvm, 5, 0);
 }
 
 pub fn screen_mouse(x: f64, y: f64, window: usize) !void {
@@ -1787,7 +1787,7 @@ pub fn screen_mouse(x: f64, y: f64, window: usize) !void {
     lvm.pushNumber(x + 1);
     lvm.pushNumber(y + 1);
     lvm.pushInteger(@intCast(window));
-    try docall(&lvm, 3, 0);
+    try docall(lvm, 3, 0);
 }
 
 pub fn screen_wheel(x: f64, y: f64, window: usize) !void {
@@ -1795,7 +1795,7 @@ pub fn screen_wheel(x: f64, y: f64, window: usize) !void {
     lvm.pushNumber(x);
     lvm.pushNumber(y);
     lvm.pushInteger(@intCast(window));
-    try docall(&lvm, 3, 0);
+    try docall(lvm, 3, 0);
 }
 
 pub fn screen_click(x: f64, y: f64, state: bool, button: u8, window: usize) !void {
@@ -1805,7 +1805,7 @@ pub fn screen_click(x: f64, y: f64, state: bool, button: u8, window: usize) !voi
     lvm.pushInteger(if (state) 1 else 0);
     lvm.pushInteger(button);
     lvm.pushInteger(@intCast(window));
-    try docall(&lvm, 5, 0);
+    try docall(lvm, 5, 0);
 }
 
 pub fn screen_resized(w: i32, h: i32, window: usize) !void {
@@ -1813,20 +1813,20 @@ pub fn screen_resized(w: i32, h: i32, window: usize) !void {
     lvm.pushInteger(w);
     lvm.pushInteger(h);
     lvm.pushInteger(@intCast(window));
-    try docall(&lvm, 3, 0);
+    try docall(lvm, 3, 0);
 }
 
 pub fn redraw() !void {
     const t = lvm.getGlobal("redraw") catch return;
     if (t != .function) return;
-    try docall(&lvm, 0, 0);
+    try docall(lvm, 0, 0);
 }
 
 pub fn metro_event(id: u8, stage: i64) !void {
     try push_lua_func("metro", "event");
     lvm.pushInteger(id + 1);
     lvm.pushInteger(stage);
-    try docall(&lvm, 2, 0);
+    try docall(lvm, 2, 0);
 }
 
 pub fn midi_add(dev: *midi.Device) !void {
@@ -1835,13 +1835,13 @@ pub fn midi_add(dev: *midi.Device) !void {
     _ = lvm.pushString(name);
     lvm.pushInteger(dev.id + 1);
     lvm.pushLightUserdata(dev);
-    try docall(&lvm, 3, 0);
+    try docall(lvm, 3, 0);
 }
 
 pub fn midi_remove(id: u32) !void {
     try push_lua_func("midi", "remove");
     lvm.pushInteger(id + 1);
-    try docall(&lvm, 1, 0);
+    try docall(lvm, 1, 0);
 }
 
 pub fn midi_event(id: u32, bytes: []const u8) !void {
@@ -1853,13 +1853,13 @@ pub fn midi_event(id: u32, bytes: []const u8) !void {
         lvm.pushInteger(bytes[i]);
         lvm.rawSetIndex(-2, @intCast(i + 1));
     }
-    try docall(&lvm, 2, 0);
+    try docall(lvm, 2, 0);
 }
 
 pub fn resume_clock(idx: u8) !void {
     try push_lua_func("clock", "resume");
     lvm.pushInteger(idx + 1);
-    try docall(&lvm, 1, 0);
+    try docall(lvm, 1, 0);
 }
 
 pub fn clock_transport(ev_type: clock.Transport) !void {
@@ -1868,7 +1868,7 @@ pub fn clock_transport(ev_type: clock.Transport) !void {
         clock.Transport.Stop => try push_lua_func("transport", "stop"),
         clock.Transport.Reset => try push_lua_func("transport", "reset"),
     }
-    try docall(&lvm, 0, 0);
+    try docall(lvm, 0, 0);
 }
 
 // -------------------------------------------------------
@@ -1895,7 +1895,7 @@ fn lua_print(l: *Lua) i32 {
 }
 
 fn run_code(code: []const u8) !void {
-    try dostring(&lvm, code, "s_run_code");
+    try dostring(lvm, code, "s_run_code");
 }
 
 fn dostring(l: *Lua, str: []const u8, name: [:0]const u8) !void {
@@ -1914,7 +1914,7 @@ fn message_handler(l: *Lua) i32 {
     const t = l.typeOf(1);
     switch (t) {
         .string => {
-            const msg = l.toBytes(1) catch unreachable;
+            const msg = l.toString(1) catch unreachable;
             l.pop(1);
             l.traceback(l, msg, 1);
         },
@@ -2001,14 +2001,14 @@ fn handle_line(l: *Lua, line: [:0]const u8) !void {
 }
 
 fn statement(l: *Lua) !bool {
-    const line = try l.toBytes(1);
+    const line = try l.toString(1);
     if (save_buf.items.len > 0) {
         try save_buf.append('\n');
     }
     try save_buf.appendSlice(line);
     l.loadBuffer(save_buf.items, "=stdin", ziglua.Mode.text) catch |err| {
         if (err != error.Syntax) return err;
-        const msg = try l.toBytes(-1);
+        const msg = try l.toString(-1);
         const eofmark = "<eof>";
         if (std.mem.endsWith(u8, msg, eofmark)) {
             l.pop(1);

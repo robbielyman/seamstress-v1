@@ -1,9 +1,7 @@
 const std = @import("std");
 const events = @import("events.zig");
 const pthread = @import("pthread.zig");
-const c = @cImport({
-    @cInclude("abl_link.h");
-});
+const c = @import("abl_link").c;
 
 var buf: [8 * 1024]u8 = undefined;
 var allocator: std.mem.Allocator = undefined;
@@ -441,8 +439,8 @@ pub fn set_source(new: Source) !void {
 }
 
 fn start_stop_callback(is_playing: bool, context: ?*anyopaque) callconv(.C) void {
-    var ctx = context orelse return;
-    var self: *Fabric = @ptrCast(@alignCast(ctx));
+    const ctx = context orelse return;
+    const self: *Fabric = @ptrCast(@alignCast(ctx));
     if (self.source == .Link) {
         c.abl_link_capture_app_session_state(fabric.link, fabric.state);
         c.abl_link_set_is_playing_and_request_beat_at_time(
@@ -460,8 +458,8 @@ fn start_stop_callback(is_playing: bool, context: ?*anyopaque) callconv(.C) void
 }
 
 fn tempo_callback(tempo: f64, context: ?*anyopaque) callconv(.C) void {
-    var ctx = context orelse return;
-    var self: *Fabric = @ptrCast(@alignCast(ctx));
+    const ctx = context orelse return;
+    const self: *Fabric = @ptrCast(@alignCast(ctx));
     if (self.source == .Link) {
         fabric.tempo = tempo;
     }

@@ -4,7 +4,7 @@ const events = @import("events.zig");
 const logger = std.log.scoped(.socket);
 var buf: [16 * 1024]u8 = undefined;
 var allocator: std.mem.Allocator = undefined;
-var listener: std.net.StreamServer = undefined;
+var listener: std.net.Server = undefined;
 var pid: std.Thread = undefined;
 var quit = false;
 
@@ -13,8 +13,7 @@ pub fn init(port: u16) !void {
     var fba = std.heap.FixedBufferAllocator.init(&buf);
     allocator = fba.allocator();
     const addr = try std.net.Address.resolveIp("127.0.0.1", port);
-    listener = std.net.StreamServer.init(.{});
-    try listener.listen(addr);
+    listener = try addr.listen(.{});
     pid = try std.Thread.spawn(.{}, loop, .{});
 }
 
@@ -54,20 +53,17 @@ fn receive(stream: *std.net.Stream) ![:0]const u8 {
 pub fn loop() !void {
     pid.setName("socket_thread") catch {};
     while (!quit) {
-        var fds: [1]std.os.pollfd = .{
+        var fds: [1]std.posix.pollfd = .{
             .{
-                .fd = listener.sockfd.?,
-                .events = std.os.POLL.IN,
+                .fd = listener.stream.handle,
+                .events = std.posix.POLL.IN,
                 .revents = 0,
             },
         };
-        const ready = try std.os.poll(&fds, 1000);
+        const ready = try std.posix.poll(&fds, 1000);
         if (ready == 0) continue;
-        const connection = listener.accept() catch |err| {
-            logger.err("connection error: {}", .{err});
-            continue;
-        };
-        logger.info("new connection: {}", .{connection.address.in.getPort()});
+        const connection = try listener.accept();
+        logger.info("new connection: {}", .{connection.address.getPort()});
         defer connection.stream.close();
         var stream = connection.stream;
         const line = receive(&stream) catch |err| {

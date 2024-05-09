@@ -1,11 +1,6 @@
 const std = @import("std");
 const events = @import("events.zig");
-pub const c = @cImport({
-    @cInclude("stdlib.h");
-    @cInclude("stdio.h");
-    @cInclude("readline/readline.h");
-    @cInclude("readline/history.h");
-});
+pub const c = @import("readline.zig");
 
 var quit = false;
 pub var readline = true;
@@ -35,11 +30,11 @@ pub fn init() !void {
 
 pub fn deinit() void {
     quit = true;
-    const newstdin = std.os.dup(std.io.getStdIn().handle) catch unreachable;
+    const newstdin = std.posix.dup(std.io.getStdIn().handle) catch unreachable;
     std.io.getStdIn().close();
     pid.detach();
     if (readline) write_history();
-    std.os.dup2(newstdin, 0) catch unreachable;
+    std.posix.dup2(newstdin, 0) catch unreachable;
 }
 
 fn write_history() void {
@@ -79,10 +74,10 @@ fn input_run() !void {
 
 fn inner() !void {
     var fba = std.heap.FixedBufferAllocator.init(&buffer);
-    var allocator = fba.allocator();
+    const allocator = fba.allocator();
     pid.setName("input_thread") catch {};
     while (!quit) {
-        var c_line = c.readline("> ") orelse {
+        const c_line = c.readline("> ") orelse {
             quit = true;
             continue;
         };
@@ -90,7 +85,7 @@ fn inner() !void {
         if (std.mem.eql(u8, line, "quit\n")) {
             quit = true;
             allocator.free(line);
-            c.free(c_line);
+            std.heap.raw_c_allocator.free(std.mem.span(c_line));
             continue;
         }
         _ = c.add_history(c_line);
@@ -109,13 +104,13 @@ fn bare_input_run() !void {
     pid.setName("input_thread") catch {};
     var stdin = std.io.getStdIn().reader();
     var stdout = std.io.getStdOut().writer();
-    var fds = [1]std.os.pollfd{
-        .{ .fd = std.io.getStdIn().handle, .events = std.os.POLL.IN, .revents = 0 },
+    var fds = [1]std.posix.pollfd{
+        .{ .fd = std.io.getStdIn().handle, .events = std.posix.POLL.IN, .revents = 0 },
     };
     try stdout.print("> ", .{});
     var buf: [1024]u8 = undefined;
     while (!quit) {
-        const data = try std.os.poll(&fds, 1);
+        const data = try std.posix.poll(&fds, 1);
         if (data == 0) continue;
         const len = stdin.read(&buf) catch break;
         if (len == 0) break;

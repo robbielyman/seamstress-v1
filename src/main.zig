@@ -12,13 +12,12 @@ const midi = @import("midi.zig");
 const socket = @import("socket.zig");
 const watcher = @import("watcher.zig");
 const create = @import("create.zig");
-const pthread = @import("pthread.zig");
 
-const VERSION = .{ .major = 1, .minor = 4, .patch = 4 };
+const VERSION = .{ .major = 1, .minor = 4, .patch = 5 };
 
-pub const std_options = struct {
-    pub const log_level = .info;
-    pub const logFn = log;
+pub const std_options: std.Options = .{
+    .log_level = .info,
+    .logFn = log,
 };
 
 var timer: std.time.Timer = undefined;
@@ -143,7 +142,6 @@ fn log(
 fn inner(go_again: *bool) !void {
     main_thread.setName("seamstress_core") catch {};
     const logger = std.log.scoped(.main);
-    pthread.set_priority(99);
 
     logger.info("handle events", .{});
     try events.handle_pending();

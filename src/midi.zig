@@ -75,9 +75,9 @@ fn read(timestamp: f64, message: [*c]const u8, len: usize, userdata: ?*anyopaque
     _ = timestamp;
     if (len == 0) return;
     const ud = userdata orelse return;
-    var self: *Device = @ptrCast(@alignCast(ud));
+    const self: *Device = @ptrCast(@alignCast(ud));
     var in = self.input orelse return;
-    var line = in.allocator.dupe(u8, message[0..len]) catch @panic("OOM!");
+    const line = in.allocator.dupe(u8, message[0..len]) catch @panic("OOM!");
     events.post(.{ .MIDI = .{
         .message = line,
         .id = self.id,
@@ -119,7 +119,7 @@ pub fn init() !void {
             .output = null,
         };
     }
-    var midi_in = c.rtmidi_in_create(
+    const midi_in = c.rtmidi_in_create(
         c.RTMIDI_API_UNSPECIFIED,
         RtMidiPrefix,
         1024,
@@ -130,7 +130,7 @@ pub fn init() !void {
     c.rtmidi_in_set_callback(midi_in, read, &devices[0]);
     c.rtmidi_in_ignore_types(midi_in, false, false, false);
     errdefer c.rtmidi_close_port(midi_in);
-    var midi_out = c.rtmidi_out_create(
+    const midi_out = c.rtmidi_out_create(
         c.RTMIDI_API_UNSPECIFIED,
         RtMidiPrefix,
     );
@@ -165,7 +165,7 @@ fn add_devices() !void {
     for (0..in_count) |i| {
         var len: c_int = 256;
         _ = c.rtmidi_get_port_name(midi_in_counter, @intCast(i), null, &len);
-        var buffer = allocator.allocSentinel(u8, @intCast(len), 0) catch @panic("OOM!");
+        const buffer = allocator.allocSentinel(u8, @intCast(len), 0) catch @panic("OOM!");
         defer allocator.free(buffer);
         _ = c.rtmidi_get_port_name(midi_in_counter, @intCast(i), buffer.ptr, &len);
         const spanned = switch (comptime builtin.os.tag) {
@@ -187,7 +187,7 @@ fn add_devices() !void {
     for (0..out_count) |i| {
         var len: c_int = 256;
         _ = c.rtmidi_get_port_name(midi_out_counter, @intCast(i), null, &len);
-        var buffer = allocator.allocSentinel(u8, @intCast(len), 0) catch @panic("OOM!");
+        const buffer = allocator.allocSentinel(u8, @intCast(len), 0) catch @panic("OOM!");
         defer allocator.free(buffer);
         _ = c.rtmidi_get_port_name(midi_out_counter, @intCast(i), buffer.ptr, &len);
         const spanned = switch (comptime builtin.os.tag) {
