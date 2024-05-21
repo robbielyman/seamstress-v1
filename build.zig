@@ -80,4 +80,10 @@ fn addDependencies(m: *std.Build.Module, b: *std.Build, target: std.Build.Resolv
         .optimize = optimize,
     });
     m.addImport("rtmidi", rtmidi_z.module("rtmidi_z"));
+
+    const libxev = b.dependency("libxev", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    m.addImport("xev", libxev.module("xev"));
 }

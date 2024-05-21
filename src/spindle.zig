@@ -1,53 +1,46 @@
-/// spindle is the seamstress Lua VM
-/// it is responsible for responding to chunks of Lua and other commands (like 'quit') over stdin
-/// setting up the Lua experience
-/// and parsing the config file / arguments
+/// the Lua VM
 const Spindle = @This();
 
-// available to everything by default, essentially
-allocator: std.mem.Allocator,
-// the events queue
-events: Events,
-// the lua object
-lvm: *Lua,
-// the IO mutex
-io: *Io,
-// a little closure used to say hello
+// the lua instance
+l: *Lua,
+// the buffered writer which we log to
+// here so that its underlying writer may be replaced easily by module code
+stderr: *BufferedWriter,
+// a little closure to say hello
 hello: ?struct {
     ctx: *anyopaque,
     hello_fn: *const fn (*anyopaque) void,
 } = null,
 
-pub const logger = std.log.scoped(.spindle);
+const logger = std.log.scoped(.spindle);
 
-// initializes the Lua VM
-pub fn init(self: *Spindle, allocator: *const std.mem.Allocator, io: *Io) Error!void {
+// initializes the lua VM
+pub fn init(self: *Spindle, allocator: *const std.mem.Allocator, writer: *BufferedWriter) Error!void {
     self.* = .{
-        .allocator = allocator.*,
-        .io = io,
-        .lvm = Lua.init(allocator) catch return error.OutOfMemory,
-        .events = undefined,
+        .stderr = writer,
+        .l = Lua.init(allocator) catch return error.OutOfMemory,
     };
-    self.events.init();
+    errdefer self.l.close();
 
     // open lua libraries
-    self.lvm.openLibs();
+    self.l.openLibs();
     self.setUpSeamstress() catch return error.LaunchFailed;
-
-    _ = self.lvm.atPanic(ziglua.wrap(luaPanic));
+    _ = self.l.atPanic(ziglua.wrap(luaPanic));
 }
 
 // sets up the _seamstress table
 fn setUpSeamstress(self: *Spindle) !void {
+    const l = self.l;
+    const seamstress: *Seamstress = @fieldParentPtr("vm", self);
     // create a new table
-    self.lvm.newTable();
-    // push ourselves
-    self.lvm.pushLightUserdata(self);
-    self.lvm.setField(-2, "_context");
+    l.newTable();
+    // push the event loop
+    l.pushLightUserdata(&seamstress.loop);
+    l.setField(-2, "_loop");
     // and another one
-    self.lvm.newTable();
+    l.newTable();
     // assign to the previous one
-    self.lvm.setField(-2, "config");
+    l.setField(-2, "config");
     {
         var buf: [16 * 1024]u8 = undefined;
         var fba: std.heap.FixedBufferAllocator = .{ .buffer = &buf, .end_index = 0 };
@@ -57,84 +50,88 @@ fn setUpSeamstress(self: *Spindle) !void {
         const path = try std.fs.path.joinZ(a, &.{ location, "..", "share", "seamstress", "lua" });
         defer a.free(path);
         const prefix = try std.fs.realpathAlloc(a, path);
-        _ = self.lvm.pushString(prefix);
-        self.lvm.setField(-2, "prefix");
+        _ = l.pushString(prefix);
+        l.setField(-2, "prefix");
     }
     {
-        const version = @import("main.zig").VERSION;
-        self.lvm.createTable(3, 1);
-        self.lvm.pushInteger(@intCast(version.major));
-        self.lvm.setIndex(-2, 1);
-        self.lvm.pushInteger(@intCast(version.minor));
-        self.lvm.setIndex(-2, 2);
-        self.lvm.pushInteger(@intCast(version.patch));
-        self.lvm.setIndex(-2, 3);
-        if (version.pre) |pre| _ = self.lvm.pushString(pre) else self.lvm.pushNil();
-        self.lvm.setField(-2, "pre");
-        self.lvm.setField(-2, "version");
+        const version = Seamstress.version;
+        l.createTable(3, 1);
+        l.pushInteger(@intCast(version.major));
+        l.setIndex(-2, 1);
+        l.pushInteger(@intCast(version.minor));
+        l.setIndex(-2, 2);
+        l.pushInteger(@intCast(version.patch));
+        l.setIndex(-2, 3);
+        if (version.pre) |pre| _ = l.pushString(pre) else l.pushNil();
+        l.setField(-2, "pre");
+        l.setField(-2, "version");
     }
-    self.lvm.setGlobal("_seamstress");
+    l.setGlobal("_seamstress");
 
     {
-        const cwd = try std.process.getCwdAlloc(self.allocator);
-        defer self.allocator.free(cwd);
-        _ = self.lvm.pushString(cwd);
-        self.lvm.setGlobal("_pwd");
+        var buf: [8 * 1024]u8 = undefined;
+        var fba: std.heap.FixedBufferAllocator = .{ .buffer = &buf, .end_index = 0 };
+        const allocator = fba.allocator();
+        const cwd = try std.process.getCwdAlloc(allocator);
+        defer allocator.free(cwd);
+        _ = l.pushString(cwd);
+        l.setGlobal("_pwd");
     }
 }
 
+// have lua crash via our panic rather than its own way
 fn luaPanic(l: *Lua) i32 {
     const msg = l.toString(-1) catch "";
     std.debug.panic("lua crashed: {s}", .{msg});
     return 0;
 }
 
-// closes the event queue and the lua VM and frees memory
+// closes the lua VM and frees memory
 pub fn close(self: *Spindle) void {
-    self.events.close();
-    self.lvm.close();
+    self.l.close();
 }
 
 // call init()
 pub fn callInit(self: *Spindle) void {
-    lu.getSeamstress(self.lvm);
-    _ = self.lvm.getField(-1, "prefix");
-    _ = self.lvm.pushString("/config.lua");
-    self.lvm.concat(2);
-    const file_name = self.lvm.toStringEx(-1);
-    self.lvm.doFile(file_name) catch lu.panic(self, error.LaunchFailed);
-    self.lvm.setTop(0);
+    lu.getSeamstress(self.l);
+    _ = self.l.getField(-1, "prefix");
+    _ = self.l.pushString("/config.lua");
+    self.l.concat(2);
+    const file_name = self.l.toStringEx(-1);
+    self.l.doFile(file_name) catch lu.panic(self.l, error.LaunchFailed);
+    self.l.setTop(0);
 
-    lu.getSeamstress(self.lvm);
-    _ = self.lvm.getField(-1, "prefix");
-    _ = self.lvm.pushString("/core/seamstress.lua");
-    self.lvm.concat(2);
-    const file_name2 = self.lvm.toStringEx(-1);
-    self.lvm.doFile(file_name2) catch lu.panic(self, error.LaunchFailed);
-    self.lvm.setTop(0);
+    lu.getSeamstress(self.l);
+    _ = self.l.getField(-1, "prefix");
+    _ = self.l.pushString("/core/seamstress.lua");
+    self.l.concat(2);
+    const file_name2 = self.l.toStringEx(-1);
+    self.l.doFile(file_name2) catch lu.panic(self.l, error.LaunchFailed);
+    self.l.setTop(0);
 
-    const t = self.lvm.getGlobal("_startup") catch {
-        lu.panic(self, error.LaunchFailed);
+    const t = self.l.getGlobal("_startup") catch {
+        lu.panic(self.l, error.LaunchFailed);
         return;
     };
-    if (t != .function) lu.panic(self, error.LaunchFailed);
-    lu.doCall(self.lvm, 0, 0);
+    if (t != .function) lu.panic(self.l, error.LaunchFailed);
+    lu.doCall(self.l, 0, 0);
 }
 
 // call cleanup()
 pub fn cleanup(self: *Spindle) void {
-    lu.getSeamstress(self.lvm);
-    const t = self.lvm.getField(-1, "cleanup");
+    lu.getSeamstress(self.l);
+    const t = self.l.getField(-1, "cleanup");
     if (t != .function) return;
-    lu.doCall(self.lvm, 0, 0);
+    lu.doCall(self.l, 0, 0);
 }
 
 // TODO: parse config
 pub fn parseConfig(self: *Spindle) Error!Config {
-    var iter = std.process.argsWithAllocator(self.allocator) catch return error.LaunchFailed;
+    var iter = std.process.argsWithAllocator(self.l.allocator()) catch return error.LaunchFailed;
+    defer iter.deinit();
     _ = iter.next();
     const script = iter.next();
-    try lu.setConfig(self, "script_file", script);
+    try lu.setConfig(self.l, "script_file", script);
     return .{ .tui = false };
 }
 
@@ -145,54 +142,6 @@ pub fn sayHello(self: *Spindle) void {
     }
 }
 
-// struct for handling REPL input
-pub const ReplContext = struct {
-    buffer: *ThreadSafeBuffer(u8),
-    length_to_read: usize = 0,
-    node: Events.Node = .{
-        .handler = Events.handlerFromClosure(ReplContext, replHandler, "node"),
-    },
-    // allows modules to "bring their own" memory management for ReplContext structs
-    data: ?*anyopaque = null,
-    discard: ?*const fn (*ReplContext, ?*anyopaque) void = null,
-
-    // 16kB should be enough for anyone
-    const max_repl_len = 16 * 1024;
-
-    // handler for responding to REPL input
-    fn replHandler(self: *ReplContext, l: *Lua) void {
-        const vm = lu.getVM(l);
-        // calculate the length to read
-        const length_to_read = @min(self.length_to_read, self.buffer.readableLength());
-        if (length_to_read > max_repl_len) {
-            logger.err("line too long! discarding", .{});
-            self.buffer.discard(length_to_read);
-        }
-        var buf: [max_repl_len]u8 = undefined;
-        // read it in
-        var actual: usize = 0;
-        while (actual < length_to_read) {
-            actual += self.buffer.peekContents(buf[actual..length_to_read], actual);
-        }
-
-        if (vm.processChunk(buf[0..length_to_read])) |continuing| {
-            if (!continuing) {
-                // the chunk is no longer needed
-                self.buffer.discard(length_to_read);
-                self.length_to_read = 0;
-            }
-            // this has the useful side-effect of telling the UI thread to render,
-            // regardless of whether we have output.
-            // when continuing is true, this is important for the prompt to change
-            _ = lu.luaPrint(l);
-        } // null actually also means the chunk is no longer needed,
-        // but it _also_ means we're quitting, so there's no point in discarding it
-
-        // call our discard closure
-        if (self.discard) |f| f(self, self.data);
-    }
-};
-
 // uses the lua_loadbuffer API to process a chunk
 fn processChunk(self: *Spindle, buf: []const u8) ?bool {
     // TODO: currently we only have one special command, but maybe we want more?
@@ -202,51 +151,51 @@ fn processChunk(self: *Spindle, buf: []const u8) ?bool {
             return null;
         }
     }
-    self.lvm.setTop(0);
+    self.l.setTop(0);
     // pushes the buffer onto the stack
-    _ = self.lvm.pushString(buf);
+    _ = self.l.pushString(buf);
     // adds "return" to the beginning of the buffer
-    const with_return = std.fmt.allocPrint(self.allocator, "return {s}", .{buf}) catch {
+    const with_return = std.fmt.allocPrint(self.l.allocator(), "return {s}", .{buf}) catch {
         lu.panic(self, error.OutOfMemory);
         return false;
     };
     defer self.allocator.free(with_return);
     // loads the chunk...
-    self.lvm.loadBuffer(with_return, "=stdin", .text) catch |err| {
+    self.l.loadBuffer(with_return, "=stdin", .text) catch |err| {
         // ...if the chunk does not compile,
         switch (err) {
             // we ran out of RAM! panic!
             error.Memory => {
-                self.lvm.pop(1);
+                self.l.pop(1);
                 lu.panic(self, error.OutOfMemory);
                 return false;
             },
             // the chunk had a syntax error
             error.Syntax => {
                 // remove the failed chunk
-                self.lvm.pop(1);
+                self.l.pop(1);
                 // load the chunk without "return " added
-                self.lvm.loadBuffer(buf, "=stdin", .text) catch |err2| switch (err2) {
+                self.l.loadBuffer(buf, "=stdin", .text) catch |err2| switch (err2) {
                     error.Memory => {
-                        self.lvm.pop(1);
+                        self.l.pop(1);
                         lu.panic(self, error.OutOfMemory);
                         return false;
                     },
                     // that still didn't compile...
                     error.Syntax => {
                         // FIXME: is `unreachable` fine here? probably, right?
-                        const msg = self.lvm.toString(-1) catch unreachable;
+                        const msg = self.l.toString(-1) catch unreachable;
                         // is the syntax error telling us that the statement isn't finished yet?
                         if (std.mem.endsWith(u8, msg, "<eof>")) {
                             // pop the unfinished chunk
-                            self.lvm.pop(1);
+                            self.l.pop(1);
                             // true means we're continuing
                             return true;
                         } else {
                             // remove the failed chunk
-                            self.lvm.remove(-2);
+                            self.l.remove(-2);
                             // process the error message (add a stack trace)
-                            _ = lu.messageHandler(self.lvm);
+                            _ = lu.messageHandler(self.l);
                             return false;
                         }
                     },
@@ -257,18 +206,18 @@ fn processChunk(self: *Spindle, buf: []const u8) ?bool {
         // so we'll save the chunk, since it's a well-formed command
         self.saveBufferToHistory(buf);
         // bizarrely, we want to remove the compiled code---it's probably not a function but a value!
-        self.lvm.remove(1);
+        self.l.remove(1);
         // instead let's call the buffer we pushed onto the stack earlier (tricksy tricksy)
-        _ = lu.doCall(self.lvm, 0, ziglua.mult_return);
+        _ = lu.doCall(self.l, 0, ziglua.mult_return);
         return false;
     };
     // ... the chunk compiles fine with "return " added!
     // so we'll save the chunk, since it's a well-formed command
     self.saveBufferToHistory(buf);
     // let's remove the buffer we pushed onto the stack earlier
-    self.lvm.remove(-2);
+    self.l.remove(-2);
     // and call the compiled function
-    _ = lu.doCall(self.lvm, 0, ziglua.mult_return);
+    _ = lu.doCall(self.l, 0, ziglua.mult_return);
     return false;
 }
 
@@ -278,27 +227,15 @@ fn saveBufferToHistory(self: *Spindle, buf: []const u8) void {
     _ = self; // autofix
 }
 
-/// the context for printing
-/// NB: we cannot and do not need to grab the IO mutex;
-/// instead the UI module will pull from the other end of our Writer
-/// when it receives input from ready
-pub const PrintContext = struct {
-    stdout: std.io.AnyWriter,
-    ready: std.io.AnyWriter,
-};
-
 /// replaces `print`
 /// pub because it is the UI module's responsibility to populate the context
 pub fn printFn(l: *Lua) i32 {
     // how many things are we printing?
     const n = l.getTop();
     // get our closed-over value
-    const ctx = lu.closureGetContext(l, PrintContext) orelse return 0;
+    const ctx = lu.closureGetContext(l, std.io.AnyWriter) orelse return 0;
 
-    //  we end by tell the UI module we're ready to render
-    defer _ = ctx.ready.write("r") catch {};
     // printing nothing should do nothing
-    // this is actually useful behavior: we use it in stdinHandler
     if (n == 0) return 0;
 
     // while loop because for loops are limited to `usize` in zig
@@ -306,48 +243,47 @@ pub fn printFn(l: *Lua) i32 {
     while (i <= n) : (i += 1) {
         // separate with tabs
         // FIXME: should we panic on error instead?
-        if (i > 1) ctx.stdout.print("\t", .{}) catch {};
+        if (i > 1) ctx.print("\t", .{}) catch {};
         const t = l.typeOf(i);
         switch (t) {
             .number => {
                 if (l.isInteger(i)) {
                     const int = l.checkInteger(i);
-                    ctx.stdout.print("{d}", .{int}) catch {};
+                    ctx.print("{d}", .{int}) catch {};
                 } else {
                     const double = l.checkNumber(i);
-                    ctx.stdout.print("{d}", .{double}) catch {};
+                    ctx.print("{d}", .{double}) catch {};
                 }
             },
             .table => {
                 const str = l.toString(i) catch {
                     const ptr = l.toPointer(i) catch unreachable;
-                    ctx.stdout.print("table: 0x{x}", .{@intFromPtr(ptr)}) catch {};
+                    ctx.print("table: 0x{x}", .{@intFromPtr(ptr)}) catch {};
                     continue;
                 };
-                ctx.stdout.print("{s}", .{str}) catch {};
+                ctx.print("{s}", .{str}) catch {};
             },
             .function => {
                 const ptr = l.toPointer(i) catch unreachable;
-                ctx.stdout.print("function: 0x{x}", .{@intFromPtr(ptr)}) catch {};
+                ctx.print("function: 0x{x}", .{@intFromPtr(ptr)}) catch {};
             },
             else => {
                 const str = l.toString(i) catch continue;
-                ctx.stdout.print("{s}", .{str}) catch {};
+                ctx.print("{s}", .{str}) catch {};
             },
         }
     }
     // finish out with a newline
-    ctx.stdout.print("\n", .{}) catch {};
+    ctx.print("\n", .{}) catch {};
     return 0;
 }
 
-const lu = @import("lua_util.zig");
 const std = @import("std");
 const ziglua = @import("ziglua");
-const Seamstress = @import("seamstress.zig");
-const Config = Seamstress.Config;
-const Error = Seamstress.Error;
+const lu = @import("lua_util.zig");
 const Lua = ziglua.Lua;
-const Events = @import("events.zig");
-const Io = @import("io.zig");
-const ThreadSafeBuffer = @import("thread_safe_buffer.zig").ThreadSafeBuffer;
+const Seamstress = @import("seamstress.zig");
+const Error = Seamstress.Error;
+const Config = @import("config.zig");
+const Wheel = @import("wheel.zig");
+const BufferedWriter = std.io.BufferedWriter(4096, std.io.AnyWriter);

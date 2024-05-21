@@ -6,12 +6,9 @@ const num_devs = 8;
 serialosc_address: *lo.Address,
 local_address: *lo.Message,
 devices: Devices = .{},
-pool: std.heap.MemoryPoolExtra(Event, .{}),
 
 // not sure struct-of-arrays actually buys us much, but it's fun
 const Devices = struct {
-    // we need to interact with this atomically
-    // bc the OSC thread and the main thread need to agree on its value.
     connected: [num_devs]bool = .{false} ** num_devs,
     name_buf: [num_devs][256]u8 = .{.{0} ** 256} ** num_devs,
     serial_buf: [num_devs][256]u8 = .{.{0} ** 256} ** num_devs,
@@ -25,35 +22,44 @@ const Devices = struct {
     dirty: [num_devs][4]bool = .{.{false} ** 4} ** num_devs,
     quads: [num_devs]enum { one, two, four } = undefined,
     rotation: [num_devs]enum { zero, ninety, one_eighty, two_seventy } = .{.zero} ** num_devs,
-    add_rem_ev: [num_devs]AddRemoveEvent = undefined,
-    dev_addr: [num_devs]?*lo.Address = .{null} ** num_devs,
-    methods: [num_devs][5]?*lo.Method = .{.{null} ** 5} ** num_devs,
-    dev_ctx: [num_devs]DevCtx = undefined,
-
-    const DevCtx = struct {
-        id: u3,
-        monome: *Monome,
-    };
+    dev_addr: [num_devs]?std.net.Address = .{null} ** num_devs,
+    server: [num_devs]*lo.Server = undefined,
 };
 
-// self-init since we're a field of another struct
-pub fn init(self: *Monome) void {
-    const ids: [8]u3 = .{ 0, 1, 2, 3, 4, 5, 6, 7 };
-    for (&self.devices.add_rem_ev, &self.devices.dev_ctx, ids) |*ev, *ctx, i| {
-        ev.* = .{ .monome = self, .idx = i };
-        ctx.* = .{ .monome = self, .id = i };
+pub fn init(self: *Monome, local_address: *lo.Message) Error!void {
+    self.* = .{
+        .serialosc_address = lo.Address.new("127.0.0.1", "12002") orelse return error.LaunchFailed,
+        .local_address = local_address,
+    };
+    const paths: [7][:0]const u8 = .{
+        "*/enc/delta",
+        "*/enc/key",
+        "*/grid/key",
+        "*/tilt",
+        "/sys/size",
+        "/sys/rotation",
+        "/sys/prefix",
+    };
+    const typespecs: [7][:0]const u8 = .{ "ii", "ii", "iii", "iiii", "ii", "i", "s" };
+    inline for (0..num_devs) |i| {
+        const methods: [7]lo.MethodHandler = .{
+            delta(@intCast(i)),
+            arcKey(@intCast(i)),
+            gridKey(@intCast(i)),
+            tilt(@intCast(i)),
+            handleSize(@intCast(i)),
+            handleRotation(@intCast(i)),
+            handlePrefix(@intCast(i)),
+        };
+        self.devices.server[i] = lo.Server.new(null, lo.wrap(Osc.errHandler)) orelse return error.LaunchFailed;
+        inline for (paths, typespecs, methods) |path, typespec, method| {
+            _ = self.devices.server[i].addMethod(path, typespec, lo.wrap(method), self);
+        }
     }
 }
 
-pub fn addMethods(self: *Monome) void {
-    const osc: *Osc = @fieldParentPtr("monome", self);
-    _ = osc.server.addMethod("/serialosc/add", "ssi", lo.wrap(handleAdd), self);
-    _ = osc.server.addMethod("/serialosc/device", "ssi", lo.wrap(handleAdd), self);
-    _ = osc.server.addMethod("/serialosc/remove", "ssi", lo.wrap(handleRemove), self);
-}
-
 // register lua functions
-pub fn registerLua(self: *Monome, vm: *Spindle) void {
+pub fn registerLua(self: *Monome, l: *Lua) void {
     const field_names: [11][:0]const u8 = .{
         "grid_set_led",
         "arc_set_led",
@@ -81,38 +87,99 @@ pub fn registerLua(self: *Monome, vm: *Spindle) void {
         gridQuads,
     };
     inline for (field_names, functions) |field, f| {
-        lu.registerSeamstress(vm, field, f, self);
+        lu.registerSeamstress(l, field, f, self);
     }
 }
 
-// releases liblo-owned memory, destroys the memory pool
+pub fn addMethods(self: *Monome) void {
+    const osc: *Osc = @fieldParentPtr("monome", self);
+    _ = osc.server.addMethod("/serialosc/add", "ssi", lo.wrap(handleAdd), self);
+    _ = osc.server.addMethod("/serialosc/device", "ssi", lo.wrap(handleAdd), self);
+    _ = osc.server.addMethod("/serialosc/remove", "ssi", lo.wrap(handleRemove), self);
+}
+
 pub fn deinit(self: *Monome) void {
-    for (&self.devices.dev_addr) |maybe_addr| if (maybe_addr) |addr| addr.free();
-    self.serialosc_address.free();
+    for (&self.devices.server) |server| {
+        server.free();
+    }
     self.local_address.free();
-    self.pool.deinit();
-    self.* = undefined;
+    self.serialosc_address.free();
+}
+
+fn loAddressFromNetAddress(addr: std.net.Address) ?*lo.Address {
+    var buf: std.BoundedArray(u8, 1024) = .{};
+    addr.format("", .{}, buf.writer()) catch return null;
+    const slice = buf.slice();
+    const idx = std.mem.lastIndexOfScalar(u8, slice, ':').?;
+    var mem: [2048]u8 = undefined;
+    var fba = std.heap.FixedBufferAllocator.init(&mem);
+    const a = fba.allocator();
+    const host = a.dupeZ(u8, slice[0..idx]) catch return null;
+    const port = a.dupeZ(u8, slice[idx + 1 ..]) catch return null;
+    return lo.Address.new(host, port);
+}
+
+// sends /sys/info to serialosc
+fn getInfo(self: *Monome, id: u3) !void {
+    const osc: *Osc = @fieldParentPtr("monome", self);
+    const addr = loAddressFromNetAddress(self.devices.dev_addr[id].?) orelse return error.AddressCreationFailed;
+    defer addr.free();
+    osc.server.send(addr, "/sys/info", self.local_address) catch return error.MessageSendFailed;
+}
+
+// set's the device's port to us
+fn setPort(self: *Monome, id: u3) !void {
+    const osc: *Osc = @fieldParentPtr("monome", self);
+    const addr = loAddressFromNetAddress(self.devices.dev_addr[id].?) orelse return error.AddressCreationFailed;
+    defer addr.free();
+    osc.server.send(addr, "/sys/port", self.local_address) catch return error.MessageSendFailed;
+}
+
+// tells lua to add or remove a device
+fn addOrRemove(l: *Lua, idx: u3, monome: *Monome) void {
+    const is_add = monome.devices.connected[idx];
+    const m_type = monome.devices.m_type[idx];
+    lu.getMethod(l, switch (m_type) {
+        .grid => "grid",
+        .arc => "arc",
+    }, if (is_add) "add" else "remove");
+    // convert to 1-based
+    l.pushInteger(idx + 1);
+    _ = l.pushString(std.mem.sliceTo(&monome.devices.serial_buf[idx], 0));
+    _ = l.pushString(std.mem.sliceTo(&monome.devices.name_buf[idx], 0));
+    lu.doCall(l, 3, 0);
+}
+
+// pub so that it can be called from osc.zig
+pub fn sendList(self: *Monome) void {
+    const osc: *Osc = @fieldParentPtr("monome", self);
+    osc.server.send(self.serialosc_address, "/serialosc/list", self.local_address) catch {
+        logger.err("error sending /serialosc/list!", .{});
+    };
+    self.sendNotify();
+}
+
+// asks serialosc to send updates
+fn sendNotify(self: *Monome) void {
+    const osc: *Osc = @fieldParentPtr("monome", self);
+    osc.server.send(self.serialosc_address, "/serialosc/notify", self.local_address) catch {
+        logger.err("error sending /serialosc/notify!", .{});
+    };
 }
 
 // the "inner" responder to a remove message.
 fn remove(self: *Monome, port: i32) !void {
     const id: u3 = id: for (&self.devices.dev_addr, 0..) |addr, i| {
         if (addr) |a| {
-            const port_str = std.mem.sliceTo(a.getPort() orelse continue, 0);
-            var buf: std.BoundedArray(u8, 256) = .{};
-            try std.fmt.format(buf.writer(), "{d}", .{port});
-            if (std.mem.eql(u8, buf.buffer[0..buf.len], port_str)) break :id @intCast(i);
+            const prt = a.getPort();
+            if (prt == port) break :id @intCast(i);
         }
     } else return error.NotFound;
     // remove method handlers on the OSC thread
     const osc: *Osc = @fieldParentPtr("monome", self);
-    for (&self.devices.methods[id]) |method| {
-        if (method) |m| _ = osc.server.deleteMethod(m);
-    }
-    // do this atomically so that the main and OSC threads agree
-    @atomicStore(bool, &self.devices.connected[id], false, .release);
+    self.devices.connected[id] = false;
     // let's tell lua to remove this device
-    osc.vm.events.submit(&self.devices.add_rem_ev[id].node);
+    addOrRemove(osc.lua, id, self);
     return;
 }
 
@@ -129,26 +196,11 @@ fn add(self: *Monome, id: [:0]const u8, m_type: [:0]const u8, port: i32) !void {
     }
     const num = idx orelse return error.NoDevicesFree;
     if (self.devices.dev_addr[num]) |addr| reconnect: {
-        const port_str = std.mem.sliceTo(addr.getPort() orelse {
-            addr.free();
-            for (&self.devices.methods[num]) |method| {
-                if (method) |m| _ = osc.server.deleteMethod(m);
-            }
-            self.devices.methods[num] = .{null} ** 5;
+        if (port != addr.getPort())
             break :reconnect;
-        }, 0);
-        const old_port = try std.fmt.parseInt(i32, port_str, 10);
-        if (old_port != port) {
-            addr.free();
-            for (&self.devices.methods[num]) |method| {
-                if (method) |m| _ = osc.server.deleteMethod(m);
-            }
-            self.devices.methods[num] = .{null} ** 5;
-            break :reconnect;
-        }
         self.devices.connected[num] = true;
         // we've already set up the device at this port, so let's tell lua to add it
-        osc.vm.events.submit(&self.devices.add_rem_ev[num].node);
+        addOrRemove(osc.lua, num, self);
         return;
     }
     // this isn't a reconnect
@@ -159,158 +211,16 @@ fn add(self: *Monome, id: [:0]const u8, m_type: [:0]const u8, port: i32) !void {
     if (m_type.len >= 256) return error.NameTooLong;
     @memset(&self.devices.name_buf[num], 0);
     @memcpy(self.devices.name_buf[num][0..m_type.len], m_type);
-    // prepare the address string
-    var buf: std.BoundedArray(u8, 256) = .{};
-    try std.fmt.format(buf.writer(), "{d}\x00", .{port});
-    const port_str = buf.buffer[0 .. buf.len - 1 :0];
+    if (port < 0) return error.BadPort;
     // set the address
-    self.devices.dev_addr[num] = lo.Address.new("127.0.0.1", port_str);
+    self.devices.dev_addr[num] = std.net.Address.initIp4(.{ 127, 0, 0, 1 }, @intCast(port));
     // set the device type: an arc is a device that calls itself an arc
     self.devices.m_type[num] = if (std.mem.indexOf(u8, m_type, "arc")) |_| .arc else .grid;
-    // add method handlers
-    switch (self.devices.m_type[num]) {
-        .arc => {
-            self.devices.quads[num] = .four;
-            const delta = osc.server.addMethod(
-                "*/enc/delta",
-                "ii",
-                lo.wrap(handler(.delta)),
-                &self.devices.dev_ctx[num],
-            );
-            const key = osc.server.addMethod(
-                "*/enc/key",
-                "ii",
-                lo.wrap(handler(.arc_key)),
-                &self.devices.dev_ctx[num],
-            );
-            const size = osc.server.addMethod(
-                "/sys/size",
-                "ii",
-                lo.wrap(handleSize),
-                &self.devices.dev_ctx[num],
-            );
-            const rot = osc.server.addMethod(
-                "/sys/rotation",
-                "i",
-                lo.wrap(handleRotation),
-                &self.devices.dev_ctx[num],
-            );
-            const prefix = osc.server.addMethod(
-                "/sys/prefix",
-                "s",
-                lo.wrap(handlePrefix),
-                &self.devices.dev_ctx[num],
-            );
-            self.devices.methods[num] = .{ delta, key, size, rot, prefix };
-        },
-        .grid => {
-            const key = osc.server.addMethod(
-                "*/grid/key",
-                "iii",
-                lo.wrap(handler(.grid_key)),
-                &self.devices.dev_ctx[num],
-            );
-            const tilt = osc.server.addMethod(
-                "*/tilt",
-                "iiii",
-                lo.wrap(handler(.tilt)),
-                &self.devices.dev_ctx[num],
-            );
-            const size = osc.server.addMethod(
-                "/sys/size",
-                "ii",
-                lo.wrap(handleSize),
-                &self.devices.dev_ctx[num],
-            );
-            const rot = osc.server.addMethod(
-                "/sys/rotation",
-                "i",
-                lo.wrap(handleRotation),
-                &self.devices.dev_ctx[num],
-            );
-            const prefix = osc.server.addMethod(
-                "/sys/prefix",
-                "s",
-                lo.wrap(handlePrefix),
-                &self.devices.dev_ctx[num],
-            );
-            self.devices.methods[num] = .{ key, tilt, size, rot, prefix };
-        },
-    }
-    osc.resetDefaultHandler();
+    self.devices.quads[num] = .four;
     try self.setPort(num);
     // we actually add the device from the `size` handler
     try self.getInfo(num);
-    // do this atomically because the main and OSC threads need to agree
-    @atomicStore(bool, &self.devices.connected[num], true, .release);
-}
-
-// sends /sys/info to serialosc
-fn getInfo(self: *Monome, id: u3) !void {
-    const osc: *Osc = @fieldParentPtr("monome", self);
-    osc.server.send(
-        self.devices.dev_addr[id] orelse return error.NoAddress,
-        "/sys/info",
-        self.local_address,
-    ) catch return error.MessageSendFailed;
-}
-
-// sets the device's port to us
-fn setPort(self: *Monome, id: u3) !void {
-    const osc: *Osc = @fieldParentPtr("monome", self);
-    osc.server.send(
-        self.devices.dev_addr[id] orelse return error.NoAddress,
-        "/sys/port",
-        self.local_address,
-    ) catch return error.MessageSendFailed;
-}
-
-const AddRemoveEvent = struct {
-    monome: *Monome,
-    idx: u3,
-    node: Events.Node = .{
-        .handler = Events.handlerFromClosure(AddRemoveEvent, addOrRemove, "node"),
-    },
-
-    fn addOrRemove(ev: *AddRemoveEvent, l: *Lua) void {
-        // do this atomically because the main and OSC threads need to agree
-        const is_add = @atomicLoad(bool, &ev.monome.devices.connected[ev.idx], .acquire);
-        if (!is_add) {
-            lu.getMethod(l, switch (ev.monome.devices.m_type[ev.idx]) {
-                .grid => "grid",
-                .arc => "arc",
-            }, "remove");
-            l.pushInteger(ev.idx);
-            lu.doCall(l, 1, 0);
-        } else {
-            lu.getMethod(l, switch (ev.monome.devices.m_type[ev.idx]) {
-                .grid => "grid",
-                .arc => "arc",
-            }, "add");
-            // convert to 1-based
-            l.pushInteger(ev.idx + 1);
-            _ = l.pushString(std.mem.sliceTo(&ev.monome.devices.serial_buf[ev.idx], 0));
-            _ = l.pushString(std.mem.sliceTo(&ev.monome.devices.name_buf[ev.idx], 0));
-            lu.doCall(l, 3, 0);
-        }
-    }
-};
-
-// asks serialosc to list devices
-pub fn sendList(self: *Monome) void {
-    const osc: *Osc = @fieldParentPtr("monome", self);
-    osc.server.send(self.serialosc_address, "/serialosc/list", self.local_address) catch {
-        logger.err("error sending /serialosc/list!", .{});
-    };
-    self.sendNotify();
-}
-
-// asks serialosc to send updates
-fn sendNotify(self: *Monome) void {
-    const osc: *Osc = @fieldParentPtr("monome", self);
-    osc.server.send(self.serialosc_address, "/serialosc/notify", self.local_address) catch {
-        logger.err("error sending /serialosc/notify!", .{});
-    };
+    self.devices.connected[num] = true;
 }
 
 // responds to /serialosc/device and /serialosc/add messages
@@ -341,188 +251,162 @@ fn handleAdd(path: [:0]const u8, _: []const u8, msg: *lo.Message, ctx: ?*anyopaq
     return false;
 }
 
-// the handlers only need differ in which function they call, so let's create a function based on that
-fn handler(
-    comptime T: enum { grid_key, arc_key, delta, tilt },
-) fn ([:0]const u8, []const u8, *lo.Message, ?*anyopaque) bool {
+// responds to /sys/prefix
+fn handlePrefix(comptime idx: u3) fn ([:0]const u8, []const u8, *lo.Message, ?*anyopaque) bool {
+    // the actual handler
     return struct {
-        // the actual handler
         fn f(_: [:0]const u8, _: []const u8, msg: *lo.Message, ctx: ?*anyopaque) bool {
-            const d: *Devices.DevCtx = @ptrCast(@alignCast(ctx orelse return true));
-            // fallthrough to other copies of this handler
-            if (!matchAddress(d, msg.source())) return true;
-            const osc: *Osc = @fieldParentPtr("monome", d.monome);
-            // create an event
-            const ev = d.monome.pool.create() catch {
-                lu.panic(osc.vm, error.OutOfMemory);
+            const self: *Monome = @ptrCast(@alignCast(ctx orelse return true));
+            // catch unreachable is valid: message must have typespec s
+            const prefix = msg.getArg([:0]const u8, 0) catch unreachable;
+            if (prefix.len >= 256) {
+                logger.err("device prefix {s} too long!", .{prefix});
                 return false;
-            };
-            // make sure the message hangs around after we return
-            msg.incRef();
-            ev.* = .{
-                .id = d.id,
-                .msg = msg,
-                .pool = &d.monome.pool,
-                .node = .{
-                    .handler = Events.handlerFromClosure(Event, switch (T) {
-                        .arc_key => Event.arcKey,
-                        .delta => Event.delta,
-                        .grid_key => Event.gridKey,
-                        .tilt => Event.tilt,
-                    }, "node"),
-                },
-            };
-            // submit to the queue
-            osc.vm.events.submit(&ev.node);
+            }
+            @memset(&self.devices.prefix_buf[idx], 0);
+            @memcpy(self.devices.prefix_buf[idx][0..prefix.len], prefix);
             return false;
         }
     }.f;
 }
 
-// responds to /sys/prefix
-fn handlePrefix(_: [:0]const u8, _: []const u8, msg: *lo.Message, ctx: ?*anyopaque) bool {
-    const d: *Devices.DevCtx = @ptrCast(@alignCast(ctx orelse return true));
-    // fallthrough to other copies of this handler
-    if (!matchAddress(d, msg.source())) return true;
-    const prefix = msg.getArg([:0]const u8, 0) catch return true;
-    if (prefix.len >= 256) {
-        logger.err("device prefix {s} too long!", .{prefix});
-        return false;
-    }
-    @memset(&d.monome.devices.prefix_buf[d.id], 0);
-    @memcpy(d.monome.devices.prefix_buf[d.id][0..prefix.len], prefix);
-    return false;
-}
-
 // responds to /sys/rotation
-fn handleRotation(_: [:0]const u8, _: []const u8, msg: *lo.Message, ctx: ?*anyopaque) bool {
-    const d: *Devices.DevCtx = @ptrCast(@alignCast(ctx orelse return true));
-    // fallthrough to other copies of this handler
-    if (!matchAddress(d, msg.source())) return true;
-    const degs = msg.getArg(i32, 0) catch return true;
-    switch (degs) {
-        0 => d.monome.devices.rotation[d.id] = .zero,
-        90 => d.monome.devices.rotation[d.id] = .ninety,
-        180 => d.monome.devices.rotation[d.id] = .one_eighty,
-        270 => d.monome.devices.rotation[d.id] = .two_seventy,
-        else => unreachable,
-    }
-    return false;
+fn handleRotation(comptime idx: u3) fn ([:0]const u8, []const u8, *lo.Message, ?*anyopaque) bool {
+    return struct {
+        // the actual handler
+        fn f(_: [:0]const u8, _: []const u8, msg: *lo.Message, ctx: ?*anyopaque) bool {
+            const self: *Monome = @ptrCast(@alignCast(ctx orelse return true));
+            // catch unreachable is valid: message must have typespec i
+            const degs = msg.getArg(i32, 0) catch unreachable;
+            switch (degs) {
+                0 => self.devices.rotation[idx] = .zero,
+                90 => self.devices.rotation[idx] = .ninety,
+                180 => self.devices.rotation[idx] = .one_eighty,
+                270 => self.devices.rotation[idx] = .two_seventy,
+                else => unreachable,
+            }
+            return false;
+        }
+    }.f;
 }
 
-// responds to /sys/size; sends an `add` event to Lua
-fn handleSize(_: [:0]const u8, _: []const u8, msg: *lo.Message, ctx: ?*anyopaque) bool {
-    const d: *Devices.DevCtx = @ptrCast(@alignCast(ctx orelse return true));
-    // fallthrough to other copies of this handler
-    if (!matchAddress(d, msg.source())) return true;
-    const rows = msg.getArg(i32, 0) catch return true;
-    const cols = msg.getArg(i32, 1) catch return true;
-    d.monome.devices.rows[d.id] = @min(@max(0, rows), 255);
-    d.monome.devices.cols[d.id] = @min(@max(0, cols), 255);
-    d.monome.devices.quads[d.id] = switch (@divExact(rows * cols, 64)) {
-        1 => .one,
-        2 => .two,
-        4 => .four,
-        else => unreachable,
-    };
-    const osc: *Osc = @fieldParentPtr("monome", d.monome);
-    osc.vm.events.submit(&d.monome.devices.add_rem_ev[d.id].node);
-    return false;
+// responds to /sys/size; adds the device on the lua side
+fn handleSize(comptime idx: u3) fn ([:0]const u8, []const u8, *lo.Message, ?*anyopaque) bool {
+    return struct {
+        // the actual handler
+        fn f(_: [:0]const u8, _: []const u8, msg: *lo.Message, ctx: ?*anyopaque) bool {
+            const self: *Monome = @ptrCast(@alignCast(ctx orelse return true));
+            // catch unreachable is valid: message must have typespec ii
+            const rows = msg.getArg(i32, 0) catch unreachable;
+            const cols = msg.getArg(i32, 1) catch unreachable;
+            self.devices.rows[idx] = @min(@max(0, rows), 255);
+            self.devices.cols[idx] = @min(@max(0, cols), 255);
+            self.devices.quads[idx] = switch (@divExact(rows * cols, 64)) {
+                1 => .one,
+                2 => .two,
+                4 => .four,
+                else => unreachable,
+            };
+            const osc: *Osc = @fieldParentPtr("monome", self);
+            addOrRemove(osc.lua, idx, self);
+            return false;
+        }
+    }.f;
 }
 
-// matches an address's port number (as a string) against a stored one
-fn matchAddress(ctx: *Devices.DevCtx, address: ?*lo.Address) bool {
-    const self = ctx.monome.devices.dev_addr[ctx.id] orelse return false;
-    const other = address orelse return false;
-    const self_port_str = std.mem.sliceTo(self.getPort() orelse return false, 0);
-    const other_port_str = std.mem.sliceTo(other.getPort() orelse return false, 0);
-    return std.mem.eql(u8, self_port_str, other_port_str);
+/// handles a grid key event
+fn gridKey(comptime idx: u8) fn ([:0]const u8, []const u8, *lo.Message, ?*anyopaque) bool {
+    return struct {
+        // the actual handler
+        fn f(_: [:0]const u8, _: []const u8, msg: *lo.Message, ctx: ?*anyopaque) bool {
+            const self: *Monome = @ptrCast(@alignCast(ctx orelse return true));
+            const osc: *Osc = @fieldParentPtr("monome", self);
+            // catch unreachable is valid: the message must be of type iii
+            const x = msg.getArg(i32, 0) catch unreachable;
+            const y = msg.getArg(i32, 1) catch unreachable;
+            const z = msg.getArg(i32, 2) catch unreachable;
+            lu.getMethod(osc.lua, "grid", "key");
+            // convert from 0-indexed
+            osc.lua.pushInteger(idx + 1);
+            osc.lua.pushInteger(x + 1);
+            osc.lua.pushInteger(y + 1);
+            // already 0 or 1
+            osc.lua.pushInteger(z);
+            lu.doCall(osc.lua, 4, 0);
+            return false;
+        }
+    }.f;
 }
 
-pub const Event = struct {
-    id: u3,
-    msg: *lo.Message,
-    pool: *std.heap.MemoryPoolExtra(Event, .{}),
-    node: Events.Node,
-
-    // handles a grid key event
-    fn gridKey(self: *Event, l: *Lua) void {
-        defer {
-            self.msg.free();
-            self.pool.destroy(self);
+/// handles an arc delta event
+fn delta(comptime idx: u8) fn ([:0]const u8, []const u8, *lo.Message, ?*anyopaque) bool {
+    return struct {
+        // the actual handler
+        fn f(_: [:0]const u8, _: []const u8, msg: *lo.Message, ctx: ?*anyopaque) bool {
+            const self: *Monome = @ptrCast(@alignCast(ctx orelse return true));
+            const osc: *Osc = @fieldParentPtr("monome", self);
+            // catch unreachable is valid: the message must be of type ii
+            const n = msg.getArg(i32, 0) catch unreachable;
+            const d = msg.getArg(i32, 1) catch unreachable;
+            lu.getMethod(osc.lua, "arc", "delta");
+            // convert from 0-indexed
+            osc.lua.pushInteger(idx + 1);
+            osc.lua.pushInteger(n + 1);
+            // correctly 0-indexed
+            osc.lua.pushInteger(d);
+            lu.doCall(osc.lua, 3, 0);
+            return false;
         }
-        // catch unreachable is valid: the message must be of type iii
-        const x = self.msg.getArg(i32, 0) catch unreachable;
-        const y = self.msg.getArg(i32, 1) catch unreachable;
-        const z = self.msg.getArg(i32, 2) catch unreachable;
-        lu.getMethod(l, "grid", "key");
-        // convert from 0-indexed
-        l.pushInteger(self.id + 1);
-        l.pushInteger(x + 1);
-        l.pushInteger(y + 1);
-        // already 0 or 1
-        l.pushInteger(z);
-        lu.doCall(l, 4, 0);
-    }
+    }.f;
+}
 
-    // handles an arc delta event
-    fn delta(self: *Event, l: *Lua) void {
-        defer {
-            self.msg.free();
-            self.pool.destroy(self);
+/// handles a grid tilt event
+fn tilt(comptime idx: u8) fn ([:0]const u8, []const u8, *lo.Message, ?*anyopaque) bool {
+    return struct {
+        // the actual handler
+        fn f(_: [:0]const u8, _: []const u8, msg: *lo.Message, ctx: ?*anyopaque) bool {
+            const self: *Monome = @ptrCast(@alignCast(ctx orelse return true));
+            const osc: *Osc = @fieldParentPtr("monome", self);
+            // catch unreachable is valid: the message must be of type iiii
+            const n = msg.getArg(i32, 0) catch unreachable;
+            const x = msg.getArg(i32, 1) catch unreachable;
+            const y = msg.getArg(i32, 2) catch unreachable;
+            const z = msg.getArg(i32, 3) catch unreachable;
+            lu.getMethod(osc.lua, "grid", "tilt");
+            // convert from 0-indexed
+            osc.lua.pushInteger(idx + 1);
+            osc.lua.pushInteger(n + 1);
+            // correctly 0-indexed
+            osc.lua.pushInteger(x);
+            osc.lua.pushInteger(y);
+            osc.lua.pushInteger(z);
+            lu.doCall(osc.lua, 5, 0);
+            return false;
         }
-        // catch unreachable is valid: the message must be of type iiii
-        const n = self.msg.getArg(i32, 0) catch unreachable;
-        const d = self.msg.getArg(i32, 1) catch unreachable;
-        lu.getMethod(l, "arc", "delta");
-        // convert from 0-indexed
-        l.pushInteger(self.id + 1);
-        l.pushInteger(n + 1);
-        // correctly 0-indexed
-        l.pushInteger(d);
-        lu.doCall(l, 3, 0);
-    }
+    }.f;
+}
 
-    // handles a grid tilt event
-    fn tilt(self: *Event, l: *Lua) void {
-        defer {
-            self.msg.free();
-            self.pool.destroy(self);
+/// hndles an arc key event
+fn arcKey(comptime idx: u8) fn ([:0]const u8, []const u8, *lo.Message, ?*anyopaque) bool {
+    return struct {
+        // the actual handler
+        fn f(_: [:0]const u8, _: []const u8, msg: *lo.Message, ctx: ?*anyopaque) bool {
+            const self: *Monome = @ptrCast(@alignCast(ctx orelse return true));
+            const osc: *Osc = @fieldParentPtr("monome", self);
+            // catch unreachable is valid: the message must be of type ii
+            const n = msg.getArg(i32, 0) catch unreachable;
+            const z = msg.getArg(i32, 1) catch unreachable;
+            lu.getMethod(osc.lua, "arc", "key");
+            // convert from 0-indexed
+            osc.lua.pushInteger(idx + 1);
+            osc.lua.pushInteger(n + 1);
+            // correctly 0 or 1
+            osc.lua.pushInteger(z);
+            lu.doCall(osc.lua, 3, 0);
+            return false;
         }
-        // catch unreachable is valid: the message must be of type iiii
-        const n = self.msg.getArg(i32, 0) catch unreachable;
-        const x = self.msg.getArg(i32, 1) catch unreachable;
-        const y = self.msg.getArg(i32, 2) catch unreachable;
-        const z = self.msg.getArg(i32, 3) catch unreachable;
-        lu.getMethod(l, "grid", "tilt");
-        // convert from 0-indexed
-        l.pushInteger(self.id + 1);
-        l.pushInteger(n + 1);
-        // correctly 0-indexed
-        l.pushInteger(x);
-        l.pushInteger(y);
-        l.pushInteger(z);
-        lu.doCall(l, 5, 0);
-    }
-
-    // handles an arc key event
-    fn arcKey(self: *Event, l: *Lua) void {
-        defer {
-            self.msg.free();
-            self.pool.destroy(self);
-        }
-        // catch unreachable is valid: the message must be of type ii
-        const n = self.msg.getArg(i32, 0) catch unreachable;
-        const z = self.msg.getArg(i32, 1) catch unreachable;
-        lu.getMethod(l, "arc", "key");
-        // convert from 0-indexed
-        l.pushInteger(self.id + 1);
-        l.pushInteger(n + 1);
-        // correctly 0 or 1
-        l.pushInteger(z);
-        lu.doCall(l, 3, 0);
-    }
-};
+    }.f;
+}
 
 /// set grid led
 // users should use `grid:led` instead.
@@ -684,7 +568,12 @@ fn gridRotation(l: *Lua) i32 {
         },
         else => unreachable,
     }
-    osc.server.send(monome.devices.dev_addr[num] orelse return 0, "/sys/rotation", msg) catch {
+    const addr = loAddressFromNetAddress(monome.devices.dev_addr[num].?) orelse {
+        logger.err("error creating address!", .{});
+        return 0;
+    };
+    defer addr.free();
+    osc.server.send(addr, "/sys/rotation", msg) catch {
         logger.err("error sending /sys/rotation!", .{});
     };
     return 0;
@@ -715,7 +604,12 @@ fn gridTiltSensor(l: *Lua) i32 {
     var buf: [512]u8 = undefined;
     const prefix = std.mem.sliceTo(&monome.devices.prefix_buf[num], 0);
     const path = concatIntoBufZAssumeCapacity(&buf, prefix, "/tilt/set");
-    osc.server.send(monome.devices.dev_addr[num] orelse return 0, path, msg) catch {
+    const addr = loAddressFromNetAddress(monome.devices.dev_addr[num].?) orelse {
+        logger.err("error creating address!", .{});
+        return 0;
+    };
+    defer addr.free();
+    osc.server.send(addr, path, msg) catch {
         logger.err("error sending /tilt/set", .{});
     };
     return 0;
@@ -749,7 +643,12 @@ fn gridIntensity(l: *Lua) i32 {
     var buf: [512]u8 = undefined;
     const prefix = std.mem.sliceTo(&monome.devices.prefix_buf[num], 0);
     const path = concatIntoBufZAssumeCapacity(&buf, prefix, "/grid/led/intensity");
-    osc.server.send(monome.devices.dev_addr[num] orelse return 0, path, msg) catch {
+    const addr = loAddressFromNetAddress(monome.devices.dev_addr[num].?) orelse {
+        logger.err("error creating address!", .{});
+        return 0;
+    };
+    defer addr.free();
+    osc.server.send(addr, path, msg) catch {
         logger.err("error setting intensity", .{});
     };
     return 0;
@@ -773,6 +672,11 @@ fn gridRefresh(l: *Lua) i32 {
     const path = concatIntoBufZAssumeCapacity(&buf, prefix, "/grid/led/level/map");
     const x_off: [4]i32 = .{ 0, 8, 0, 8 };
     const y_off: [4]i32 = .{ 0, 0, 8, 8 };
+    const addr = loAddressFromNetAddress(monome.devices.dev_addr[num].?) orelse {
+        logger.err("error creating address!", .{});
+        return 0;
+    };
+    defer addr.free();
     switch (monome.devices.quads[num]) {
         .one => {
             if (!monome.devices.dirty[num][0]) return 0;
@@ -783,7 +687,7 @@ fn gridRefresh(l: *Lua) i32 {
             defer msg.free();
             msg.add(.{ 0, 0 }) catch return 0;
             msg.addSlice(i32, &monome.devices.data[num][0]) catch return 0;
-            osc.server.send(monome.devices.dev_addr[num] orelse return 0, path, msg) catch {
+            osc.server.send(addr, path, msg) catch {
                 logger.err("error sending /led/level/map", .{});
             };
             monome.devices.dirty[num][0] = false;
@@ -804,7 +708,7 @@ fn gridRefresh(l: *Lua) i32 {
                 defer msg.free();
                 msg.add(.{ x_off[i], y_off[i] }) catch return 0;
                 msg.addSlice(i32, &monome.devices.data[num][i]) catch return 0;
-                osc.server.send(monome.devices.dev_addr[num] orelse return 0, path, msg) catch {
+                osc.server.send(addr, path, msg) catch {
                     logger.err("error sending /led/level/map", .{});
                 };
                 monome.devices.dirty[num][i] = false;
@@ -821,7 +725,7 @@ fn gridRefresh(l: *Lua) i32 {
                 defer msg.free();
                 msg.add(.{ x_off[i], y_off[i] }) catch return 0;
                 msg.addSlice(i32, &monome.devices.data[num][i]) catch return 0;
-                osc.server.send(monome.devices.dev_addr[num] orelse return 0, path, msg) catch {
+                osc.server.send(addr, path, msg) catch {
                     logger.err("error sending /grid/led/level/map", .{});
                 };
                 monome.devices.dirty[num][i] = false;
@@ -847,6 +751,11 @@ fn arcRefresh(l: *Lua) i32 {
     var buf: [512]u8 = undefined;
     const prefix = std.mem.sliceTo(&monome.devices.prefix_buf[num], 0);
     const path = concatIntoBufZAssumeCapacity(&buf, prefix, "/ring/map");
+    const addr = loAddressFromNetAddress(monome.devices.dev_addr[num].?) orelse {
+        logger.err("error creating address!", .{});
+        return 0;
+    };
+    defer addr.free();
     for (0..4) |i| {
         if (!monome.devices.dirty[num][i]) continue;
         const msg = lo.Message.new() orelse {
@@ -856,7 +765,7 @@ fn arcRefresh(l: *Lua) i32 {
         defer msg.free();
         msg.add(.{@as(i32, @intCast(i))}) catch return 0;
         msg.addSlice(i32, &monome.devices.data[num][i]) catch return 0;
-        osc.server.send(monome.devices.dev_addr[num] orelse return 0, path, msg) catch {
+        osc.server.send(addr, path, msg) catch {
             logger.err("error sending /ring/map", .{});
         };
         monome.devices.dirty[num][i] = false;
@@ -923,13 +832,13 @@ fn concatIntoBufZAssumeCapacity(buf: []u8, first: []const u8, second: []const u8
     return buf[0 .. first.len + second.len :0];
 }
 
-const o = @import("osc.zig");
-const Osc = o.Osc;
-const logger = o.logger;
-const lo = @import("ziglo");
+const logger = std.log.scoped(.serialosc);
+const Osc = @import("osc.zig").Osc;
 const std = @import("std");
-const Events = @import("events.zig");
-const Spindle = @import("spindle.zig");
+const lo = @import("ziglo");
+const xev = @import("xev");
 const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
 const lu = @import("lua_util.zig");
+const Seamstress = @import("seamstress.zig");
+const Error = Seamstress.Error;

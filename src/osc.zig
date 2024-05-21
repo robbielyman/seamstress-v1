@@ -2,140 +2,312 @@
 
 // returns the module interface
 pub fn module() Module {
-    return .{
-        .vtable = &.{
-            .init_fn = init,
-            .deinit_fn = deinit,
-            .launch_fn = launch,
-        },
-    };
+    return .{ .vtable = &.{
+        .init_fn = init,
+        .deinit_fn = deinit,
+        .launch_fn = launch,
+    } };
 }
 
 // sets up the OSC server, using the config-provided port if it exists, otherwise using a free one
-fn init(m: *Module, vm: *Spindle) Error!void {
-    const self = try vm.allocator.create(Osc);
-    const port = lu.getConfig(vm, "local_port", [*:0]const u8) catch null;
+fn init(m: *Module, vm: *Spindle, _: *Wheel, allocator: std.mem.Allocator) Error!void {
+    const l = vm.l;
+    const self = try allocator.create(Osc);
+    const port = lu.getConfig(l, "local_port", [*:0]const u8) catch null;
+    var addr = std.net.Address.initIp4(.{ 127, 0, 0, 1 }, 0);
     self.* = .{
-        .server = lo.Server.new(port, lo.wrap(errHandler)) orelse return error.LaunchFailed,
-        .vm = vm,
-        .path_pool = StringPool.init(vm.allocator),
-        .event_pool = std.heap.MemoryPool(OscEvent).initPreheated(vm.allocator, 256) catch return error.LaunchFailed,
-        .monome = .{
-            .serialosc_address = lo.Address.new("127.0.0.1", "12002") orelse return error.LaunchFailed,
-            .local_address = lo.Message.new() orelse return error.LaunchFailed,
-            .pool = std.heap.MemoryPoolExtra(Monome.Event, .{}).initPreheated(vm.allocator, 128) catch return error.LaunchFailed,
-        },
+        .watcher = xev.UDP.init(addr) catch return error.LaunchFailed,
+        .server = lo.Server.new(null, lo.wrap(Osc.errHandler)) orelse return error.LaunchFailed,
+        .lua = l,
+        .s = .{ .userdata = null },
+        .buffer = try allocator.alloc(u8, 65535),
+        .last_addr = null,
+        .monome = undefined,
     };
-    const real_port = self.server.getPort() catch return error.LaunchFailed;
-    self.monome.local_address.add(.{ "127.0.0.1", @as(i32, @intCast(real_port)) }) catch return error.LaunchFailed;
-    self.monome.init();
-    var buf: std.BoundedArray(u8, 1024) = .{};
-    std.fmt.format(buf.writer(), "{d}\x00", .{real_port}) catch unreachable;
+    var port_num: u16 = std.fmt.parseUnsigned(u16, std.mem.sliceTo(port orelse "7777", 0), 10) catch 7777;
+    var try_again = true;
+    var rand = std.rand.DefaultPrng.init(7777);
+    const r = rand.random();
+    while (try_again) {
+        addr.setPort(port_num);
+        self.watcher.bind(addr) catch {
+            port_num = r.int(u16);
+            continue;
+        };
+        try_again = false;
+    }
+    var buf: std.BoundedArray(u8, 256) = .{};
+    std.fmt.format(buf.writer(), "{d}\x00", .{port_num}) catch unreachable;
     const slice: [:0]const u8 = buf.slice()[0 .. buf.len - 1 :0];
-    try lu.setConfig(vm, "local_port", slice);
+    try lu.setConfig(l, "local_port", slice);
+
+    const local_address = lo.Message.new() orelse return error.LaunchFailed;
+    local_address.add(.{ "127.0.0.1", @as(i32, @intCast(port_num))}) catch return error.LaunchFailed;
+    try self.monome.init(local_address);
     logger.info("local port: {s}", .{slice});
-    m.self = self;
 
-    _ = self.server.addMethod("/seamstress/quit", null, lo.wrap(Osc.setQuit), self);
-
-    lu.registerSeamstress(vm, "osc_send", oscSend, self);
-    self.monome.registerLua(vm);
+    _ = self.server.addMethod("/seamstress/quit", null, lo.wrap(setQuit), l);
     self.monome.addMethods();
-    self.resetDefaultHandler();
+    _ = self.server.addMethod(null, null, lo.wrap(defaultHandler), self);
+
+    lu.registerSeamstress(l, "osc_send", oscSend, self);
+    self.monome.registerLua(l);
+    
+    m.self = self;
 }
 
-// starts the OSC server thread
-fn launch(m: *const Module, vm: *Spindle) Error!void {
-    _ = vm; // autofix
-    const self: *Osc = @ptrCast(@alignCast(m.self orelse return error.LaunchFailed));
-    self.pid = std.Thread.spawn(.{}, Osc.loop, .{self}) catch return error.LaunchFailed;
-    self.monome.sendList();
-}
-
-// shuts down the OSC server thread
-fn deinit(m: *const Module, vm: *Spindle, cleanup: Cleanup) void {
+fn deinit(m: *const Module, l: *Lua, allocator: std.mem.Allocator, cleanup: Cleanup) void {
+    if (cleanup != .full) return;
     const self: *Osc = @ptrCast(@alignCast(m.self orelse return));
-    defer if (cleanup == .full) {
-        self.monome.deinit();
-        self.server.free();
-        self.event_pool.deinit();
-        self.path_pool.deinit();
-        vm.allocator.destroy(self);
+    const wheel = lu.getWheel(l);
+    self.watcher.close(&wheel.loop, &self.c, anyopaque, null, noopCallback);
+
+    self.monome.deinit();
+    self.server.free();
+    allocator.free(self.buffer);
+    allocator.destroy(self);
+}
+
+fn launch(m: *const Module, _: *Lua, wheel: *Wheel) Error!void {
+    const self: *Osc = @ptrCast(@alignCast(m.self orelse return error.LaunchFailed));
+    self.monome.sendList();
+    const buf: xev.ReadBuffer = .{ .slice = self.buffer };
+    self.watcher.read(&wheel.loop, &self.c, &self.s, buf, Osc, self, callbackOSC);
+}
+
+// pub so that submodules like monome.zig can access it
+pub const Osc = struct {
+    watcher: xev.UDP,
+    c: xev.Completion = .{},
+    s: xev.UDP.State,
+    server: *lo.Server,
+    lua: *Lua,
+    monome: @import("monome.zig"),
+    last_addr: ?std.net.Address,
+    buffer: []u8,
+    
+// pub so that submodules like monome.zig can access it
+pub fn errHandler(errno: i32, msg: ?[*:0]const u8, path: ?[*:0]const u8) void {
+    logger.err("liblo error {d} at {s}: {s}", .{ errno, path orelse "", msg orelse "" });
+}
+
+};
+
+// pub so that submodules like monome.zig can access it
+pub const OscServer = struct {
+    server: *lo.Server,
+    lua: *Lua,
+    addr: std.net.Address,
+};
+
+fn noopCallback(
+    _: ?*anyopaque, _: *xev.Loop, _: *xev.Completion, _: xev.UDP, err: xev.UDP.CloseError!void
+) xev.CallbackAction {
+    _ = err catch {};
+    return .disarm;
+}
+
+fn callbackOSC(
+    ud: ?*Osc,
+    _: *xev.Loop,
+    _: *xev.Completion,
+    _: *xev.UDP.State,
+    addr: std.net.Address,
+    _: xev.UDP,
+    b: xev.ReadBuffer,
+    r: xev.ReadError!usize,
+) xev.CallbackAction {
+    const size = r catch |e| {
+        logger.err("error while reading: {}", .{e});
+        return .rearm;
     };
-    if (self.pid) |p| {
-        var buf: [4096]u8 = undefined;
-        const quit_msg = lo.Message.new() orelse {
-            p.detach();
-            return;
-        };
-        defer if (cleanup == .full) quit_msg.free();
-        const data = quit_msg.serialise("/seamstress/quit", &buf) catch {
-            p.detach();
-            return;
-        };
-        self.server.dispatchData(data) catch {
-            p.detach();
-            return;
-        };
-        switch (cleanup) {
-            .full => {
-                p.join();
-            },
-            .panic, .clean => p.detach(),
+    const self = ud.?;
+    for (&self.monome.devices.server, &self.monome.devices.dev_addr) |server, other| {
+        if (addr.eql(other orelse continue)) {
+            server.dispatchData(b.slice[0..size]) catch {
+                logger.err("liblo error!", .{});
+            };
+            return .rearm;
         }
     }
+    self.last_addr = addr;
+    self.server.dispatchData(b.slice[0..size]) catch {
+        logger.err("liblo error!", .{});
+    };
+    return .rearm;
 }
 
-// FIXME: no real way to panic on error, so let's assume they're "fine"
-fn errHandler(errno: i32, msg: ?[*:0]const u8, path: ?[*:0]const u8) void {
-    logger.err("liblo error {d} at {s}: {s}", .{
-        errno,
-        path orelse "",
-        msg orelse "",
-    });
+// quits
+fn setQuit(_: [:0]const u8, _: []const u8, _: *lo.Message, ctx: ?*anyopaque) bool {
+    const l: *Lua = @ptrCast(@alignCast(ctx orelse return true));
+    lu.quit(l);
+    return false;
 }
 
-// pub so submodules like monome.zig can access it
-pub const Osc = struct {
-    server: *lo.Server,
-    // needed to be able to post events from OSC handlers
-    vm: *Spindle,
-    pid: ?std.Thread = null,
-    path_pool: StringPool,
-    event_pool: std.heap.MemoryPool(OscEvent),
-    quit: bool = false,
-    monome: Monome,
-    default_handler: ?*lo.Method = null,
-
-    // the main OSC loop
-    fn loop(self: *Osc) void {
-        while (!self.quit) {
-            // TODO: theoretically we could allow an infinite timeout, huh
-            const ready = self.server.wait(1000);
-            if (ready) {
-                _ = self.server.receive() catch {
-                    logger.err("OSC receive failed! shutting down OSC...", .{});
-                    return;
-                };
+/// handles OSC events that aren't intercepted by another module
+/// this _includes_ custom functions registered from Lua
+/// ah, whose registry we can manage entirely in Lua actually lol, nice
+fn defaultHandler(path: [:0]const u8, _: []const u8, msg: *lo.Message, ctx: ?*anyopaque) bool {
+    const self: *Osc = @ptrCast(@alignCast(ctx orelse return true));
+    const l = self.lua;
+    // push _seamstress onto the stack
+    lu.getSeamstress(l);
+    // grab osc.method_list
+    _ = l.getField(-1, "osc");
+    l.remove(-2);
+    _ = l.getField(-1, "method_list");
+    l.remove(-2);
+    // nil, to get the first key
+    l.pushNil();
+    // if one of our lua-defined functions returns something truthy, we stop
+    var keep_going = true;
+    while (l.next(-2) and keep_going) {
+        {
+            const t = l.typeOf(-2);
+            // if the key is not a string, keep going
+            if (t != .string) {
+                logger.err("OSC handler: string expected, got {s}", .{l.typeName(t)});
+                // remove the value, keep the key
+                l.pop(1);
+                continue;
             }
         }
-        self.pid = null;
-    }
+        // if it is, check to see if we match the path of this event
+        if (!lo.patternMatch(path, l.toStringEx(-2))) {
+            l.pop(1);
+            continue;
+        }
 
-    fn setQuit(_: [:0]const u8, _: []const u8, _: *lo.Message, ctx: ?*anyopaque) bool {
-        const osc: *Osc = @ptrCast(@alignCast(ctx orelse return true));
-        osc.quit = true;
-        lu.quit(osc.vm);
-        return false;
+        // first of all, the value had better be a function or a table of functions
+        const t = l.typeOf(-1);
+        switch (t) {
+            .function => keep_going = pushArgsAndCall(l, msg, self.last_addr.?, path),
+            .table => {
+                l.len(-1);
+                // if it's a table, how long is it?
+                const len = l.toInteger(-1) catch unreachable;
+                l.pop(1);
+                var index: ziglua.Integer = 1;
+                // while loop because in Zig for loops are limited to `usize`
+                while (index <= len and keep_going) : (index += 1) {
+                    const t2 = l.getIndex(-1, index);
+                    if (t2 != .function) {
+                        logger.err("OSC handler: function expected, got {s}", .{l.typeName(t2)});
+                        l.pop(1);
+                        continue;
+                    }
+                    keep_going = pushArgsAndCall(l, msg, self.last_addr.?, path);
+                }
+            },
+            else => {
+                logger.err("OSC handler: function or list of functions expected, got: {s}", .{l.typeName(t)});
+                l.pop(1);
+                continue;
+            },
+        }
+        // if keep_going is still true, call the default handler
+        if (keep_going) {
+            lu.getSeamstress(l);
+            _ = l.getField(-1, "osc");
+            l.remove(-2);
+            _ = l.getField(-1, "event");
+            l.remove(-2);
+            _ = pushArgsAndCall(l, msg, self.last_addr.?, path);
+        }
     }
+    return false;
+}
 
-    // a silly hack to make sure that the default handler is always called last
-    pub fn resetDefaultHandler(self: *Osc) void {
-        if (self.default_handler) |handler|
-            _ = self.server.deleteMethod(handler);
-        self.default_handler = self.server.addMethod(null, null, lo.wrap(defaultHandler), self);
-    }
-};
+/// pushes the contents of `msg` onto the stack and calls the function at the top of the stack
+/// the function will receive the args as `path`, `args` (which may be an empty table) and `{from_hostname, from_port}`
+fn pushArgsAndCall(l: *Lua, msg: *lo.Message, addr: std.net.Address, path: [:0]const u8) bool {
+    const top = l.getTop();
+    // push path first
+    _ = l.pushString(path);
+    const len = msg.argCount();
+    l.createTable(@intCast(len), 0);
+    // grab the list of types
+    const types: []const u8 = if (len > 0) msg.types().?[0..len] else "";
+    // cheeky way to handle the errors only once
+    _ = err: {
+        // loop over the types, adding them to our table
+        for (types, 0..) |t, i| {
+            switch (t) {
+                'i', 'h' => {
+                    const arg = msg.getArg(i64, i) catch |err| break :err err;
+                    l.pushInteger(@intCast(arg));
+                    l.setIndex(-2, @intCast(i + 1));
+                },
+                'f', 'd' => {
+                    const arg = msg.getArg(f64, i) catch |err| break :err err;
+                    l.pushNumber(arg);
+                    l.setIndex(-2, @intCast(i + 1));
+                },
+                's', 'S' => {
+                    const arg = msg.getArg([:0]const u8, i) catch |err| break :err err;
+                    _ = l.pushStringZ(arg);
+                    l.setIndex(-2, @intCast(i + 1));
+                },
+                'm' => {
+                    const arg = msg.getArg([4]u8, i) catch |err| break :err err;
+                    _ = l.pushString(&arg);
+                    l.setIndex(-2, @intCast(i + 1));
+                },
+                'b' => {
+                    const arg = msg.getArg([]const u8, i) catch |err| break :err err;
+                    _ = l.pushString(arg);
+                    l.setIndex(-2, @intCast(i + 1));
+                },
+                'c' => {
+                    const arg = msg.getArg(u8, i) catch |err| break :err err;
+                    _ = l.pushString(&.{arg});
+                    l.setIndex(-2, @intCast(i + 1));
+                },
+                'T', 'F' => {
+                    const arg = msg.getArg(bool, i) catch |err| break :err err;
+                    l.pushBoolean(arg);
+                    l.setIndex(-2, @intCast(i + 1));
+                },
+                'I', 'N' => {
+                    const arg = msg.getArg(lo.LoType, i) catch |err| break :err err;
+                    switch (arg) {
+                        .infinity => l.pushInteger(ziglua.max_integer),
+                        .nil => l.pushNil(),
+                    }
+                    l.setIndex(-2, @intCast(i + 1));
+                },
+                else => unreachable,
+            }
+        }
+    } catch |err| {
+        logger.err("error getting argument: {s}", .{@errorName(err)});
+        l.pop(l.getTop() - top);
+        return true;
+    };
+    pushAddress(l, addr);
+    // call the function
+    lu.doCall(l, 3, 1);
+    defer l.pop(1);
+    // if we got something truthy, that means we're done so should return false
+    return !l.toBoolean(-1);
+}
+
+fn pushAddress(l: *Lua, addr: std.net.Address) void {
+    l.createTable(2, 0);
+    var counter = std.io.countingWriter(std.io.null_writer);
+    addr.format("", .{}, counter.writer()) catch unreachable;
+    const count = counter.bytes_written;
+    var buf: ziglua.Buffer = .{};
+    const slice = buf.initSize(l, @intCast(count));
+    var stream = std.io.fixedBufferStream(slice);
+    addr.format("", .{}, stream.writer()) catch unreachable;
+    const idx = std.mem.lastIndexOfScalar(u8, slice, ':').?;
+    _ = l.pushString(slice[idx + 1 ..]);
+    l.setIndex(-2, 2);
+    buf.addSize(idx);
+    buf.pushResult();
+    l.setIndex(-2, 1);
+}
 
 /// sends an OSC message
 // users should use `osc.send` instead.
@@ -239,220 +411,17 @@ pub fn oscSend(l: *Lua) i32 {
     return 0;
 }
 
-// handles an OSC event by submitting it to the events queue
-fn defaultHandler(path: [:0]const u8, _: []const u8, msg: *lo.Message, ctx: ?*anyopaque) bool {
-    const osc: *Osc = @ptrCast(@alignCast(ctx orelse return true));
-    const interned = osc.path_pool.intern(path) catch {
-        lu.panic(osc.vm, error.OutOfMemory);
-        return true;
-    };
-    const source = msg.source() orelse return true;
-    const addr = lo.Address.new(source.getHostname().?, source.getPort().?).?;
-    const ev: *OscEvent = osc.event_pool.create() catch {
-        lu.panic(osc.vm, error.OutOfMemory);
-        return true;
-    };
-    ev.* = .{
-        .msg = msg,
-        .addr = addr,
-        .path = interned,
-        .osc = osc,
-    };
-    // prevents the message from being freed until oscHandler calls free on it
-    msg.incRef();
-    osc.vm.events.submit(&ev.node);
-    return false;
-}
-
-// event closure for default handling of OSC events
-const OscEvent = struct {
-    path: [:0]const u8,
-    msg: *lo.Message,
-    addr: *lo.Address,
-    osc: *Osc,
-    node: Events.Node = .{
-        .handler = Events.handlerFromClosure(OscEvent, oscHandler, "node"),
-    },
-
-    // handles OSC events that aren't intercepted by another module
-    // this includes custom functions registered from Lua
-    // ah, whose registry we can manage entirely in Lua actually lol, nice
-    fn oscHandler(self: *OscEvent, l: *Lua) void {
-        defer {
-            l.setTop(0);
-            self.addr.free();
-            self.msg.free();
-            self.osc.event_pool.destroy(self);
-        }
-        // push _seamstress onto the stack
-        lu.getSeamstress(l);
-        // grabs `osc.method_list`
-        _ = l.getField(-1, "osc");
-        l.remove(-2);
-        _ = l.getField(-1, "method_list");
-        l.remove(-2);
-        // nil, to get the first key
-        l.pushNil();
-        // if one of our lua-defined functions returns something truthy, we stop
-        var keep_going = true;
-        // iterate over the key / value pairs of _seamstress.osc.method_list
-        while (l.next(-2) and keep_going) {
-            const t = l.typeOf(-2);
-            // if the key is not a string, keep going
-            if (t != .string) {
-                logger.err("OSC handler: string expected, got {s}", .{l.typeName(t)});
-                // remove the value, keep the key
-                l.pop(1);
-                continue;
-            }
-            // if it is, check to see if we match the path of this event
-            if (lo.patternMatch(self.path, l.toString(-2) catch unreachable)) {
-                // first of all, the value had better be a function or a table of functions
-                const t2 = l.typeOf(-1);
-                switch (t2) {
-                    // if it's a function, call it
-                    .function => keep_going = pushArgsAndCall(l, self.msg, self.addr, self.path),
-                    .table => {
-                        l.len(-1);
-                        // if it's a table, how long is it?
-                        const len = l.toInteger(-1) catch unreachable;
-                        l.pop(1);
-
-                        var index: ziglua.Integer = 1;
-                        // while loop because in Zig for loops are limited to `usize`
-                        while (index <= len and keep_going) : (index += 1) {
-                            const t3 = l.getIndex(-1, index);
-                            if (t3 != .function) {
-                                logger.err("OSC handler: function expected, got {s}", .{l.typeName(t3)});
-                                l.pop(1);
-                                continue;
-                            }
-                            keep_going = pushArgsAndCall(l, self.msg, self.addr, self.path);
-                        }
-                    },
-                    else => {
-                        logger.err("OSC handler: function or list of functions expected, got {s}", .{l.typeName(t2)});
-                        l.pop(1);
-                        continue;
-                    },
-                }
-            } else l.pop(1);
-        }
-
-        // if keep_going is still true, call the default handler
-        if (keep_going) {
-            lu.getSeamstress(l);
-            _ = l.getField(-1, "osc");
-            l.remove(-2);
-            _ = l.getField(-1, "event");
-            l.remove(-2);
-            _ = pushArgsAndCall(l, self.msg, self.addr, self.path);
-        }
-    }
-
-    // pushes the contents of `msg` onto the stack and calls the function at the top of the stack
-    // the function will receive the args as `path`, `args` (which may be an empty table) and `{from_hostname, from_port}`
-    fn pushArgsAndCall(l: *Lua, msg: *lo.Message, addr: *lo.Address, path: [:0]const u8) bool {
-        const top = l.getTop();
-        // push path first
-        _ = l.pushString(path);
-        const len = msg.argCount();
-        l.createTable(@intCast(len), 0);
-        // grab the list of types
-        const types: []const u8 = if (len > 0) msg.types().?[0..len] else "";
-        // cheeky way to handle the errors only once
-        _ = err: {
-            // loop over the types, adding them to our table
-            for (types, 0..) |t, i| {
-                switch (t) {
-                    'i', 'h' => {
-                        const arg = msg.getArg(i64, i) catch |err| break :err err;
-                        l.pushInteger(@intCast(arg));
-                        l.setIndex(-2, @intCast(i + 1));
-                    },
-                    'f', 'd' => {
-                        const arg = msg.getArg(f64, i) catch |err| break :err err;
-                        l.pushNumber(arg);
-                        l.setIndex(-2, @intCast(i + 1));
-                    },
-                    's', 'S' => {
-                        const arg = msg.getArg([:0]const u8, i) catch |err| break :err err;
-                        _ = l.pushStringZ(arg);
-                        l.setIndex(-2, @intCast(i + 1));
-                    },
-                    'm' => {
-                        const arg = msg.getArg([4]u8, i) catch |err| break :err err;
-                        _ = l.pushString(&arg);
-                        l.setIndex(-2, @intCast(i + 1));
-                    },
-                    'b' => {
-                        const arg = msg.getArg([]const u8, i) catch |err| break :err err;
-                        _ = l.pushString(arg);
-                        l.setIndex(-2, @intCast(i + 1));
-                    },
-                    'c' => {
-                        const arg = msg.getArg(u8, i) catch |err| break :err err;
-                        _ = l.pushString(&.{arg});
-                        l.setIndex(-2, @intCast(i + 1));
-                    },
-                    'T', 'F' => {
-                        const arg = msg.getArg(bool, i) catch |err| break :err err;
-                        l.pushBoolean(arg);
-                        l.setIndex(-2, @intCast(i + 1));
-                    },
-                    'I', 'N' => {
-                        const arg = msg.getArg(lo.LoType, i) catch |err| break :err err;
-                        switch (arg) {
-                            .infinity => l.pushInteger(ziglua.max_integer),
-                            .nil => l.pushNil(),
-                        }
-                        l.setIndex(-2, @intCast(i + 1));
-                    },
-                    else => unreachable,
-                }
-            }
-        } catch |err| {
-            logger.err("error getting argument: {s}", .{@errorName(err)});
-            l.pop(l.getTop() - top);
-            return true;
-        };
-        // should never be null
-        l.createTable(2, 0);
-        // get the address
-        if (addr.getHostname()) |host| {
-            _ = l.pushStringZ(std.mem.sliceTo(host, 0));
-            l.setIndex(-2, 1);
-        } else {
-            l.pushNil();
-            l.setIndex(-2, 1);
-        }
-        // get the port
-        if (addr.getPort()) |port| {
-            _ = l.pushStringZ(std.mem.sliceTo(port, 0));
-            l.setIndex(-2, 2);
-        } else {
-            l.pushNil();
-            l.setIndex(-2, 2);
-        }
-        // call the function
-        l.call(3, 1);
-        defer l.pop(1);
-        // if we got something truthy, that means we're done, so should return false
-        return if (l.toBoolean(-1)) false else true;
-    }
-};
+const logger = std.log.scoped(.osc);
 
 const Module = @import("module.zig");
-const Seamstress = @import("seamstress.zig");
-const Error = Seamstress.Error;
-const Cleanup = Seamstress.Cleanup;
-const Spindle = @import("spindle.zig");
-const StringPool = @import("string_pool.zig").StringPool(0);
-const Events = @import("events.zig");
-const lo = @import("ziglo");
-const std = @import("std");
-pub const logger = std.log.scoped(.osc);
 const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
+const Seamstress = @import("seamstress.zig");
+const Cleanup = Seamstress.Cleanup;
+const Error = Seamstress.Error;
+const Wheel = @import("wheel.zig");
+const Spindle = @import("spindle.zig");
 const lu = @import("lua_util.zig");
-const Monome = @import("monome.zig");
+const lo = @import("ziglo");
+const xev = @import("xev");
+const std = @import("std");

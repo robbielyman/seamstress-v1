@@ -27,5 +27,9 @@
             .url = "https://github.com/ryleelyman/rtmidi_z/archive/de7c7a5f9dbdbe84f8792769e72a8347e0cc963f.tar.gz",
             .hash = "12202255aa378adcdaada18c4f2b3a9b700a530fbf1fdb17b6ba8601c938e8c888e9",
         },
+        .libxev = .{
+            .url = "https://github.com/mitchellh/libxev/archive/a284cf851fe2f88f8947c01160c39ff216dacea1.tar.gz",
+            .hash = "12205b8ea5495b812b9a8943535a7af8da556644d2c1599dc01e1a5ea7aaf59bb2c7",
+        },
     },
 }
