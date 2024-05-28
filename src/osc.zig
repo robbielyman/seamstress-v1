@@ -1,97 +1,10 @@
 /// OSC module
+const Osc = @This();
 
-// returns the module interface
-pub fn module() Module {
-    return .{ .vtable = &.{
-        .init_fn = init,
-        .deinit_fn = deinit,
-        .launch_fn = launch,
-    } };
-}
-
-// sets up the OSC server, using the config-provided port if it exists, otherwise using a free one
-fn init(m: *Module, vm: *Spindle, _: *Wheel, allocator: std.mem.Allocator) Error!void {
-    const l = vm.l;
-    const self = try allocator.create(Osc);
-    const port = lu.getConfig(l, "local_port", [*:0]const u8) catch null;
-    var addr = std.net.Address.initIp4(.{ 127, 0, 0, 1 }, 0);
-    self.* = .{
-        .watcher = xev.UDP.init(addr) catch return error.LaunchFailed,
-        .server = lo.Server.new(null, lo.wrap(Osc.errHandler)) orelse return error.LaunchFailed,
-        .lua = l,
-        .s = .{ .userdata = null },
-        .buffer = try allocator.alloc(u8, 65535),
-        .last_addr = null,
-        .monome = undefined,
-    };
-    var port_num: u16 = std.fmt.parseUnsigned(u16, std.mem.sliceTo(port orelse "7777", 0), 10) catch 7777;
-    var try_again = true;
-    var rand = std.rand.DefaultPrng.init(7777);
-    const r = rand.random();
-    while (try_again) {
-        addr.setPort(port_num);
-        self.watcher.bind(addr) catch {
-            port_num = r.int(u16);
-            continue;
-        };
-        try_again = false;
-    }
-    var buf: std.BoundedArray(u8, 256) = .{};
-    std.fmt.format(buf.writer(), "{d}\x00", .{port_num}) catch unreachable;
-    const slice: [:0]const u8 = buf.slice()[0 .. buf.len - 1 :0];
-    try lu.setConfig(l, "local_port", slice);
-
-    const local_address = lo.Message.new() orelse return error.LaunchFailed;
-    local_address.add(.{ "127.0.0.1", @as(i32, @intCast(port_num))}) catch return error.LaunchFailed;
-    try self.monome.init(local_address);
-    logger.info("local port: {s}", .{slice});
-
-    _ = self.server.addMethod("/seamstress/quit", null, lo.wrap(setQuit), l);
-    self.monome.addMethods();
-    _ = self.server.addMethod(null, null, lo.wrap(defaultHandler), self);
-
-    lu.registerSeamstress(l, "osc_send", oscSend, self);
-    self.monome.registerLua(l);
-    
-    m.self = self;
-}
-
-fn deinit(m: *const Module, l: *Lua, allocator: std.mem.Allocator, cleanup: Cleanup) void {
-    if (cleanup != .full) return;
-    const self: *Osc = @ptrCast(@alignCast(m.self orelse return));
-    const wheel = lu.getWheel(l);
-    self.watcher.close(&wheel.loop, &self.c, anyopaque, null, noopCallback);
-
-    self.monome.deinit();
-    self.server.free();
-    allocator.free(self.buffer);
-    allocator.destroy(self);
-}
-
-fn launch(m: *const Module, _: *Lua, wheel: *Wheel) Error!void {
-    const self: *Osc = @ptrCast(@alignCast(m.self orelse return error.LaunchFailed));
-    self.monome.sendList();
-    const buf: xev.ReadBuffer = .{ .slice = self.buffer };
-    self.watcher.read(&wheel.loop, &self.c, &self.s, buf, Osc, self, callbackOSC);
-}
-
-// pub so that submodules like monome.zig can access it
-pub const Osc = struct {
-    watcher: xev.UDP,
-    c: xev.Completion = .{},
-    s: xev.UDP.State,
-    server: *lo.Server,
-    lua: *Lua,
-    monome: @import("monome.zig"),
-    last_addr: ?std.net.Address,
-    buffer: []u8,
-    
 // pub so that submodules like monome.zig can access it
 pub fn errHandler(errno: i32, msg: ?[*:0]const u8, path: ?[*:0]const u8) void {
     logger.err("liblo error {d} at {s}: {s}", .{ errno, path orelse "", msg orelse "" });
 }
-
-};
 
 // pub so that submodules like monome.zig can access it
 pub const OscServer = struct {
@@ -100,9 +13,7 @@ pub const OscServer = struct {
     addr: std.net.Address,
 };
 
-fn noopCallback(
-    _: ?*anyopaque, _: *xev.Loop, _: *xev.Completion, _: xev.UDP, err: xev.UDP.CloseError!void
-) xev.CallbackAction {
+fn noopCallback(_: ?*anyopaque, _: *xev.Loop, _: *xev.Completion, _: xev.UDP, err: xev.UDP.CloseError!void) xev.CallbackAction {
     _ = err catch {};
     return .disarm;
 }
@@ -139,8 +50,8 @@ fn callbackOSC(
 
 // quits
 fn setQuit(_: [:0]const u8, _: []const u8, _: *lo.Message, ctx: ?*anyopaque) bool {
-    const l: *Lua = @ptrCast(@alignCast(ctx orelse return true));
-    lu.quit(l);
+    const wheel: *Wheel = @ptrCast(@alignCast(ctx.?));
+    wheel.quit();
     return false;
 }
 
@@ -411,6 +322,89 @@ pub fn oscSend(l: *Lua) i32 {
     return 0;
 }
 
+watcher: xev.UDP,
+c: xev.Completion = .{},
+s: xev.UDP.State,
+server: *lo.Server,
+lua: *Lua,
+monome: @import("monome.zig"),
+last_addr: ?std.net.Address,
+buffer: []u8,
+
+// sets up the OSC server, using the config-provided port if it exists, otherwise using a free one
+fn init(m: *Module, vm: *Spindle, allocator: std.mem.Allocator) void {
+    const l = vm.l;
+    const self = allocator.create(Osc) catch panic("out of memory!", .{});
+    const port = lu.getConfig(l, "local_port", ?[*:0]const u8);
+    var addr = std.net.Address.initIp4(.{ 127, 0, 0, 1 }, 0);
+    self.* = .{
+        .watcher = xev.UDP.init(addr) catch panic("unable to init UDP listener!", .{}),
+        .server = lo.Server.new(null, lo.wrap(Osc.errHandler)) orelse panic("out of memory!", .{}),
+        .lua = l,
+        .s = .{ .userdata = null },
+        .buffer = allocator.alloc(u8, 65535) catch panic("out of memory!", .{}),
+        .last_addr = null,
+        .monome = undefined,
+    };
+    var port_num: u16 = std.fmt.parseUnsigned(u16, std.mem.sliceTo(port orelse "7777", 0), 10) catch 7777;
+    var try_again = true;
+    var rand = std.rand.DefaultPrng.init(7777);
+    const r = rand.random();
+    while (try_again) {
+        addr.setPort(port_num);
+        self.watcher.bind(addr) catch {
+            port_num = r.int(u16);
+            continue;
+        };
+        try_again = false;
+    }
+    var buf: std.BoundedArray(u8, 256) = .{};
+    std.fmt.format(buf.writer(), "{d}\x00", .{port_num}) catch unreachable;
+    const slice: [:0]const u8 = buf.slice()[0 .. buf.len - 1 :0];
+    lu.setConfig(l, "local_port", slice);
+
+    const local_address = lo.Message.new() orelse panic("out of memory!", .{});
+    local_address.add(.{ "127.0.0.1", @as(i32, @intCast(port_num)) }) catch panic("out of memory!", .{});
+    self.monome.init(local_address);
+    logger.info("local port: {s}", .{slice});
+
+    _ = self.server.addMethod("/seamstress/quit", null, lo.wrap(setQuit), lu.getWheel(l));
+    self.monome.addMethods();
+    _ = self.server.addMethod(null, null, lo.wrap(defaultHandler), self);
+
+    lu.registerSeamstress(l, "osc_send", oscSend, self);
+    self.monome.registerLua(l);
+
+    m.self = self;
+}
+
+fn deinit(m: *const Module, l: *Lua, allocator: std.mem.Allocator, cleanup: Cleanup) void {
+    if (cleanup != .full) return;
+    const self: *Osc = @ptrCast(@alignCast(m.self orelse return));
+    const wheel = lu.getWheel(l);
+    self.watcher.close(&wheel.loop, &self.c, anyopaque, null, noopCallback);
+
+    self.monome.deinit();
+    self.server.free();
+    allocator.free(self.buffer);
+    allocator.destroy(self);
+}
+
+fn launch(m: *const Module, _: *Lua, wheel: *Wheel) void {
+    const self: *Osc = @ptrCast(@alignCast(m.self.?));
+    self.monome.sendList();
+    const buf: xev.ReadBuffer = .{ .slice = self.buffer };
+    self.watcher.read(&wheel.loop, &self.c, &self.s, buf, Osc, self, callbackOSC);
+}
+
+pub fn module() Module {
+    return .{ .vtable = &.{
+        .init_fn = init,
+        .deinit_fn = deinit,
+        .launch_fn = launch,
+    } };
+}
+
 const logger = std.log.scoped(.osc);
 
 const Module = @import("module.zig");
@@ -418,10 +412,10 @@ const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
 const Seamstress = @import("seamstress.zig");
 const Cleanup = Seamstress.Cleanup;
-const Error = Seamstress.Error;
 const Wheel = @import("wheel.zig");
 const Spindle = @import("spindle.zig");
-const lu = @import("lua_util.zig");
+const xev = @import("libxev");
 const lo = @import("ziglo");
-const xev = @import("xev");
+const lu = @import("lua_util.zig");
 const std = @import("std");
+const panic = std.debug.panic;

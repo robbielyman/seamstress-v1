@@ -1,6 +1,12 @@
-/// a collection of convenience functions intended to make module code easier to write
-/// checks that the function has the specified number of arguments
-pub fn checkNumArgs(l: *Lua, n: usize) void {
+/// a collection of useful functions for modules to use when interacting with Lua
+const ziglua = @import("ziglua");
+const Lua = ziglua.Lua;
+const Wheel = @import("wheel.zig");
+const std = @import("std");
+const panic = std.debug.panic;
+
+/// checks that the function has exactly the specified number of arguments
+pub fn checkNumArgs(l: *Lua, n: i32) void {
     if (l.getTop() != n) l.raiseErrorStr("error: requires %d arguments", .{n});
 }
 
@@ -32,26 +38,21 @@ pub fn closureGetContext(l: *Lua, comptime T: type) ?*T {
 
 // attempts to push _seamstress onto the stack
 pub fn getSeamstress(l: *Lua) void {
-    const t = l.getGlobal("_seamstress") catch |err| blk: {
-        logger.err("error getting _seamstress: {s}", .{@errorName(err)});
-        break :blk .nil;
-    };
+    const t = l.getGlobal("_seamstress") catch |err|
+        panic("error getting _seamstress: {s}", .{@errorName(err)});
     if (t == .table) return;
-    // FIXME: since the `Lua` object is a pointer,
-    // we can't use @fieldParentPtr to find the VM,
-    // so our only sensible option is to panic this way
-    std.debug.panic("_seamstress corrupted!", .{});
+    panic("_seamstress corrupted!", .{});
 }
 
 // attempts to get the method specified by name onto the stack
 pub fn getMethod(l: *Lua, field: [:0]const u8, method: [:0]const u8) void {
     getSeamstress(l);
     const t = l.getField(-1, field);
-    // FIXME: again, nothing sensible to do other than panic if something goes wrong
-    if (t != .table) std.debug.panic("_seamstress corrupted!", .{});
+    // nothing sensible to do other than panic if something goes wrong
+    if (t != .table) panic("_seamstress corrupted!", .{});
     l.remove(-2);
     const t2 = l.getField(-1, method);
-    if (t2 != .function) std.debug.panic("_seamstress corrupted!", .{});
+    if (t2 != .function) panic("_seamstress corrupted!", .{});
     l.remove(-2);
 }
 
@@ -59,72 +60,34 @@ pub fn getMethod(l: *Lua, field: [:0]const u8, method: [:0]const u8) void {
 pub fn getWheel(l: *Lua) *Wheel {
     getSeamstress(l);
     const t = l.getField(-1, "_loop");
-    // FIXME: again, nothing sensible to do other than panic if something goes wrong
-    if (t != .userdata and t != .light_userdata) std.debug.panic("_seamstress corrupted!", .{});
-    const self = l.toUserdata(Wheel, -1) catch std.debug.panic("_seamstress corrupted!", .{});
+    // nothing sensible to do other than panic if something goes wrong
+    if (t != .userdata and t != .light_userdata) panic("_seamstress corrupted!", .{});
+    const self = l.toUserdata(Wheel, -1) catch panic("_seamstress corrupted!", .{});
     l.pop(2);
     return self;
 }
 
 // attempts to set the specified field of the _seamstress.config table
-pub fn setConfig(l: *Lua, field: [:0]const u8, val: anytype) Error!void {
+pub fn setConfig(l: *Lua, field: [:0]const u8, val: anytype) void {
     getSeamstress(l);
     defer l.setTop(0);
     const t = l.getField(-1, "config");
-    // FIXME: again, nothing sensible to do other than panic if something goes wrong
-    if (t != .table) std.debug.panic("_seamstress corrupted!", .{});
-    l.pushAny(val) catch return error.LuaError;
+    // nothing sensible to do other than panic if something goes wrong
+    if (t != .table) panic("_seamstress corrupted!", .{});
+    l.pushAny(val) catch |err| panic("error setting config: {s}", .{@errorName(err)});
     l.setField(-2, field);
 }
 
 // attempts to get the specified field of the _seamstress.config table
-pub fn getConfig(l: *Lua, field: [:0]const u8, comptime T: type) Error!T {
+pub fn getConfig(l: *Lua, field: [:0]const u8, comptime T: type) T {
     getSeamstress(l);
     const t = l.getField(-1, "config");
-    // FIXME: again, nothing sensible to do other than panic if something goes wrong
-    if (t != .table) std.debug.panic("_seamstress corrupted!", .{});
+    // nothing sensible to do other than panic if something goes wrong
+    if (t != .table) panic("_seamstress corrupted!", .{});
     _ = l.getField(-1, field);
-    const ret = l.toAny(T, -1) catch return error.LuaFailed;
+    const ret = l.toAny(T, -1) catch |err| panic("error getting config: {s}", .{@errorName(err)});
     l.setTop(0);
     return ret;
-}
-
-// allows us to panic by pushing it through the event queue
-pub fn panic(l: *Lua, err: Error) void {
-    const wheel = getWheel(l);
-    wheel.err = err;
-    // attempt to dump the stack trace _now_ so that we don't have to carry it around
-    blk: {
-        const seamstress: *Seamstress = @fieldParentPtr("loop", wheel);
-        var info = std.debug.DebugInfo.init(seamstress.allocator) catch break :blk;
-        const config = std.io.tty.detectConfig(std.io.getStdErr());
-        @call(.always_inline, std.debug.writeCurrentStackTrace, .{ seamstress.vm.stderr.writer(), &info, config, null }) catch break :blk;
-    }
-    wheel.timer.run(&wheel.loop, &wheel.panic_ev, 1, Wheel, wheel, panicCallback);
-}
-
-// posts a quit event
-pub fn quit(l: *Lua) void {
-    const wheel = getWheel(l);
-    wheel.timer.run(&wheel.loop, &wheel.quit_ev, 1, Wheel, wheel, quitCallback);
-}
-
-fn quitCallback(wheel: ?*Wheel, _: *xev.Loop, _: *xev.Completion, err: xev.Timer.RunError!void) xev.CallbackAction {
-    const self = wheel.?;
-    _ = err catch unreachable;
-    const seamstress: *Seamstress = @fieldParentPtr("loop", self);
-    seamstress.deinit();
-    self.quit = true;
-    return .disarm;
-}
-
-fn panicCallback(wheel: ?*Wheel, _: *xev.Loop, _: *xev.Completion, err: xev.Timer.RunError!void) xev.CallbackAction {
-    const self = wheel.?;
-    _ = err catch unreachable;
-    const seamstress: *Seamstress = @fieldParentPtr("loop", self);
-    seamstress.panic(self.err.?);
-    self.quit = true;
-    return .disarm;
 }
 
 // a wrapper around lua_pcall
@@ -134,7 +97,6 @@ pub fn doCall(l: *Lua, nargs: i32, nres: i32) void {
     l.insert(base);
     l.protectedCall(nargs, nres, base) catch {
         l.remove(base);
-        luaPrint(l);
         return;
     };
     l.remove(base);
@@ -160,26 +122,118 @@ pub fn messageHandler(l: *Lua) i32 {
     return 1;
 }
 
-// calls our monkey-patched print function directly
+/// uses the lua_loadbuffer API to process a chunk
+/// returns true if the chunk is not a complete lua statement
+pub fn processChunk(l: *Lua, chunk: []const u8) bool {
+    // pushes the buffer onto the stack
+    _ = l.pushString(chunk);
+    // adds "return" to the beginning of the buffer
+    const with_return = std.fmt.allocPrint(l.allocator(), "return {s}", .{chunk}) catch panic("out of memory!", .{});
+    defer l.allocator().free(with_return);
+    // loads the chunk...
+    l.loadBuffer(with_return, "=stdin", .text) catch |err| {
+        // ... if the chunk does not compile
+        switch (err) {
+            // we ran out of RAM! ack!
+            error.Memory => panic("out of memory!", .{}),
+            // the chunk had a syntax error
+            error.Syntax => {
+                // remove the failed chunk
+                l.pop(1);
+                // load the chunk without "return " added
+                l.loadBuffer(chunk, "=stdin", .text) catch |err2| switch (err2) {
+                    error.Memory => panic("out of memory!", .{}),
+                    error.Syntax => {
+                        const msg = l.toStringEx(-1);
+                        // is the syntax error telling us that the statement isn't finished yet?
+                        if (std.mem.endsWith(u8, msg, "<eof>")) {
+                            // pop the unfinished chunk and any error message
+                            l.setTop(0);
+                            // true means we're continuing
+                            return true;
+                        } else {
+                            // remove the failed chunk
+                            l.remove(-2);
+                            // process the error message (add a stack trace)
+                            _ = messageHandler(l);
+                            return false;
+                        }
+                    },
+                };
+            },
+        }
+        // if we got here, the chunk compiled fine without "return " added
+        // bizarrely, we want to remove the compiled code---it's probably not a function but a value!
+        l.remove(1);
+        // instead let's call the buffer we pushed onto the stack earlier (tricksy tricksy)
+        _ = doCall(l, 0, ziglua.mult_return);
+        return false;
+    };
+    // ... the chunk compiles fine with "return " added!
+    // let's remove the buffer we pushed onto the stack earlier
+    l.remove(-2);
+    // and call the compiled function
+    doCall(l, 0, ziglua.mult_return);
+    return false;
+}
+
+/// call print from outside lua
 pub fn luaPrint(l: *Lua) void {
     const n = l.getTop();
     getSeamstress(l);
-    // gets the _print field of _seamstress
+    // put _print onto the stack
     _ = l.getField(-1, "_print");
-    // removes _seamstress from the stack
+    // remove _seamstress from the stack
     l.remove(-2);
-    // moves _print so that we can call it
+    // put print where we can call it
     l.insert(1);
-    // TODO: should we pcall instead?
     l.call(n, 0);
 }
 
-const logger = std.log.scoped(.spindle);
-const std = @import("std");
-const ziglua = @import("ziglua");
-const xev = @import("xev");
-const Lua = ziglua.Lua;
-const Spindle = @import("spindle.zig");
-const Seamstress = @import("seamstress.zig");
-const Error = Seamstress.Error;
-const Wheel = @import("wheel.zig");
+/// replaces `print`
+/// the terminal UI module is responsible for registering this function
+pub fn printFn(l: *Lua) i32 {
+    // how many things are we printing?
+    const n = l.getTop();
+    // get our closed-over value
+    const ctx = closureGetContext(l, std.io.AnyWriter).?;
+    // printing nothing should do nothing
+    if (n == 0) return 0;
+    // while loop because for loops are limited to `usize` in zig
+    var i: i32 = 1;
+    while (i <= n) : (i += 1) {
+        // separate with tabs
+        if (i > 1) ctx.writeAll("\t") catch {};
+        const t = l.typeOf(i);
+        switch (t) {
+            .number => {
+                if (l.isInteger(i)) {
+                    const int = l.checkInteger(i);
+                    ctx.print("{d}", .{int}) catch {};
+                } else {
+                    const double = l.checkNumber(i);
+                    ctx.print("{d}", .{double}) catch {};
+                }
+            },
+            .table => {
+                const str = l.toString(i) catch {
+                    const ptr = l.toPointer(i) catch unreachable;
+                    ctx.print("table: 0x{x}", .{@intFromPtr(ptr)}) catch {};
+                    continue;
+                };
+                ctx.print("{s}", .{str}) catch {};
+            },
+            .function => {
+                const ptr = l.toPointer(i) catch unreachable;
+                ctx.print("function: 0x{x}", .{@intFromPtr(ptr)}) catch {};
+            },
+            else => {
+                const str = l.toStringEx(i);
+                ctx.print("{s}", .{str}) catch {};
+            },
+        }
+    }
+    // finish with a newline
+    ctx.writeAll("\n") catch {};
+    return 0;
+}

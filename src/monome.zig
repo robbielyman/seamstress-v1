@@ -26,9 +26,9 @@ const Devices = struct {
     server: [num_devs]*lo.Server = undefined,
 };
 
-pub fn init(self: *Monome, local_address: *lo.Message) Error!void {
+pub fn init(self: *Monome, local_address: *lo.Message) void {
     self.* = .{
-        .serialosc_address = lo.Address.new("127.0.0.1", "12002") orelse return error.LaunchFailed,
+        .serialosc_address = lo.Address.new("127.0.0.1", "12002") orelse panic("out of memory!", .{}),
         .local_address = local_address,
     };
     const paths: [7][:0]const u8 = .{
@@ -51,7 +51,7 @@ pub fn init(self: *Monome, local_address: *lo.Message) Error!void {
             handleRotation(@intCast(i)),
             handlePrefix(@intCast(i)),
         };
-        self.devices.server[i] = lo.Server.new(null, lo.wrap(Osc.errHandler)) orelse return error.LaunchFailed;
+        self.devices.server[i] = lo.Server.new(null, lo.wrap(Osc.errHandler)) orelse panic("unable to create OSC server!", .{});
         inline for (paths, typespecs, methods) |path, typespec, method| {
             _ = self.devices.server[i].addMethod(path, typespec, lo.wrap(method), self);
         }
@@ -833,12 +833,12 @@ fn concatIntoBufZAssumeCapacity(buf: []u8, first: []const u8, second: []const u8
 }
 
 const logger = std.log.scoped(.serialosc);
-const Osc = @import("osc.zig").Osc;
+const Osc = @import("osc.zig");
 const std = @import("std");
 const lo = @import("ziglo");
-const xev = @import("xev");
+const xev = @import("libxev");
 const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
 const lu = @import("lua_util.zig");
 const Seamstress = @import("seamstress.zig");
-const Error = Seamstress.Error;
+const panic = std.debug.panic;
