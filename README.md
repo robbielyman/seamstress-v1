@@ -13,16 +13,16 @@ that link will contain a summary of seamstress 2's current capabilities.
 
 ## installation
 
-seamstress requires `lua` and `notcurses`. on macOS do
+seamstress requires `liblo` (and depends on the Zig projects [ziglua](https://github.com/natecraddock/ziglua), [libxev](https://github.com/mitchellh/libxev) and [libvaxis](https://github.com/rockorager/libvaxis).
 
 ```bash
-brew install lua notcurses pkg-config
+brew install lua pkg-config
 ```
 
 on ubuntu (for example) do
 
 ```bash
-sudo apt-get install liblua5.4-dev libnotcurses-core-dev
+sudo apt-get install liblo-dev
 ```
 
 alternatively to install with homebrew, do
@@ -34,7 +34,7 @@ brew install seamstress
 ## building from source
 
 
-building seamstress from source requires the master (nightly) version of [zig](https://github.com/ziglang/zig).
+building seamstress from source requires version 0.12.0 (soon to be 0.13.0) of [zig](https://github.com/ziglang/zig).
 the easiest way to get zig is to download a binary from [here](https://ziglang.org/download/) and add it to your PATH.
 to build seamstress, install the dependencies listed above (as well as `pkg-config`) and invoke
 
