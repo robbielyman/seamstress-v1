@@ -10,12 +10,12 @@
     .version = "1.4.5",
     .dependencies = .{
         .Lua = .{
-            .url = "https://github.com/natecraddock/ziglua/archive/486f51d3acc61d805783f5f07aee34c75ab59a25.tar.gz",
-            .hash = "12208603e0f51fa6ce7201d8e851c5979b6b78887434623ac87a0f2a5a3dd3e75130",
+            .url = "git+https://github.com/natecraddock/ziglua#d853aa9450ae568a39ea02d7082e85bafc33f735",
+            .hash = "1220affeb3fe37ef09411b5a213b5fdf9bb6568e9913bade204694648983a8b2776d",
         },
         .link = .{
-            .url = "https://github.com/ryleelyman/zig-abl_link/archive/f45fd3eb86e15ca3e28208bd05a894ad359d8857.tar.gz",
-            .hash = "1220204f523f548dd9ef1bfebd0fbb14653d627ca16a950b9d950b8963c91399ce8c",
+            .url = "git+https://github.com/ryleelyman/zig-abl_link#bca725468f88ef073cabc6da03696ceaa0af19c7",
+            .hash = "12205b92ab3c432ed67f84896ad0c4f89e1a3c3934bc9a34c16e98952eee717761ac",
         },
     },
 }

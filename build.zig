@@ -5,7 +5,7 @@ pub fn build(b: *std.Build) void {
     const optimize = b.standardOptimizeOption(.{});
     const exe = b.addExecutable(.{
         .name = "seamstress",
-        .root_source_file = .{ .path = "src/main.zig" },
+        .root_source_file = b.path("src/main.zig"),
         .target = target,
         .optimize = optimize,
     });
@@ -13,17 +13,17 @@ pub fn build(b: *std.Build) void {
     exe.headerpad_max_install_names = true;
 
     const install_lua_files = b.addInstallDirectory(.{
-        .source_dir = .{ .path = "lua" },
+        .source_dir = b.path("lua"),
         .install_dir = .{ .custom = "share/seamstress" },
         .install_subdir = "lua",
     });
     const install_resources = b.addInstallDirectory(.{
-        .source_dir = .{ .path = "resources" },
+        .source_dir = b.path("resources"),
         .install_dir = .{ .custom = "share/seamstress" },
         .install_subdir = "resources",
     });
     const install_examples = b.addInstallDirectory(.{
-        .source_dir = .{ .path = "examples" },
+        .source_dir = b.path("examples"),
         .install_dir = .{ .custom = "share/seamstress" },
         .install_subdir = "examples",
     });
