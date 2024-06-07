@@ -8,10 +8,11 @@
 
 local seamstress = {
   monome = {
-    grid = require "core/grid",
-    arc = require "core/arc",
+    grid = require "core.grid",
+    arc = require "core.arc",
   },
-  osc = require "core/osc",
+  osc = require "core.osc",
+  tui = nil,
   path = _seamstress.path,
 
   --- init callback to be overwritten in user scripts
@@ -21,5 +22,7 @@ local seamstress = {
   --- cleanup function to be overwritten in user scripts
   cleanup = function() end,
 }
+
+if _seamstress.config.tui then seamstress.tui = require 'core.tui' end
 
 return seamstress

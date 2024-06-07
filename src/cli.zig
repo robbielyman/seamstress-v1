@@ -11,7 +11,7 @@ continuing: bool = false,
 any: std.io.AnyWriter,
 
 /// flushes stdout and stderr, and re-prompts (usually)
-fn render(ctx: *anyopaque) void {
+fn render(ctx: *anyopaque, _: u64) void {
     const self: *Cli = @ptrCast(@alignCast(ctx));
     self.stderr.flush() catch {};
     const writer = self.stdout.writer();
@@ -53,7 +53,7 @@ fn hello(ctx: *anyopaque) void {
     const writer = self.stdout.writer();
     writer.print("SEAMSTRESS\n", .{}) catch return;
     writer.print("seamstress version: {}\n", .{@import("seamstress.zig").version}) catch return;
-    render(self);
+    render(self, 0);
 }
 
 fn init(m: *Module, vm: *Spindle, allocator: std.mem.Allocator) void {
@@ -116,6 +116,6 @@ const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
 const Cleanup = @import("seamstress.zig").Cleanup;
 const std = @import("std");
-const xev = @import("libxev");
+const xev = @import("xev");
 const panic = std.debug.panic;
 const lu = @import("lua_util.zig");

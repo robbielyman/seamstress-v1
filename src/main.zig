@@ -16,6 +16,17 @@ pub fn main() void {
     }
     const allocator = gpa.allocator();
 
+    var act: std.posix.Sigaction = .{
+        .handler = .{ .handler = handleAbrt },
+        .mask = switch (builtin.os.tag) {
+            .macos => 0,
+            .linux => std.posix.empty_sigset,
+            else => @compileError("os not supported"),
+        },
+        .flags = 0,
+    };
+    std.posix.sigaction(std.posix.SIG.ABRT, &act, null) catch @panic("not supported!");
+
     // stack-allocated, baby!
     var seamstress: Seamstress = undefined;
     // initialize
@@ -66,6 +77,10 @@ pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_
     if (panic_closure) |p| p.panic_fn(p.ctx);
     // inline so that the stack traces are correct
     @call(.always_inline, std.builtin.default_panic, .{ msg, error_return_trace, ret_addr });
+}
+
+fn handleAbrt(_: c_int) callconv(.C) noreturn {
+    @call(.always_inline, std.debug.panic, .{ "assertion failed!!", .{} });
 }
 
 const std = @import("std");

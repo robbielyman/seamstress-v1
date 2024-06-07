@@ -49,10 +49,10 @@ pub fn getMethod(l: *Lua, field: [:0]const u8, method: [:0]const u8) void {
     getSeamstress(l);
     const t = l.getField(-1, field);
     // nothing sensible to do other than panic if something goes wrong
-    if (t != .table) panic("_seamstress corrupted!", .{});
+    if (t != .table) panic("_seamstress corrupted! table expected for field {s}, got {s}", .{ field, @tagName(t) });
     l.remove(-2);
     const t2 = l.getField(-1, method);
-    if (t2 != .function) panic("_seamstress corrupted!", .{});
+    if (t2 != .function) panic("_seamstress corrupted! function expected for field {s}, got {s}", .{ field, @tagName(t2) });
     l.remove(-2);
 }
 
@@ -86,7 +86,7 @@ pub fn getConfig(l: *Lua, field: [:0]const u8, comptime T: type) T {
     if (t != .table) panic("_seamstress corrupted!", .{});
     _ = l.getField(-1, field);
     const ret = l.toAny(T, -1) catch |err| panic("error getting config: {s}", .{@errorName(err)});
-    l.setTop(0);
+    l.pop(3);
     return ret;
 }
 
@@ -163,9 +163,8 @@ pub fn processChunk(l: *Lua, chunk: []const u8) bool {
             },
         }
         // if we got here, the chunk compiled fine without "return " added
-        // bizarrely, we want to remove the compiled code---it's probably not a function but a value!
+        // so remove the string at the beginning
         l.remove(1);
-        // instead let's call the buffer we pushed onto the stack earlier (tricksy tricksy)
         _ = doCall(l, 0, ziglua.mult_return);
         return false;
     };
@@ -188,6 +187,13 @@ pub fn luaPrint(l: *Lua) void {
     // put print where we can call it
     l.insert(1);
     l.call(n, 0);
+}
+
+pub fn render(l: *Lua) void {
+    const wheel = getWheel(l);
+    if (wheel.render) |r| {
+        r.render_fn(r.ctx, wheel.timer.lap());
+    }
 }
 
 /// replaces `print`

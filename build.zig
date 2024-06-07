@@ -44,11 +44,11 @@ fn addImports(b: *std.Build, m: *std.Build.Module, target: std.Build.ResolvedTar
     });
     m.addImport("ziglua", ziglua.module("ziglua"));
 
-    const xev = b.dependency("libxev", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    m.addImport("libxev", xev.module("xev"));
+    // const xev = b.dependency("libxev", .{
+    // .target = target,
+    // .optimize = optimize,
+    // });
+    // m.addImport("libxev", xev.module("xev"));
 
     const lo = b.dependency("ziglo", .{
         .target = target,
@@ -60,6 +60,21 @@ fn addImports(b: *std.Build, m: *std.Build.Module, target: std.Build.ResolvedTar
     const vaxis = b.dependency("vaxis", .{
         .target = target,
         .optimize = optimize,
+        .libxev = true,
     });
     m.addImport("vaxis", vaxis.module("vaxis"));
+
+    const vx = vaxis.module("vaxis");
+    if (vx.owner.lazyDependency("libxev", .{
+        .target = target,
+        .optimize = optimize,
+    })) |xev| {
+        m.addImport("xev", xev.module("xev"));
+    }
+
+    const zg = vx.owner.dependency("zg", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    m.addImport("grapheme", zg.module("grapheme"));
 }

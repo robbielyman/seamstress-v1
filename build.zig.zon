@@ -4,28 +4,28 @@
     .paths = .{ "build.zig.zon", "build.zig", "src" },
     .dependencies = .{
         .ziglua = .{
-            .url = "https://github.com/natecraddock/ziglua/archive/486f51d3acc61d805783f5f07aee34c75ab59a25.tar.gz",
-            .hash = "12208603e0f51fa6ce7201d8e851c5979b6b78887434623ac87a0f2a5a3dd3e75130",
+            .url = "git+https://github.com/natecraddock/ziglua#d853aa9450ae568a39ea02d7082e85bafc33f735",
+            .hash = "1220affeb3fe37ef09411b5a213b5fdf9bb6568e9913bade204694648983a8b2776d",
         },
         .ziglo = .{
-            .url = "https://github.com/ryleelyman/ziglo/archive/5e73f7ddbadfc0a43d31c03cedbb5c513fbce863.tar.gz",
+            .url = "git+https://github.com/ryleelyman/ziglo#5e73f7ddbadfc0a43d31c03cedbb5c513fbce863",
             .hash = "1220249f9f7f5e30061079be6a208172ce674ff8787a1c15ef5fed5aee39918e7953",
         },
         .@"zig-abl_link" = .{
-            .url = "https://github.com/ryleelyman/zig-abl_link/archive/766b661b5005ddb4460e64eda59589b76d602dec.tar.gz",
+            .url = "git+https://github.com/ryleelyman/zig-abl_link#766b661b5005ddb4460e64eda59589b76d602dec",
             .hash = "122054b0fb984f3e190c6406f17169de0776484f25b21c88fbf3faf4693a6bdf5f01",
         },
         .rtmidi_z = .{
-            .url = "https://github.com/ryleelyman/rtmidi_z/archive/de7c7a5f9dbdbe84f8792769e72a8347e0cc963f.tar.gz",
+            .url = "git+https://github.com/ryleelyman/rtmidi_z#de7c7a5f9dbdbe84f8792769e72a8347e0cc963f",
             .hash = "12202255aa378adcdaada18c4f2b3a9b700a530fbf1fdb17b6ba8601c938e8c888e9",
         },
-        .libxev = .{
-            .url = "https://github.com/mitchellh/libxev/archive/a284cf851fe2f88f8947c01160c39ff216dacea1.tar.gz",
-            .hash = "12205b8ea5495b812b9a8943535a7af8da556644d2c1599dc01e1a5ea7aaf59bb2c7",
-        },
+        // .libxev = .{
+        // .url = "https://github.com/mitchellh/libxev/archive/a284cf851fe2f88f8947c01160c39ff216dacea1.tar.gz",
+        // .hash = "12205b8ea5495b812b9a8943535a7af8da556644d2c1599dc01e1a5ea7aaf59bb2c7",
+        // },
         .vaxis = .{
-            .url = "git+https://github.com/rockorager/libvaxis#93ac8e00f880e50007d6cf049df28e44b7de889c",
-            .hash = "1220033e2f7770acacae66f5ba02d689f025f325b0352316e48142f0a61d352b98aa",
+            .url = "git+https://github.com/rockorager/libvaxis#0cb81e30eb6e33435b687e21573ff3e9b6ba7505",
+            .hash = "1220367cccbf3bcdec48d989aacdc1ea2bff1ff80cd7f828bac69ff46b99bb053f05",
         },
     },
 }

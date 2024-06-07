@@ -16,6 +16,12 @@ pub fn close(self: *Spindle) void {
     self.l.close();
 }
 
+fn quit(l: *Lua) i32 {
+    const wheel = lu.getWheel(l);
+    wheel.quit();
+    return 0;
+}
+
 fn setUpSeamstress(self: *Spindle) !void {
     const l = self.l;
     const seamstress: *Seamstress = @fieldParentPtr("vm", self);
@@ -24,6 +30,9 @@ fn setUpSeamstress(self: *Spindle) !void {
     // push the event loop
     l.pushLightUserdata(&seamstress.loop);
     l.setField(-2, "_loop");
+    // register the quit function
+    l.pushFunction(ziglua.wrap(quit));
+    l.setField(-2, "quit");
     // and another one
     l.newTable();
     // assign to the previous one
@@ -88,8 +97,14 @@ pub fn callInit(self: *Spindle) void {
     _ = self.l.pushString("/start.lua");
     self.l.concat(2);
     const file_name = self.l.toStringEx(-1);
-    self.l.doFile(file_name) catch panic("unable to read start.lua!", .{});
-    self.l.setTop(0);
+
+    self.l.doFile(file_name) catch {
+        const msg = self.l.toString(-1) catch unreachable;
+        self.l.pop(1);
+        self.l.traceback(self.l, msg, 1);
+        const str = self.l.toStringEx(-1);
+        panic("unable to read start.lua! {s}", .{str});
+    };
 
     lu.getSeamstress(self.l);
     _ = self.l.getField(-1, "_startup");
@@ -99,7 +114,11 @@ pub fn callInit(self: *Spindle) void {
 
 /// have lua crash via our panic rather than its own way
 fn luaPanic(l: *Lua) i32 {
-    const msg = l.toString(-1) catch "";
+    const str = l.toStringEx(-1);
+    l.pop(1);
+    l.traceback(l, str, 1);
+    const msg = l.toString(-1) catch unreachable;
+    l.pop(1);
     std.debug.panic("lua crashed: {s}", .{msg});
     return 0;
 }

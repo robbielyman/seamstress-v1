@@ -22,10 +22,10 @@ _seamstress.path = {
   seamstress = seamstress_home, -- defined to be `home .. '/seamstress'`
 }
 
+seamstress = require "core.seamstress"
+
 print = _seamstress._print
 
 _seamstress._startup = function (script_file)
-	
+	if _seamstress.config.hello then _seamstress.config.hello(_seamstress.version) else error("wtf") end
 end
-
-seamstress = require "seamstress"

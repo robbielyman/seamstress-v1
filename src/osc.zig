@@ -379,10 +379,10 @@ fn init(m: *Module, vm: *Spindle, allocator: std.mem.Allocator) void {
 }
 
 fn deinit(m: *const Module, l: *Lua, allocator: std.mem.Allocator, cleanup: Cleanup) void {
+    _ = l; // autofix
     if (cleanup != .full) return;
     const self: *Osc = @ptrCast(@alignCast(m.self orelse return));
-    const wheel = lu.getWheel(l);
-    self.watcher.close(&wheel.loop, &self.c, anyopaque, null, noopCallback);
+    std.posix.close(self.watcher.fd);
 
     self.monome.deinit();
     self.server.free();
@@ -414,7 +414,7 @@ const Seamstress = @import("seamstress.zig");
 const Cleanup = Seamstress.Cleanup;
 const Wheel = @import("wheel.zig");
 const Spindle = @import("spindle.zig");
-const xev = @import("libxev");
+const xev = @import("xev");
 const lo = @import("ziglo");
 const lu = @import("lua_util.zig");
 const std = @import("std");

@@ -44,6 +44,8 @@ pub fn init(self: *Seamstress, allocator: *const std.mem.Allocator, stderr: *Buf
 /// cleanup done at panic
 /// pub because it is called from main.zig
 pub fn panicCleanup(self: *Seamstress) void {
+    if (self.panicked) return;
+    self.panicked = true;
     @setCold(true);
     // used to, e.g. turn off grid lights, so should be called here
     self.vm.cleanup();
@@ -111,6 +113,8 @@ vm: Spindle,
 loop: Wheel,
 // the "global" default allocator
 allocator: std.mem.Allocator,
+// attempt to avoid shutting things down twice
+panicked: bool = false,
 
 const std = @import("std");
 const builtin = @import("builtin");
