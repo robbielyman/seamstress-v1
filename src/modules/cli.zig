@@ -1,19 +1,20 @@
 /// bare-bones CLI communication layer
+// @module seamstress.cli
 const Cli = @This();
 
 l: *Lua,
-stderr: *BufferedWriter,
 stdout: BufferedWriter,
 stdin_buf: std.ArrayList(u8),
 file: xev.File,
 c: xev.Completion = .{},
 continuing: bool = false,
-any: std.io.AnyWriter,
+dirty: bool = false,
 
 /// flushes stdout and stderr, and re-prompts (usually)
 fn render(ctx: *anyopaque, _: u64) void {
     const self: *Cli = @ptrCast(@alignCast(ctx));
-    self.stderr.flush() catch {};
+    if (!self.dirty) return;
+    self.dirty = false;
     const writer = self.stdout.writer();
     if (self.continuing)
         writer.writeAll(">... ") catch panic("unable to print!", .{})
@@ -48,35 +49,85 @@ fn handleStdin(
 }
 
 /// says hello
-fn hello(ctx: *anyopaque) void {
-    const self: *Cli = @ptrCast(@alignCast(ctx));
+fn hello(l: *Lua) i32 {
+    const self: *Cli = lu.closureGetContext(l, Cli);
     const writer = self.stdout.writer();
-    writer.print("SEAMSTRESS\n", .{}) catch return;
-    writer.print("seamstress version: {}\n", .{@import("seamstress.zig").version}) catch return;
+    writer.print("SEAMSTRESS\n", .{}) catch return 0;
+    writer.print("seamstress version: {}\n", .{@import("../seamstress.zig").version}) catch return 0;
+    self.dirty = true;
     render(self, 0);
+    return 0;
 }
 
-fn init(m: *Module, vm: *Spindle, allocator: std.mem.Allocator) void {
-    const self = allocator.create(Cli) catch panic("out of memory!", .{});
-    const stdout_backing = allocator.create(std.fs.File.Writer) catch panic("out of memory!", .{});
+/// replaces `print`
+pub fn printFn(l: *Lua) i32 {
+    // how many things are we printing?
+    const n = l.getTop();
+    // get our closed-over value
+    const self = lu.closureGetContext(l, Cli);
+    const ctx = self.stdout.writer();
+    // printing nothing should do nothing
+    if (n == 0) return 0;
+    defer {
+        self.dirty = true;
+        render(self, 0);
+    }
+    // while loop because for loops are limited to `usize` in zig
+    var i: i32 = 1;
+    while (i <= n) : (i += 1) {
+        // separate with tabs
+        if (i > 1) ctx.writeAll("\t") catch {};
+        const t = l.typeOf(i);
+        switch (t) {
+            .number => {
+                if (l.isInteger(i)) {
+                    const int = l.checkInteger(i);
+                    ctx.print("{d}", .{int}) catch {};
+                } else {
+                    const double = l.checkNumber(i);
+                    ctx.print("{d}", .{double}) catch {};
+                }
+            },
+            .table => {
+                const str = l.toString(i) catch {
+                    const ptr = l.toPointer(i) catch unreachable;
+                    ctx.print("table: 0x{x}", .{@intFromPtr(ptr)}) catch {};
+                    continue;
+                };
+                ctx.print("{s}", .{str}) catch {};
+            },
+            .function => {
+                const ptr = l.toPointer(i) catch unreachable;
+                ctx.print("function: 0x{x}", .{@intFromPtr(ptr)}) catch {};
+            },
+            else => {
+                const str = l.toStringEx(i);
+                ctx.print("{s}", .{str}) catch {};
+            },
+        }
+    }
+    // finish with a newline
+    ctx.writeAll("\n") catch {};
+    return 0;
+}
+
+fn init(m: *Module, l: *Lua, allocator: std.mem.Allocator) anyerror!void {
+    const self = try allocator.create(Cli);
+    errdefer allocator.destroy(self);
+    const stdout_backing = try allocator.create(std.fs.File.Writer);
+    errdefer allocator.destroy(stdout_backing);
     stdout_backing.* = std.io.getStdOut().writer();
-    const any_backing = allocator.create(BufferedWriter.Writer) catch panic("out of memory!", .{});
     m.self = self;
     self.* = .{
-        .l = vm.l,
-        .stderr = vm.stderr,
+        .l = l,
         .stdout = std.io.bufferedWriter(stdout_backing.any()),
         .stdin_buf = std.ArrayList(u8).init(allocator),
         .file = xev.File.init(std.io.getStdIn()) catch panic("unable to open stdin!", .{}),
-        .any = undefined,
     };
-    any_backing.* = self.stdout.writer();
-    self.any = any_backing.any();
-    vm.hello = .{
-        .ctx = self,
-        .hello_fn = hello,
-    };
-    lu.registerSeamstress(vm.l, "_print", lu.printFn, &self.any);
+    l.pushLightUserdata(self);
+    l.pushClosure(ziglua.wrap(printFn), 1);
+    l.setGlobal("print");
+    lu.registerSeamstress(l, null, "hello", hello, self);
 }
 
 fn deinit(m: *const Module, _: *Lua, allocator: std.mem.Allocator, kind: Cleanup) void {
@@ -84,13 +135,12 @@ fn deinit(m: *const Module, _: *Lua, allocator: std.mem.Allocator, kind: Cleanup
     const self: *Cli = @ptrCast(@alignCast(m.self orelse return));
     self.stdin_buf.deinit();
     allocator.destroy(@as(*const std.fs.File.Writer, @ptrCast(@alignCast(self.stdout.unbuffered_writer.context))));
-    allocator.destroy(@as(*const BufferedWriter.Writer, @ptrCast(@alignCast(self.any.context))));
     allocator.destroy(self);
 }
 
-fn launch(m: *const Module, l: *Lua, wheel: *Wheel) void {
+fn launch(m: *const Module, l: *Lua, wheel: *Wheel) anyerror!void {
     const self: *Cli = @ptrCast(@alignCast(m.self.?));
-    self.stdin_buf.ensureUnusedCapacity(4096) catch panic("out of memory!", .{});
+    try self.stdin_buf.ensureUnusedCapacity(4096);
     const slice = self.stdin_buf.unusedCapacitySlice();
     wheel.render = .{
         .ctx = self,
@@ -109,13 +159,13 @@ pub fn module() Module {
 }
 
 const BufferedWriter = std.io.BufferedWriter(4096, std.io.AnyWriter);
-const Module = @import("module.zig");
-const Spindle = @import("spindle.zig");
-const Wheel = @import("wheel.zig");
+const Module = @import("../module.zig");
+const Spindle = @import("../spindle.zig");
+const Wheel = @import("../wheel.zig");
 const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
-const Cleanup = @import("seamstress.zig").Cleanup;
+const Cleanup = @import("../seamstress.zig").Cleanup;
 const std = @import("std");
 const xev = @import("xev");
 const panic = std.debug.panic;
-const lu = @import("lua_util.zig");
+const lu = @import("../lua_util.zig");

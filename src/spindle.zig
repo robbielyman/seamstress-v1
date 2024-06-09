@@ -1,42 +1,54 @@
-/// thin wrapper around the Lua vm
-const Spindle = @This();
+//! Lua VM lifetime functions (init, deinit, etc)
+//! in this file to make seamstress.zig cleaner to read.
 
-l: *Lua,
-stderr: *BufferedWriter,
-hello: ?struct {
-    ctx: *anyopaque,
-    hello_fn: *const fn (*anyopaque) void,
-} = null,
-
-pub fn cleanup(self: *Spindle) void {
-    _ = self; // autofix
+/// user-defined: cleans up resources the Lua layer has used
+pub fn cleanup(l: *Lua) void {
+    if ((l.getGlobal("seamstress") catch return) != .table) {
+        l.pop(1);
+        return;
+    }
+    _ = l.getField(-1, "cleanup");
+    l.remove(-2);
+    lu.doCall(l, 0, 0);
 }
 
-pub fn close(self: *Spindle) void {
-    self.l.close();
+/// loads a Module, calling its init function
+fn load(l: *Lua) i32 {
+    const seamstress = lu.closureGetContext(l, Seamstress);
+    const str = l.toStringEx(1);
+    const m = seamstress.module_list.get(str) orelse l.raiseErrorStr("module %s not found", .{str.ptr});
+    m.init(seamstress.l, seamstress.allocator) catch |err| l.raiseErrorStr("error while loading module %s: %s", .{ str.ptr, @errorName(err).ptr });
+    return 0;
 }
 
+/// launches a Module, calling its launch function
+fn launch(l: *Lua) i32 {
+    const seamstress = lu.closureGetContext(l, Seamstress);
+    const str = l.toStringEx(1);
+    const m = seamstress.module_list.get(str) orelse l.raiseErrorStr("module %s not found", .{str.ptr});
+    m.launch(seamstress.l, &seamstress.loop) catch |err| l.raiseErrorStr("error while launching module %s: %s", .{ str.ptr, @errorName(err).ptr });
+    return 0;
+}
+
+/// quits seamstress
 fn quit(l: *Lua) i32 {
     const wheel = lu.getWheel(l);
     wheel.quit();
     return 0;
 }
 
-fn setUpSeamstress(self: *Spindle) !void {
-    const l = self.l;
-    const seamstress: *Seamstress = @fieldParentPtr("vm", self);
-    // create a new table
-    l.newTable();
-    // push the event loop
-    l.pushLightUserdata(&seamstress.loop);
-    l.setField(-2, "_loop");
-    // register the quit function
-    l.pushFunction(ziglua.wrap(quit));
-    l.setField(-2, "quit");
-    // and another one
-    l.newTable();
-    // assign to the previous one
-    l.setField(-2, "config");
+/// restarts seamstress
+fn restart(l: *Lua) i32 {
+    const wheel = lu.getWheel(l);
+    wheel.kind = .full;
+    const seamstress: *Seamstress = @fieldParentPtr("loop", wheel);
+    wheel.quit();
+    seamstress.go_again = true;
+    return 0;
+}
+
+/// adds to the seamstress table
+fn setUpSeamstress(l: *Lua, seamstress: *Seamstress) !void {
     {
         var buf: [16 * 1024]u8 = undefined;
         var fba: std.heap.FixedBufferAllocator = .{ .buffer = &buf, .end_index = 0 };
@@ -46,10 +58,38 @@ fn setUpSeamstress(self: *Spindle) !void {
         const path = try std.fs.path.joinZ(a, &.{ location, "..", "share", "seamstress", "lua" });
         defer a.free(path);
         const prefix = try std.fs.realpathAlloc(a, path);
+        _ = try l.getGlobal("package");
         _ = l.pushString(prefix);
-        l.setField(-2, "prefix");
+        _ = l.pushStringZ("/?.lua;");
+        _ = l.getField(-3, "path");
+        l.concat(3);
+        l.setField(-2, "path");
+        l.pop(1);
+        const seamstress_lua = try std.fs.path.joinZ(a, &.{ prefix, "seamstress", "seamstress.lua" });
+        defer a.free(seamstress_lua);
+        try l.doFile(seamstress_lua);
     }
+    lu.getSeamstress(l);
+    // push the event loop
+    l.pushLightUserdata(&seamstress.loop);
+    l.setField(-2, "_loop");
+    // register the quit function
+    l.pushFunction(ziglua.wrap(quit));
+    l.setField(-2, "quit");
+    l.pushFunction(ziglua.wrap(restart));
+    l.setField(-2, "restart");
+    l.pushLightUserdata(seamstress);
+    l.pushClosure(ziglua.wrap(load), 1);
+    l.setField(-2, "_load");
+    l.pushLightUserdata(seamstress);
+    l.pushClosure(ziglua.wrap(launch), 1);
+    l.setField(-2, "_launch");
+    // and another one
+    l.newTable();
+    // assign to the previous one
+    l.setField(-2, "config");
     {
+        // push seamstress version information
         const version = Seamstress.version;
         l.createTable(3, 1);
         l.pushInteger(@intCast(version.major));
@@ -71,45 +111,19 @@ fn setUpSeamstress(self: *Spindle) !void {
             l.setField(-2, "_pwd");
         }
     }
-    l.setGlobal("_seamstress");
+    l.pop(1);
 }
 
-pub fn init(self: *Spindle, allocator: *const std.mem.Allocator, stderr: *BufferedWriter) void {
-    self.* = .{
-        .l = Lua.init(allocator) catch |err| panic("error starting lua vm: {s}", .{@errorName(err)}),
-        .stderr = stderr,
-    };
-    errdefer self.l.close();
+/// starts the lua VM and sets up the seamstress table
+pub fn init(allocator: *const std.mem.Allocator, seamstress: *Seamstress) *Lua {
+    const l = Lua.init(allocator) catch |err| panic("error starting lua vm: {s}", .{@errorName(err)});
+    errdefer l.close();
 
     // open lua libraries
-    self.l.openLibs();
-    self.setUpSeamstress() catch |err| panic("error setting up seamstress: {s}", .{@errorName(err)});
-    _ = self.l.atPanic(ziglua.wrap(luaPanic));
-}
-
-pub fn sayHello(self: *Spindle) void {
-    if (self.hello) |h| h.hello_fn(h.ctx);
-}
-
-pub fn callInit(self: *Spindle) void {
-    lu.getSeamstress(self.l);
-    _ = self.l.getField(-1, "prefix");
-    _ = self.l.pushString("/start.lua");
-    self.l.concat(2);
-    const file_name = self.l.toStringEx(-1);
-
-    self.l.doFile(file_name) catch {
-        const msg = self.l.toString(-1) catch unreachable;
-        self.l.pop(1);
-        self.l.traceback(self.l, msg, 1);
-        const str = self.l.toStringEx(-1);
-        panic("unable to read start.lua! {s}", .{str});
-    };
-
-    lu.getSeamstress(self.l);
-    _ = self.l.getField(-1, "_startup");
-    self.l.remove(-2);
-    lu.doCall(self.l, 0, 0);
+    l.openLibs();
+    setUpSeamstress(l, seamstress) catch |err| panic("error setting up seamstress: {s}", .{@errorName(err)});
+    _ = l.atPanic(ziglua.wrap(luaPanic));
+    return l;
 }
 
 /// have lua crash via our panic rather than its own way
@@ -123,7 +137,6 @@ fn luaPanic(l: *Lua) i32 {
     return 0;
 }
 
-const BufferedWriter = std.io.BufferedWriter(4096, std.io.AnyWriter);
 const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
 const Seamstress = @import("seamstress.zig");

@@ -10,13 +10,17 @@ pub fn checkNumArgs(l: *Lua, n: i32) void {
     if (l.getTop() != n) l.raiseErrorStr("error: requires %d arguments", .{n});
 }
 
-/// registers a closure as _seamstress.field_name
+/// registers a closure as seamstress.field_name or seamstress.submodule.field_name
 /// we're using closures instead of global state!
 /// makes me feel fancy
 /// the closure has one "upvalue" in Lua terms: ptr
-pub fn registerSeamstress(l: *Lua, field_name: [:0]const u8, comptime f: ziglua.ZigFn, ptr: *anyopaque) void {
+pub fn registerSeamstress(l: *Lua, submodule: ?[:0]const u8, field_name: [:0]const u8, comptime f: ziglua.ZigFn, ptr: *anyopaque) void {
     // pushes _seamstress onto the stack
     getSeamstress(l);
+    if (submodule) |s| {
+        _ = l.getField(-1, s);
+        l.remove(2);
+    }
     // pushes our upvalue
     l.pushLightUserdata(ptr);
     // creates the function (consuming the upvalue)
@@ -27,21 +31,21 @@ pub fn registerSeamstress(l: *Lua, field_name: [:0]const u8, comptime f: ziglua.
     l.pop(1);
 }
 
-/// must be called within a closure registered with `registerSeamstress`.
+/// must be called within a closure with a single upvalue.
 /// gets the one upvalue associated with the closure
 /// returns null on failure
-pub fn closureGetContext(l: *Lua, comptime T: type) ?*T {
+pub fn closureGetContext(l: *Lua, comptime T: type) *T {
     const idx = Lua.upvalueIndex(1);
-    const ctx = l.toUserdata(T, idx) catch return null;
+    const ctx = l.toUserdata(T, idx) catch |err| panic("unexpected error: {s}", .{@errorName(err)});
     return ctx;
 }
 
 // attempts to push _seamstress onto the stack
 pub fn getSeamstress(l: *Lua) void {
-    const t = l.getGlobal("_seamstress") catch |err|
-        panic("error getting _seamstress: {s}", .{@errorName(err)});
+    const t = l.getGlobal("seamstress") catch |err|
+        panic("error getting seamstress: {s}", .{@errorName(err)});
     if (t == .table) return;
-    panic("_seamstress corrupted!", .{});
+    panic("seamstress corrupted!", .{});
 }
 
 // attempts to get the method specified by name onto the stack
@@ -49,10 +53,10 @@ pub fn getMethod(l: *Lua, field: [:0]const u8, method: [:0]const u8) void {
     getSeamstress(l);
     const t = l.getField(-1, field);
     // nothing sensible to do other than panic if something goes wrong
-    if (t != .table) panic("_seamstress corrupted! table expected for field {s}, got {s}", .{ field, @tagName(t) });
+    if (t != .table) panic("seamstress corrupted! table expected for field {s}, got {s}", .{ field, @tagName(t) });
     l.remove(-2);
     const t2 = l.getField(-1, method);
-    if (t2 != .function) panic("_seamstress corrupted! function expected for field {s}, got {s}", .{ field, @tagName(t2) });
+    if (t2 != .function) panic("seamstress corrupted! function expected for field {s}, got {s}", .{ method, @tagName(t2) });
     l.remove(-2);
 }
 
@@ -83,7 +87,7 @@ pub fn getConfig(l: *Lua, field: [:0]const u8, comptime T: type) T {
     getSeamstress(l);
     const t = l.getField(-1, "config");
     // nothing sensible to do other than panic if something goes wrong
-    if (t != .table) panic("_seamstress corrupted!", .{});
+    if (t != .table) panic("seamstress corrupted!", .{});
     _ = l.getField(-1, field);
     const ret = l.toAny(T, -1) catch |err| panic("error getting config: {s}", .{@errorName(err)});
     l.pop(3);
@@ -107,15 +111,14 @@ pub fn messageHandler(l: *Lua) i32 {
     const t = l.typeOf(1);
     switch (t) {
         .string => {
-            const msg = l.toString(1) catch return 1;
-            l.pop(1);
+            const msg = l.checkString(1);
             l.traceback(l, msg, 1);
         },
         // TODO: could we use checkString instead?
         else => {
-            const msg = std.fmt.allocPrintZ(l.allocator(), "(error object is an {s} value)", .{l.typeName(t)}) catch return 1;
-            defer l.allocator().free(msg);
+            const msg = std.fmt.allocPrintZ(l.allocator(), "(error object is an {s} value: {s})", .{ l.typeName(t), l.toStringEx(1) }) catch return 1;
             l.pop(1);
+            defer l.allocator().free(msg);
             l.traceback(l, msg, 1);
         },
     }
@@ -179,67 +182,16 @@ pub fn processChunk(l: *Lua, chunk: []const u8) bool {
 /// call print from outside lua
 pub fn luaPrint(l: *Lua) void {
     const n = l.getTop();
-    getSeamstress(l);
-    // put _print onto the stack
-    _ = l.getField(-1, "_print");
-    // remove _seamstress from the stack
-    l.remove(-2);
+    _ = l.getGlobal("print") catch unreachable;
     // put print where we can call it
     l.insert(1);
     l.call(n, 0);
 }
 
+/// renders to the terminal
 pub fn render(l: *Lua) void {
     const wheel = getWheel(l);
     if (wheel.render) |r| {
         r.render_fn(r.ctx, wheel.timer.lap());
     }
-}
-
-/// replaces `print`
-/// the terminal UI module is responsible for registering this function
-pub fn printFn(l: *Lua) i32 {
-    // how many things are we printing?
-    const n = l.getTop();
-    // get our closed-over value
-    const ctx = closureGetContext(l, std.io.AnyWriter).?;
-    // printing nothing should do nothing
-    if (n == 0) return 0;
-    // while loop because for loops are limited to `usize` in zig
-    var i: i32 = 1;
-    while (i <= n) : (i += 1) {
-        // separate with tabs
-        if (i > 1) ctx.writeAll("\t") catch {};
-        const t = l.typeOf(i);
-        switch (t) {
-            .number => {
-                if (l.isInteger(i)) {
-                    const int = l.checkInteger(i);
-                    ctx.print("{d}", .{int}) catch {};
-                } else {
-                    const double = l.checkNumber(i);
-                    ctx.print("{d}", .{double}) catch {};
-                }
-            },
-            .table => {
-                const str = l.toString(i) catch {
-                    const ptr = l.toPointer(i) catch unreachable;
-                    ctx.print("table: 0x{x}", .{@intFromPtr(ptr)}) catch {};
-                    continue;
-                };
-                ctx.print("{s}", .{str}) catch {};
-            },
-            .function => {
-                const ptr = l.toPointer(i) catch unreachable;
-                ctx.print("function: 0x{x}", .{@intFromPtr(ptr)}) catch {};
-            },
-            else => {
-                const str = l.toStringEx(i);
-                ctx.print("{s}", .{str}) catch {};
-            },
-        }
-    }
-    // finish with a newline
-    ctx.writeAll("\n") catch {};
-    return 0;
 }

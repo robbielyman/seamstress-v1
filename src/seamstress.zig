@@ -1,7 +1,6 @@
 /// functions in this file set up, configure and run seamstress
 /// the main players are the event loop, the lua VM and the modules
 /// modules are passed the loop and the vm to register functions and events with each
-/// the loop and the lua vm are more or less unaware of each other
 const Seamstress = @This();
 
 /// single source of truth about seamstress's version
@@ -10,35 +9,31 @@ pub const version: std.SemanticVersion = .{
     .major = 2,
     .minor = 0,
     .patch = 0,
-    .pre = "prealpha-3",
+    .pre = "prealpha-4",
 };
 
 /// the seamstress loop
 pub fn run(self: *Seamstress) void {
-    for (self.modules.items) |*module| {
-        module.launch(self.vm.l, &self.loop);
-    }
-    self.sayHello();
-    // drain the events queue
-    self.loop.processAll();
-    self.vm.callInit();
+    self.module_list.get("cli").?.launch(self.l, &self.loop) catch |err| std.debug.panic("unable to start CLI I/O! {s}", .{@errorName(err)});
+    // runs after any events which have already accumulated
+    // queueInit(&self.loop.loop);
     // run the event loop; blocks until we exit
     self.loop.run();
-    self.deinit();
+    self.deinit(self.loop.kind);
 }
 
 // a member function so that elements of this struct have a stable pointer
-pub fn init(self: *Seamstress, allocator: *const std.mem.Allocator, stderr: *BufferedWriter) void {
-    // set up the lua vm
-    self.vm.init(allocator, stderr);
+pub fn init(self: *Seamstress, allocator: *const std.mem.Allocator, logger: ?*BufferedWriter) void {
     self.allocator = allocator.*;
-    self.modules = .{};
-    @import("config.zig").configure(self);
+    self.logger = logger;
     // set up the event loop
     self.loop.init();
-    for (self.modules.items) |*module| {
-        module.init(&self.vm, self.allocator);
-    }
+    // set up the lua vm
+    self.l = spindle.init(allocator, self);
+    self.module_list = Module.list(self.allocator) catch std.debug.panic("out of memory!", .{});
+    // set up the REPL at a minimum
+    self.module_list.get("cli").?.init(self.l, self.allocator) catch |err| std.debug.panic("unable to start CLI I/O! {s}", .{@errorName(err)});
+    @import("config.zig").configure(self);
 }
 
 /// cleanup done at panic
@@ -48,14 +43,13 @@ pub fn panicCleanup(self: *Seamstress) void {
     self.panicked = true;
     @setCold(true);
     // used to, e.g. turn off grid lights, so should be called here
-    self.vm.cleanup();
+    spindle.cleanup(self.l);
     // shut down modules
-    for (self.modules.items) |*module| {
-        module.deinit(self.vm.l, self.allocator, .panic);
+    for (self.module_list.values()) |module| {
+        module.deinit(self.l, self.allocator, .panic);
     }
-    // try printing anything in stderr we have leftover?
-    self.vm.stderr.unbuffered_writer = std.io.getStdErr().writer().any();
-    self.vm.stderr.flush() catch {};
+    // flush logs
+    if (self.logger) |l| l.flush() catch {};
 }
 
 /// used by modules to determine what and how much to clean up.
@@ -65,20 +59,20 @@ pub fn panicCleanup(self: *Seamstress) void {
 pub const Cleanup = enum { panic, clean, full };
 
 /// pub because it's called by the loop using @fieldParentPtr
-pub fn deinit(self: *Seamstress) void {
-    // e.g. turns off grid lights
-    self.vm.cleanup();
-    const kind: Cleanup = switch (builtin.mode) {
+/// returns true if seamstress should start again
+pub fn deinit(self: *Seamstress, kind: Cleanup) void {
+    self.loop.kind = switch (builtin.mode) {
         .Debug, .ReleaseSafe => .full,
         .ReleaseFast, .ReleaseSmall => .clean,
     };
+    // e.g. turns off grid lights
+    spindle.cleanup(self.l);
     // shut down modules
-    for (self.modules.items) |*module| {
-        module.deinit(self.vm.l, self.allocator, kind);
+    for (self.module_list.values()) |module| {
+        module.deinit(self.l, self.allocator, kind);
     }
     // flush logs
-    self.vm.stderr.unbuffered_writer = std.io.getStdErr().writer().any();
-    self.vm.stderr.flush() catch {};
+    if (self.logger) |l| l.flush() catch {};
     // uses stdout to print because the UI module is shut down
     sayGoodbye();
     // if we're doing a clean exit, now is the time to quit
@@ -87,9 +81,10 @@ pub fn deinit(self: *Seamstress) void {
         return;
     }
     // closes the lua VM and frees memory
-    self.vm.close();
-    // frees memory
-    self.modules.deinit(self.allocator);
+    self.l.close();
+    // frees module memory
+    for (self.module_list.values()) |ptr| self.allocator.destroy(ptr);
+    self.module_list.deinit(self.allocator);
 }
 
 /// should always simply print to stdout
@@ -100,25 +95,24 @@ fn sayGoodbye() void {
     bw.flush() catch return;
 }
 
-/// ultimately defined by the terminal UI module
-fn sayHello(self: *Seamstress) void {
-    self.vm.sayHello();
-}
-
-// unmanaged because we store an allocator
-modules: std.ArrayListUnmanaged(Module),
 // the lua VM
-vm: Spindle,
+l: *Lua,
 // the event loop
 loop: Wheel,
 // the "global" default allocator
 allocator: std.mem.Allocator,
 // attempt to avoid shutting things down twice
 panicked: bool = false,
+// logger from main
+logger: ?*BufferedWriter,
+module_list: std.StaticStringMap(*Module),
+go_again: bool = false,
 
 const std = @import("std");
 const builtin = @import("builtin");
 const Module = @import("module.zig");
-const Spindle = @import("spindle.zig");
+const spindle = @import("spindle.zig");
+const ziglua = @import("ziglua");
+const Lua = ziglua.Lua;
 const Wheel = @import("wheel.zig");
 const BufferedWriter = std.io.BufferedWriter(4096, std.io.AnyWriter);

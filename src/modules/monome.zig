@@ -1,4 +1,5 @@
 /// struct-of-arrays for storing and interacting with monome arc or grid devices
+// @module _seamstress.monome
 const Monome = @This();
 
 const num_devs = 8;
@@ -418,7 +419,7 @@ fn arcKey(comptime idx: u8) fn ([:0]const u8, []const u8, *lo.Message, ?*anyopaq
 // @function grid_set_led
 fn gridLed(l: *Lua) i32 {
     lu.checkNumArgs(l, 4);
-    const monome = lu.closureGetContext(l, Monome) orelse return 0;
+    const monome = lu.closureGetContext(l, Monome);
     const id = l.checkInteger(1);
     // let's be nice; accept numbers as well as integers
     const x: ziglua.Integer = x: {
@@ -454,7 +455,7 @@ fn gridLed(l: *Lua) i32 {
 // @function arc_set_led
 fn arcLed(l: *Lua) i32 {
     lu.checkNumArgs(l, 4);
-    const monome = lu.closureGetContext(l, Monome) orelse return 0;
+    const monome = lu.closureGetContext(l, Monome);
     const id = l.checkInteger(1);
     // let's be nice; accept numbers as well as integers
     const n: ziglua.Integer = n: {
@@ -489,7 +490,7 @@ fn arcLed(l: *Lua) i32 {
 // @function monome_all_led
 fn allLed(l: *Lua) i32 {
     lu.checkNumArgs(l, 2);
-    const monome = lu.closureGetContext(l, Monome) orelse return 0;
+    const monome = lu.closureGetContext(l, Monome);
     const id = l.checkInteger(1);
     // let's be nice; accept numbers as well as integers
     const val: ziglua.Integer = val: {
@@ -531,7 +532,7 @@ fn quadOffset(x: u4, y: u4) u8 {
 // @function grid_set_rotation
 fn gridRotation(l: *Lua) i32 {
     lu.checkNumArgs(l, 2);
-    const monome = lu.closureGetContext(l, Monome) orelse return 0;
+    const monome = lu.closureGetContext(l, Monome);
     const osc: *Osc = @fieldParentPtr("monome", monome);
     const id = l.checkInteger(1);
     const rotation = l.checkInteger(2);
@@ -588,7 +589,7 @@ fn gridRotation(l: *Lua) i32 {
 // @function grid_tilt_sensor
 fn gridTiltSensor(l: *Lua) i32 {
     lu.checkNumArgs(l, 3);
-    const monome = lu.closureGetContext(l, Monome) orelse return 0;
+    const monome = lu.closureGetContext(l, Monome);
     const osc: *Osc = @fieldParentPtr("monome", monome);
     const id = l.checkInteger(1);
     l.argCheck(1 <= id and id <= 8, 1, "id must be between 1 and 8");
@@ -623,7 +624,7 @@ fn gridTiltSensor(l: *Lua) i32 {
 // @function grid_intensity
 fn gridIntensity(l: *Lua) i32 {
     lu.checkNumArgs(l, 2);
-    const monome = lu.closureGetContext(l, Monome) orelse return 0;
+    const monome = lu.closureGetContext(l, Monome);
     const osc: *Osc = @fieldParentPtr("monome", monome);
     const id = l.checkInteger(1);
     // let's be nice; accept numbers as well as integers
@@ -661,7 +662,7 @@ fn gridIntensity(l: *Lua) i32 {
 // @function grid_refresh
 fn gridRefresh(l: *Lua) i32 {
     lu.checkNumArgs(l, 1);
-    const monome = lu.closureGetContext(l, Monome) orelse return 0;
+    const monome = lu.closureGetContext(l, Monome);
     const osc: *Osc = @fieldParentPtr("monome", monome);
     const id = l.checkInteger(1);
     l.argCheck(1 <= id and id <= 8, 1, "id must be between 1 and 8");
@@ -742,7 +743,7 @@ fn gridRefresh(l: *Lua) i32 {
 // @function arc_refresh
 fn arcRefresh(l: *Lua) i32 {
     lu.checkNumArgs(l, 1);
-    const monome = lu.closureGetContext(l, Monome) orelse return 0;
+    const monome = lu.closureGetContext(l, Monome);
     const osc: *Osc = @fieldParentPtr("monome", monome);
     const id = l.checkInteger(1);
     l.argCheck(1 <= id and id <= 8, 1, "id must be between 1 and 8");
@@ -778,7 +779,7 @@ fn arcRefresh(l: *Lua) i32 {
 // @function grid_rows
 fn gridRows(l: *Lua) i32 {
     lu.checkNumArgs(l, 1);
-    const monome = lu.closureGetContext(l, Monome) orelse return 0;
+    const monome = lu.closureGetContext(l, Monome);
     const id = l.checkInteger(1);
     l.argCheck(1 <= id and id <= 8, 1, "id must be between 1 and 8");
     const num: u3 = @intCast(id - 1);
@@ -793,7 +794,7 @@ fn gridRows(l: *Lua) i32 {
 // @function grid_cols
 fn gridCols(l: *Lua) i32 {
     lu.checkNumArgs(l, 1);
-    const monome = lu.closureGetContext(l, Monome) orelse return 0;
+    const monome = lu.closureGetContext(l, Monome);
     const id = l.checkInteger(1);
     l.argCheck(1 <= id and id <= 8, 1, "id must be between 1 and 8");
     const num: u3 = @intCast(id - 1);
@@ -808,7 +809,7 @@ fn gridCols(l: *Lua) i32 {
 // @function grid_quads
 fn gridQuads(l: *Lua) i32 {
     lu.checkNumArgs(l, 1);
-    const monome = lu.closureGetContext(l, Monome) orelse return 0;
+    const monome = lu.closureGetContext(l, Monome);
     const id = l.checkInteger(1);
     l.argCheck(1 <= id and id <= 8, 1, "id must be between 1 and 8");
     const num: u3 = @intCast(id - 1);
@@ -839,6 +840,6 @@ const lo = @import("ziglo");
 const xev = @import("libxev");
 const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
-const lu = @import("lua_util.zig");
-const Seamstress = @import("seamstress.zig");
+const lu = @import("../lua_util.zig");
+const Seamstress = @import("../seamstress.zig");
 const panic = std.debug.panic;

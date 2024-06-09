@@ -61,6 +61,7 @@ fn addImports(b: *std.Build, m: *std.Build.Module, target: std.Build.ResolvedTar
         .target = target,
         .optimize = optimize,
         .libxev = true,
+        .nvim = false,
     });
     m.addImport("vaxis", vaxis.module("vaxis"));
 

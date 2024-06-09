@@ -1,4 +1,5 @@
 /// OSC module
+// @module _seamstress.osc
 const Osc = @This();
 
 // pub so that submodules like monome.zig can access it
@@ -232,7 +233,7 @@ fn pushAddress(l: *Lua, addr: std.net.Address) void {
 // @function osc_send
 pub fn oscSend(l: *Lua) i32 {
     const num_args = l.getTop();
-    const osc = lu.closureGetContext(l, Osc) orelse return 0;
+    const osc = lu.closureGetContext(l, Osc);
     if (num_args < 2) return 0;
     if (num_args > 3) l.raiseErrorStr("expected 3 args, got %d", .{num_args});
     // grab the address
@@ -332,17 +333,17 @@ last_addr: ?std.net.Address,
 buffer: []u8,
 
 // sets up the OSC server, using the config-provided port if it exists, otherwise using a free one
-fn init(m: *Module, vm: *Spindle, allocator: std.mem.Allocator) void {
-    const l = vm.l;
-    const self = allocator.create(Osc) catch panic("out of memory!", .{});
+fn init(m: *Module, l: *Lua, allocator: std.mem.Allocator) anyerror!void {
+    const self = try allocator.create(Osc);
+    errdefer allocator.destroy(self);
     const port = lu.getConfig(l, "local_port", ?[*:0]const u8);
     var addr = std.net.Address.initIp4(.{ 127, 0, 0, 1 }, 0);
     self.* = .{
         .watcher = xev.UDP.init(addr) catch panic("unable to init UDP listener!", .{}),
-        .server = lo.Server.new(null, lo.wrap(Osc.errHandler)) orelse panic("out of memory!", .{}),
+        .server = lo.Server.new(null, lo.wrap(Osc.errHandler)) orelse return error.OutOfMemory,
         .lua = l,
         .s = .{ .userdata = null },
-        .buffer = allocator.alloc(u8, 65535) catch panic("out of memory!", .{}),
+        .buffer = try allocator.alloc(u8, 65535),
         .last_addr = null,
         .monome = undefined,
     };
@@ -359,12 +360,12 @@ fn init(m: *Module, vm: *Spindle, allocator: std.mem.Allocator) void {
         try_again = false;
     }
     var buf: std.BoundedArray(u8, 256) = .{};
-    std.fmt.format(buf.writer(), "{d}\x00", .{port_num}) catch unreachable;
+    try std.fmt.format(buf.writer(), "{d}\x00", .{port_num});
     const slice: [:0]const u8 = buf.slice()[0 .. buf.len - 1 :0];
     lu.setConfig(l, "local_port", slice);
 
-    const local_address = lo.Message.new() orelse panic("out of memory!", .{});
-    local_address.add(.{ "127.0.0.1", @as(i32, @intCast(port_num)) }) catch panic("out of memory!", .{});
+    const local_address = lo.Message.new() orelse return error.OutOfMemroy;
+    try local_address.add(.{ "127.0.0.1", @as(i32, @intCast(port_num)) });
     self.monome.init(local_address);
     logger.info("local port: {s}", .{slice});
 
@@ -390,7 +391,7 @@ fn deinit(m: *const Module, l: *Lua, allocator: std.mem.Allocator, cleanup: Clea
     allocator.destroy(self);
 }
 
-fn launch(m: *const Module, _: *Lua, wheel: *Wheel) void {
+fn launch(m: *const Module, _: *Lua, wheel: *Wheel) anyerror!void {
     const self: *Osc = @ptrCast(@alignCast(m.self.?));
     self.monome.sendList();
     const buf: xev.ReadBuffer = .{ .slice = self.buffer };
@@ -407,15 +408,15 @@ pub fn module() Module {
 
 const logger = std.log.scoped(.osc);
 
-const Module = @import("module.zig");
+const Module = @import("../module.zig");
 const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
-const Seamstress = @import("seamstress.zig");
+const Seamstress = @import("../seamstress.zig");
 const Cleanup = Seamstress.Cleanup;
-const Wheel = @import("wheel.zig");
-const Spindle = @import("spindle.zig");
+const Wheel = @import("../wheel.zig");
+const Spindle = @import("../spindle.zig");
 const xev = @import("xev");
 const lo = @import("ziglo");
-const lu = @import("lua_util.zig");
+const lu = @import("../lua_util.zig");
 const std = @import("std");
 const panic = std.debug.panic;

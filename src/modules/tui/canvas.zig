@@ -1,7 +1,7 @@
 pub fn registerSeamstress(l: *Lua, tui: *Tui) void {
-    lu.registerSeamstress(l, "tuiDrawInBox", display, tui);
-    lu.registerSeamstress(l, "tuiClearBox", clear, tui);
-    lu.registerSeamstress(l, "tuiShowCursorInBox", showCursor, tui);
+    lu.registerSeamstress(l, "tui", "drawInBox", display, tui);
+    lu.registerSeamstress(l, "tui", "clearBox", clear, tui);
+    lu.registerSeamstress(l, "tui", "showCursorInBox", showCursor, tui);
     // lu.getSeamstress(l);
     // l.pushFunction(ziglua.wrap(printFn));
     // l.setField(-2, "_print");
@@ -9,7 +9,7 @@ pub fn registerSeamstress(l: *Lua, tui: *Tui) void {
 }
 
 fn showCursor(l: *Lua) i32 {
-    const tui = lu.closureGetContext(l, Tui).?;
+    const tui = lu.closureGetContext(l, Tui);
     const window = tui.vaxis.window();
     var spec: WindowSpec = .{};
     var border: vx.Window.BorderOptions = .{};
@@ -150,7 +150,7 @@ fn parseBorder(l: *Lua) vx.Window.BorderOptions {
 }
 
 fn clear(l: *Lua) i32 {
-    const tui = lu.closureGetContext(l, Tui).?;
+    const tui = lu.closureGetContext(l, Tui);
     const parent = tui.vaxis.window();
 
     var spec: WindowSpec = .{};
@@ -184,7 +184,7 @@ fn clear(l: *Lua) i32 {
 }
 
 fn display(l: *Lua) i32 {
-    const tui = lu.closureGetContext(l, Tui).?;
+    const tui = lu.closureGetContext(l, Tui);
     const parent = tui.vaxis.window();
 
     var spec: WindowSpec = .{};
@@ -387,7 +387,7 @@ fn printFn(l: *Lua) i32 {
 
 const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
-const lu = @import("../lua_util.zig");
+const lu = @import("../../lua_util.zig");
 const Tui = @import("../tui.zig");
 const Line = @import("line.zig").Line;
 const vx = @import("vaxis");

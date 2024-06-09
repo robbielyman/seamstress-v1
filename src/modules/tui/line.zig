@@ -1,41 +1,42 @@
+/// @module _seamstress.tui.Line
 pub fn registerSeamstress(l: *Lua, tui: *Tui) void {
-    l.newMetatable("tui.Line") catch unreachable;
+    l.newMetatable("seamstress.tui.Line") catch unreachable;
 
     _ = l.pushStringZ("__index");
     _ = l.pushValue(1); // push the metatable
-    l.setTable(1); // metatable.__index = metatable
+    l.setTable(-3); // metatable.__index = metatable
 
     _ = l.pushStringZ("__tostring");
     l.pushFunction(ziglua.wrap(toString));
-    l.setTable(1); // metatable.__tostring = toString
+    l.setTable(-3); // metatable.__tostring = toString
 
     _ = l.pushStringZ("__concat");
     l.pushFunction(ziglua.wrap(concat));
-    l.setTable(1); // metatable.__concat = concat
+    l.setTable(-3); // metatable.__concat = concat
 
     _ = l.pushStringZ("__len");
     l.pushFunction(ziglua.wrap(lenFn));
-    l.setTable(1); // metatable.len = len
+    l.setTable(-3); // metatable.len = len
 
     _ = l.pushStringZ("width");
     l.pushFunction(ziglua.wrap(widthFn));
-    l.setTable(1); // metatable.width = width
+    l.setTable(-3); // metatable.width = width
 
     _ = l.pushStringZ("sub");
     l.pushLightUserdata(tui);
     l.pushClosure(ziglua.wrap(sub), 1);
-    l.setTable(1); // metatable.sub = sub
+    l.setTable(-3); // metatable.sub = sub
 
     _ = l.pushStringZ("find");
     l.pushFunction(ziglua.wrap(find));
-    l.setTable(1); // metatable.find = find
+    l.setTable(-3); // metatable.find = find
 
     _ = l.pushString("__eq");
     l.pushFunction(ziglua.wrap(eql));
-    l.setTable(1); // metatable.eq = eq
+    l.setTable(-3); // metatable.eq = eq
 
     l.pop(1);
-    lu.registerSeamstress(l, "tuiLineNew", newFromStringAndStyle, tui);
+    lu.registerSeamstress(l, "tui", "Line", newFromStringAndStyle, tui);
 }
 
 /// a Line is a Lua-managed collection of Segments containing no newlines
@@ -66,7 +67,7 @@ pub const Line = struct {
 };
 
 fn find(l: *Lua) i32 {
-    _ = l.checkUserdata(Line, 1, "tui.Line");
+    _ = l.checkUserdata(Line, 1, "seamstress.tui.Line");
     const t = l.typeOf(2);
     const start_idx: ziglua.Integer = @intFromFloat(l.optNumber(3) orelse 1);
     _ = l.getMetaField(1, "sub") catch unreachable;
@@ -76,7 +77,7 @@ fn find(l: *Lua) i32 {
 
     switch (t) {
         .userdata => {
-            _ = l.checkUserdata(Line, 2, "tui.Line");
+            _ = l.checkUserdata(Line, 2, "seamstress.tui.Line");
             _ = l.getUserValue(1, 1) catch unreachable;
             const haystack = l.toString(-1) catch unreachable;
             _ = l.getUserValue(2, 1) catch unreachable;
@@ -149,8 +150,8 @@ fn find(l: *Lua) i32 {
 }
 
 fn eql(l: *Lua) i32 {
-    const line = l.checkUserdata(Line, 1, "tui.Line");
-    const other = l.checkUserdata(Line, 2, "tui.Line");
+    const line = l.checkUserdata(Line, 1, "seamstress.tui.Line");
+    const other = l.checkUserdata(Line, 2, "seamstress.tui.Line");
     if (line.grapheme_len != other.grapheme_len or line.width != other.width) {
         l.pushBoolean(false);
         return 1;
@@ -187,31 +188,31 @@ fn eql(l: *Lua) i32 {
 }
 
 fn lenFn(l: *Lua) i32 {
-    const line = l.checkUserdata(Line, 1, "tui.Line");
+    const line = l.checkUserdata(Line, 1, "seamstress.tui.Line");
     l.pushInteger(@intCast(line.grapheme_len));
     return 1;
 }
 
 fn widthFn(l: *Lua) i32 {
-    const line = l.checkUserdata(Line, 1, "tui.Line");
+    const line = l.checkUserdata(Line, 1, "seamstress.tui.Line");
     l.pushInteger(@intCast(line.width));
     return 1;
 }
 
 fn toString(l: *Lua) i32 {
-    _ = l.checkUserdata(Line, 1, "tui.Line");
+    _ = l.checkUserdata(Line, 1, "seamstress.tui.Line");
     _ = l.getUserValue(1, 1) catch unreachable;
     return 1;
 }
 
 /// returns one or more Lines, all with the same style
 fn newFromStringAndStyle(l: *Lua) i32 {
-    const tui = lu.closureGetContext(l, Tui).?;
+    const tui = lu.closureGetContext(l, Tui);
     const t1 = l.typeOf(1);
     switch (t1) {
         .userdata => {
             l.getMetatable(1) catch unreachable;
-            _ = l.getMetatableRegistry("tui.Line");
+            _ = l.getMetatableRegistry("seamstress.tui.Line");
             if (l.rawEqual(-1, -2)) {
                 l.pop(2);
                 l.pushValue(1);
@@ -230,7 +231,7 @@ fn newFromStringAndStyle(l: *Lua) i32 {
     if (str.len == 0) {
         l.pop(1);
         const line = l.newUserdata(Line, 2);
-        _ = l.getMetatableRegistry("tui.Line");
+        _ = l.getMetatableRegistry("seamstress.tui.Line");
         l.setMetatable(-2);
         _ = l.pushString("");
         l.setUserValue(-2, 1) catch unreachable;
@@ -264,7 +265,7 @@ fn newFromStringAndStyle(l: *Lua) i32 {
     while (tokenizer.next()) |token| {
         count += 1;
         const line = l.newUserdata(Line, 2);
-        _ = l.getMetatableRegistry("tui.Line");
+        _ = l.getMetatableRegistry("seamstress.tui.Line");
         l.setMetatable(-2);
         _ = l.pushString(token);
         l.setUserValue(-2, 1) catch unreachable;
@@ -303,11 +304,11 @@ fn concat(l: *Lua) i32 {
             l.remove(-2);
             l.pushValue(1);
             l.call(1, ziglua.mult_return);
-            _ = l.checkUserdata(Line, 2, "tui.Line");
+            _ = l.checkUserdata(Line, 2, "seamstress.tui.Line");
             l.pushValue(2);
         },
         .userdata => {
-            _ = l.checkUserdata(Line, 1, "tui.Line");
+            _ = l.checkUserdata(Line, 1, "seamstress.tui.Line");
             l.pushValue(1);
             switch (t2) {
                 .number, .string => {
@@ -320,7 +321,7 @@ fn concat(l: *Lua) i32 {
                     // l.rotate(3, -1);
                 },
                 .userdata => {
-                    _ = l.checkUserdata(Line, 2, "tui.Line");
+                    _ = l.checkUserdata(Line, 2, "seamstress.tui.Line");
                     l.pushValue(2);
                 },
                 else => l.typeError(2, "line or string"),
@@ -331,7 +332,7 @@ fn concat(l: *Lua) i32 {
     const first = l.toUserdata(Line, -2) catch unreachable;
     const second = l.toUserdata(Line, -1) catch unreachable;
     const line = l.newUserdata(Line, 2);
-    _ = l.getMetatableRegistry("tui.Line");
+    _ = l.getMetatableRegistry("seamstress.tui.Line");
     l.setMetatable(-2);
     _ = l.getUserValue(-3, 1) catch unreachable;
     const str_a = l.toString(-1) catch unreachable;
@@ -413,11 +414,11 @@ fn concat(l: *Lua) i32 {
 }
 
 fn sub(l: *Lua) i32 {
-    const tui = lu.closureGetContext(l, Tui).?;
-    const line = l.checkUserdata(Line, 1, "tui.Line");
+    const tui = lu.closureGetContext(l, Tui);
+    const line = l.checkUserdata(Line, 1, "seamstress.tui.Line");
     if (line.grapheme_len == 0) {
         const ret = l.newUserdata(Line, 2);
-        _ = l.getMetatableRegistry("tui.Line");
+        _ = l.getMetatableRegistry("seamstress.tui.Line");
         l.setMetatable(-2);
         _ = l.pushString("");
         l.setUserValue(-2, 1) catch unreachable;
@@ -439,7 +440,7 @@ fn sub(l: *Lua) i32 {
     };
     if (offset >= line.grapheme_len) {
         const ret = l.newUserdata(Line, 2);
-        _ = l.getMetatableRegistry("tui.Line");
+        _ = l.getMetatableRegistry("seamstress.tui.Line");
         l.setMetatable(-2);
         _ = l.pushString("");
         l.setUserValue(-2, 1) catch unreachable;
@@ -458,7 +459,7 @@ fn sub(l: *Lua) i32 {
     };
     if (len == 0) {
         const ret = l.newUserdata(Line, 2);
-        _ = l.getMetatableRegistry("tui.Line");
+        _ = l.getMetatableRegistry("seamstress.tui.Line");
         l.setMetatable(-2);
         _ = l.pushString("");
         l.setUserValue(-2, 1) catch unreachable;
@@ -472,7 +473,7 @@ fn sub(l: *Lua) i32 {
     }
 
     const ret = l.newUserdata(Line, 2);
-    _ = l.getMetatableRegistry("tui.Line");
+    _ = l.getMetatableRegistry("seamstress.tui.Line");
     l.setMetatable(-2);
     _ = l.getUserValue(1, 2) catch unreachable;
     const segments = l.toUserdataSlice(Line.Segment, -1) catch unreachable;
@@ -577,6 +578,6 @@ const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
 const vx = @import("vaxis");
 const grapheme = @import("grapheme");
-const lu = @import("../lua_util.zig");
+const lu = @import("../../lua_util.zig");
 const Tui = @import("../tui.zig");
 const std = @import("std");

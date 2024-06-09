@@ -1,4 +1,5 @@
 /// metros module
+// @module _seamstress.metro
 
 // returns the module interface
 pub fn module() Module {
@@ -171,14 +172,14 @@ fn metroStart(l: *Lua) i32 {
 
 const logger = std.log.scoped(.metros);
 
-const Module = @import("module.zig");
-const Spindle = @import("spindle.zig");
-const Wheel = @import("wheel.zig");
+const Module = @import("../module.zig");
+const Spindle = @import("../spindle.zig");
+const Wheel = @import("../wheel.zig");
 const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
 const std = @import("std");
-const Seamstress = @import("seamstress.zig");
+const Seamstress = @import("../seamstress.zig");
 const Error = Seamstress.Error;
 const Cleanup = Seamstress.Cleanup;
 const xev = @import("xev");
-const lu = @import("lua_util.zig");
+const lu = @import("../lua_util.zig");

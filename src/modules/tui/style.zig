@@ -1,12 +1,14 @@
 pub fn registerSeamstress(l: *Lua) void {
-    l.newMetatable("tui.Style") catch unreachable;
+    l.newMetatable("seamstress.tui.Style") catch unreachable;
     l.setFuncs(functions, 0);
     l.pop(1);
 
     lu.getSeamstress(l);
-    _ = l.pushStringZ("tuiStyleNew");
+    _ = l.getField(-1, "tui");
+    l.remove(-2);
+    _ = l.pushStringZ("Style");
     l.pushFunction(ziglua.wrap(new));
-    l.setTable(1);
+    l.setTable(-3);
     l.pop(1);
 }
 
@@ -27,7 +29,7 @@ const functions: []const ziglua.FnReg = &.{ .{
 fn new(l: *Lua) i32 {
     lu.checkNumArgs(l, 1);
     const style: *vx.Style = l.newUserdata(vx.Style, 0);
-    _ = l.getMetatableRegistry("tui.Style");
+    _ = l.getMetatableRegistry("seamstress.tui.Style");
     l.setMetatable(-2);
     style.* = .{};
     const t = l.typeOf(1);
@@ -134,7 +136,7 @@ fn new(l: *Lua) i32 {
 }
 
 fn getIndex(l: *Lua) i32 {
-    const style = l.checkUserdata(vx.Style, 1, "tui.Style");
+    const style = l.checkUserdata(vx.Style, 1, "seamstress.tui.Style");
     const field = l.toStringEx(2);
     inline for (.{ "fg", "bg", "ul" }) |col| {
         if (std.mem.eql(u8, field, col)) {
@@ -160,14 +162,14 @@ fn getIndex(l: *Lua) i32 {
 }
 
 fn eql(l: *Lua) i32 {
-    const a = l.checkUserdata(vx.Style, 1, "tui.Style");
-    const b = l.checkUserdata(vx.Style, 1, "tui.Style");
+    const a = l.checkUserdata(vx.Style, 1, "seamstress.tui.Style");
+    const b = l.checkUserdata(vx.Style, 1, "seamstress.tui.Style");
     l.pushBoolean(a.eql(b.*));
     return 1;
 }
 
 fn toString(l: *Lua) i32 {
-    const style = l.checkUserdata(vx.Style, 1, "tui.Style");
+    const style = l.checkUserdata(vx.Style, 1, "seamstress.tui.Style");
     var buf: ziglua.Buffer = .{};
     const slice = buf.initSize(l, 1024);
     var stream = std.io.fixedBufferStream(slice);
@@ -220,7 +222,7 @@ const uls: []const struct { vx.Style.Underline, []const u8 } = &.{
 };
 
 fn call(l: *Lua) i32 {
-    const style = l.checkUserdata(vx.Style, 1, "tui.Style");
+    const style = l.checkUserdata(vx.Style, 1, "seamstress.tui.Style");
     const t2 = l.typeOf(2);
     const start = l.optInteger(3) orelse 1;
     const end = l.optInteger(4) orelse -1;
@@ -292,5 +294,5 @@ const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
 const std = @import("std");
 const vx = @import("vaxis");
-const lu = @import("../lua_util.zig");
+const lu = @import("../../lua_util.zig");
 const Line = @import("line.zig").Line;

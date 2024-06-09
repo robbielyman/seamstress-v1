@@ -1,17 +1,20 @@
+/// @module _seamstress.tui.Color
 pub fn registerSeamstress(l: *Lua) void {
-    l.newMetatable("tui.Color") catch unreachable;
+    l.newMetatable("seamstress.tui.Color") catch std.debug.panic("wtf!?", .{});
     for (functions) |val| {
         _ = l.pushStringZ(val.name);
         l.pushFunction(val.func.?);
-        l.setTable(1);
+        l.setTable(-3);
     }
 
     l.pop(1);
 
     lu.getSeamstress(l);
-    _ = l.pushStringZ("tuiColorNew");
+    _ = l.getField(-1, "tui");
+    l.remove(-2);
+    _ = l.pushStringZ("Color");
     l.pushFunction(ziglua.wrap(new));
-    l.setTable(1); // _seamstress.tuiColorNew = new
+    l.setTable(-3); // _seamstress.tuiColorNew = new
     l.pop(1);
 }
 
@@ -44,15 +47,22 @@ const functions: []const ziglua.FnReg = &.{ .{
     .func = ziglua.wrap(negate),
 } };
 
+/// tests whether two Color objects are equal:
+// the default color is equal only to itself,
+// while other colors are compared by RGB values
+// @tparam Color a
+// @tparam Color b
+// @treturn bool
+// @function Color.__eq
 fn eql(l: *Lua) i32 {
-    const a = l.checkUserdata(vx.Color, 1, "tui.Color");
-    const b = l.checkUserdata(vx.Color, 2, "tui.Color");
+    const a = l.checkUserdata(vx.Color, 1, "seamstress.tui.Color");
+    const b = l.checkUserdata(vx.Color, 2, "seamstress.tui.Color");
     l.pushBoolean(a.eql(b.*));
     return 1;
 }
 
 fn toString(l: *Lua) i32 {
-    const color = l.checkUserdata(vx.Color, 1, "tui.Color");
+    const color = l.checkUserdata(vx.Color, 1, "seamstress.tui.Color");
     switch (color.*) {
         .default => _ = l.pushStringZ("color(default)"),
         .rgb => |rgb| {
@@ -70,7 +80,7 @@ fn new(l: *Lua) i32 {
     const top = l.getTop();
     if (top != 0 and top != 1 and top != 3) l.raiseErrorStr("bad number of args to constructor!", .{});
     const color = l.newUserdata(vx.Color, 0);
-    _ = l.getMetatableRegistry("tui.Color");
+    _ = l.getMetatableRegistry("seamstress.tui.Color");
     l.setMetatable(-2);
     switch (top) {
         0 => color.* = .default,
@@ -86,13 +96,14 @@ fn new(l: *Lua) i32 {
                             color.* = .default;
                             return 1;
                         };
-                        color.* = .{ .rgb = @bitCast(col) };
+                        const rgb: [3]u8 = @bitCast(col);
+                        color.* = .{ .rgb = .{ rgb[2], rgb[1], rgb[0] } };
                         return 1;
                     }
                     lu.getSeamstress(l);
                     _ = l.getField(-1, "tui");
                     l.remove(-2);
-                    _ = l.getField(-1, "colors");
+                    _ = l.getField(-1, "palette");
                     l.remove(-2);
                     const t1 = l.getField(-1, key);
                     l.remove(-2);
@@ -103,14 +114,10 @@ fn new(l: *Lua) i32 {
                             defer l.allocator().free(lower);
                             const col = std.fmt.parseInt(u24, lower, 16) catch {
                                 color.* = .default;
-                                l.pop(1);
                                 return 1;
                             };
-                            color.* = .{ .rgb = .{
-                                @truncate((col & 0xff0000) >> 16),
-                                @truncate((col & 0x00ff00) >> 8),
-                                @truncate(col & 0x0000ff),
-                            } };
+                            const rgb: [3]u8 = @bitCast(col);
+                            color.* = .{ .rgb = .{ rgb[2], rgb[1], rgb[0] } };
                             l.pop(1);
                             return 1;
                         }
@@ -158,7 +165,7 @@ fn new(l: *Lua) i32 {
 }
 
 fn getIndex(l: *Lua) i32 {
-    const color = l.checkUserdata(vx.Color, 1, "tui.Color");
+    const color = l.checkUserdata(vx.Color, 1, "seamstress.tui.Color");
     switch (color.*) {
         .default => return 0,
         .rgb => {
@@ -194,13 +201,13 @@ fn add(l: *Lua) i32 {
     const t1 = l.typeOf(1);
     const t2 = l.typeOf(2);
     const ret = l.newUserdata(vx.Color, 0);
-    _ = l.getMetatableRegistry("tui.Color");
+    _ = l.getMetatableRegistry("seamstress.tui.Color");
     l.setMetatable(-2);
     ret.* = .default;
     switch (t1) {
         .number => {
             const num = l.checkInteger(1);
-            const color = l.checkUserdata(vx.Color, 2, "tui.Color");
+            const color = l.checkUserdata(vx.Color, 2, "seamstress.tui.Color");
             switch (color.*) {
                 .default => {},
                 .rgb => |rgb| {
@@ -216,7 +223,7 @@ fn add(l: *Lua) i32 {
             }
         },
         .userdata => {
-            const color = l.checkUserdata(vx.Color, 1, "tui.Color");
+            const color = l.checkUserdata(vx.Color, 1, "seamstress.tui.Color");
             switch (t2) {
                 .number => {
                     const num = l.checkInteger(2);
@@ -235,7 +242,7 @@ fn add(l: *Lua) i32 {
                     }
                 },
                 .userdata => {
-                    const other = l.checkUserdata(vx.Color, 2, "tui.Color");
+                    const other = l.checkUserdata(vx.Color, 2, "seamstress.tui.Color");
                     switch (color.*) {
                         .default => {},
                         .rgb => |rgb| {
@@ -265,9 +272,9 @@ fn add(l: *Lua) i32 {
 }
 
 fn negate(l: *Lua) i32 {
-    const color = l.checkUserdata(vx.Color, 1, "tui.Color");
+    const color = l.checkUserdata(vx.Color, 1, "seamstress.tui.Color");
     const ret = l.newUserdata(vx.Color, 0);
-    _ = l.getMetatableRegistry("tui.Color");
+    _ = l.getMetatableRegistry("seamstress.tui.Color");
     l.setMetatable(-2);
     ret.* = .default;
     switch (color.*) {
@@ -292,13 +299,13 @@ fn multiply(l: *Lua) i32 {
     const t1 = l.typeOf(1);
     const t2 = l.typeOf(2);
     const ret = l.newUserdata(vx.Color, 0);
-    _ = l.getMetatableRegistry("tui.Color");
+    _ = l.getMetatableRegistry("seamstress.tui.Color");
     l.setMetatable(-2);
     ret.* = .default;
     switch (t1) {
         .number => {
             const num = l.checkNumber(1);
-            const color = l.checkUserdata(vx.Color, 2, "tui.Color");
+            const color = l.checkUserdata(vx.Color, 2, "seamstress.tui.Color");
             switch (color.*) {
                 .default => {},
                 .rgb => |rgb| {
@@ -314,7 +321,7 @@ fn multiply(l: *Lua) i32 {
             }
         },
         .userdata => {
-            const color = l.checkUserdata(vx.Color, 1, "tui.Color");
+            const color = l.checkUserdata(vx.Color, 1, "seamstress.tui.Color");
             switch (t2) {
                 .number => {
                     const num = l.checkNumber(2);
@@ -333,7 +340,7 @@ fn multiply(l: *Lua) i32 {
                     }
                 },
                 .userdata => {
-                    const other = l.checkUserdata(vx.Color, 2, "tui.Color");
+                    const other = l.checkUserdata(vx.Color, 2, "seamstress.tui.Color");
                     switch (color.*) {
                         .default => {},
                         .rgb => |rgb| {
@@ -385,7 +392,7 @@ fn div(l: *Lua) i32 {
 }
 
 fn call(l: *Lua) i32 {
-    const color = l.checkUserdata(vx.Color, 1, "tui.Color");
+    const color = l.checkUserdata(vx.Color, 1, "seamstress.tui.Color");
     const t2 = l.typeOf(2);
     // const start = l.optInteger(4) orelse 1;
     // const end = l.optInteger(5) orelse -1;
@@ -403,7 +410,7 @@ fn call(l: *Lua) i32 {
             l.call(1, 1);
         },
         .userdata => {
-            const line = l.checkUserdata(Line, 2, "tui.Line");
+            const line = l.checkUserdata(Line, 2, "seamstress.tui.Line");
             const new_line = l.newUserdata(Line, 2);
             new_line.* = line.*;
             _ = l.getUserValue(2, 1) catch unreachable;
@@ -464,5 +471,5 @@ const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
 const vx = @import("vaxis");
 const std = @import("std");
-const lu = @import("../lua_util.zig");
+const lu = @import("../../lua_util.zig");
 const Line = @import("line.zig").Line;

@@ -8,24 +8,20 @@
             .hash = "1220affeb3fe37ef09411b5a213b5fdf9bb6568e9913bade204694648983a8b2776d",
         },
         .ziglo = .{
-            .url = "git+https://github.com/ryleelyman/ziglo#5e73f7ddbadfc0a43d31c03cedbb5c513fbce863",
-            .hash = "1220249f9f7f5e30061079be6a208172ce674ff8787a1c15ef5fed5aee39918e7953",
+            .url = "git+https://github.com/ryleelyman/ziglo#76fd1efaba187e4ba8ceceac686a9644f33fc91c",
+            .hash = "1220fbf622d309fc3584addd62351ec9bac60581621fe580ee5ad3f10f4d73055630",
         },
         .@"zig-abl_link" = .{
-            .url = "git+https://github.com/ryleelyman/zig-abl_link#766b661b5005ddb4460e64eda59589b76d602dec",
-            .hash = "122054b0fb984f3e190c6406f17169de0776484f25b21c88fbf3faf4693a6bdf5f01",
+            .url = "git+https://github.com/ryleelyman/zig-abl_link#bca725468f88ef073cabc6da03696ceaa0af19c7",
+            .hash = "12205b92ab3c432ed67f84896ad0c4f89e1a3c3934bc9a34c16e98952eee717761ac",
         },
         .rtmidi_z = .{
-            .url = "git+https://github.com/ryleelyman/rtmidi_z#de7c7a5f9dbdbe84f8792769e72a8347e0cc963f",
-            .hash = "12202255aa378adcdaada18c4f2b3a9b700a530fbf1fdb17b6ba8601c938e8c888e9",
+            .url = "git+https://github.com/ryleelyman/rtmidi_z#856a560e3f0744ab1ac08711fb63ad0f9684e445",
+            .hash = "1220fd302a49120bbbd197448825c4254a8471e74cdd7c136870ff696361c96c7124",
         },
-        // .libxev = .{
-        // .url = "https://github.com/mitchellh/libxev/archive/a284cf851fe2f88f8947c01160c39ff216dacea1.tar.gz",
-        // .hash = "12205b8ea5495b812b9a8943535a7af8da556644d2c1599dc01e1a5ea7aaf59bb2c7",
-        // },
         .vaxis = .{
-            .url = "git+https://github.com/rockorager/libvaxis#0cb81e30eb6e33435b687e21573ff3e9b6ba7505",
-            .hash = "1220367cccbf3bcdec48d989aacdc1ea2bff1ff80cd7f828bac69ff46b99bb053f05",
+            .url = "git+https://github.com/rockorager/libvaxis#b7946a33939af94236348dcb9be424d43fc39286",
+            .hash = "1220fbb1b748ced787d6a19d3be8a28839e000548b76bae0f183a6e13504e6bc7b20",
         },
     },
 }

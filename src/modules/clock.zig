@@ -1,4 +1,5 @@
 /// clocks module; musically relevant coroutines
+// @module _seamstress.clock
 pub fn module() Module {
     return .{ .vtable = &.{
         .init_fn = init,
@@ -333,14 +334,14 @@ fn linkStop(l: *Lua) i32 {
 
 const logger = std.log.scoped(.clock);
 
-const Module = @import("module.zig");
-const Wheel = @import("wheel.zig");
-const Spindle = @import("spindle.zig");
-const Seamstress = @import("seamstress.zig");
+const Module = @import("../module.zig");
+const Wheel = @import("../wheel.zig");
+const Spindle = @import("../spindle.zig");
+const Seamstress = @import("../seamstress.zig");
 const Error = Seamstress.Error;
 const Cleanup = Seamstress.Cleanup;
 const Lua = @import("ziglua").Lua;
 const std = @import("std");
 const xev = @import("xev");
 const lk = @import("link");
-const lu = @import("lua_util.zig");
+const lu = @import("../lua_util.zig");

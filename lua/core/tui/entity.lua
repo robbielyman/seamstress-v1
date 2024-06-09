@@ -35,7 +35,11 @@ return function(tui)
           local entity = _seamstress.tui.entities[entity_key]
           if entity then
             if type(entity[event]) == "table" then
-              if entity[event][key] then entity[event][key](...) end
+              if entity[event][key] then
+                entity[event][key](...)
+              elseif entity[event].text and ... ~= nil then
+                entity[event].text(...)
+              end
             else
               entity[event](key, ...)
             end
