@@ -4,23 +4,25 @@ const Tui = @This();
 
 l: *Lua,
 vaxis: vx.Vaxis,
-tty: ?vx.Tty,
+tty: vx.Tty,
 watcher: vx.xev.TtyWatcher(Tui) = undefined,
+launched: bool = false,
 
 fn render(ctx: *anyopaque, lap_time_ns: u64) void {
     const lap_time_float: f64 = @floatFromInt(lap_time_ns);
     const dt = lap_time_float / std.time.ns_per_s;
     const tui: *Tui = @ptrCast(@alignCast(ctx));
-
     tui.vaxis.window().hideCursor();
 
     lu.getMethod(tui.l, "tui", "update");
+    lu.getMethod(tui.l, "tui", "update");
     tui.l.pushNumber(dt);
-    tui.l.call(1, 0);
+    tui.l.call(2, 0);
     lu.getMethod(tui.l, "tui", "draw");
-    tui.l.call(0, 0);
+    lu.getMethod(tui.l, "tui", "draw");
+    tui.l.call(1, 0);
 
-    tui.vaxis.render(tui.tty.?.anyWriter()) catch panic("unable to draw to the terminal!", .{});
+    tui.vaxis.render(tui.tty.anyWriter()) catch panic("unable to draw to the terminal!", .{});
 }
 
 fn callback(ud: ?*Tui, _: *xev.Loop, _: *vx.xev.TtyWatcher(Tui), event: vx.xev.Event) xev.CallbackAction {
@@ -34,12 +36,12 @@ fn callback(ud: ?*Tui, _: *xev.Loop, _: *vx.xev.TtyWatcher(Tui), event: vx.xev.E
         .focus_in => {
             lu.getMethod(tui.l, "tui", "window_focus");
             tui.l.pushBoolean(true);
-            lu.doCall(tui.l, 1, 0);
+            tui.l.call(1, 0);
         },
         .focus_out => {
             lu.getMethod(tui.l, "tui", "window_focus");
             tui.l.pushBoolean(true);
-            lu.doCall(tui.l, 1, 0);
+            tui.l.call(1, 0);
         },
         .paste_start, .paste_end => {}, // since paste is already special, these seem not necessary?
         .paste => |txt| {
@@ -49,30 +51,28 @@ fn callback(ud: ?*Tui, _: *xev.Loop, _: *vx.xev.TtyWatcher(Tui), event: vx.xev.E
         .color_report => |_| {},
         .color_scheme => |scheme| lu.setConfig(tui.l, "color_scheme", @tagName(scheme)),
         .winsize => |winsize| {
-            tui.vaxis.resize(tui.l.allocator(), tui.tty.?.anyWriter(), winsize) catch panic("out of memory!", .{});
+            tui.vaxis.resize(tui.l.allocator(), tui.tty.anyWriter(), winsize) catch panic("out of memory!", .{});
             tui.vaxis.queueRefresh();
             lu.getSeamstress(tui.l);
             if (tui.l.getField(-1, "tui") == .table) {
                 tui.l.remove(-2);
+                _ = tui.l.getField(-1, "resize");
+                tui.l.remove(-2);
                 tui.l.pushInteger(@intCast(winsize.cols));
                 tui.l.pushInteger(@intCast(winsize.rows));
-                _ = tui.l.getField(-3, "resize");
-                tui.l.remove(-4);
-                lu.doCall(tui.l, 2, 0);
+                tui.l.call(2, 0);
             } else tui.l.pop(2);
             lu.getSeamstress(tui.l);
+            _ = tui.l.getField(-1, "tui");
+            tui.l.remove(-2);
             tui.l.pushInteger(@intCast(winsize.cols));
-            tui.l.setField(-2, "tui_cols");
+            tui.l.setField(-2, "cols");
             tui.l.pushInteger(@intCast(winsize.rows));
-            tui.l.setField(-2, "tui_rows");
+            tui.l.setField(-2, "rows");
             tui.l.pop(1);
             lu.render(tui.l);
         },
     }
-    // if (!tui.queried) {
-    // tui.queried = true;
-    // tui.vaxis.queryTerminal(tui.tty.anyWriter(), std.time.ns_per_s) catch unreachable;
-    // }
     return .rearm;
 }
 
@@ -168,7 +168,7 @@ fn mouse(l: *Lua, m: vx.Mouse) void {
         .wheel_up, .wheel_down => {
             lu.getMethod(l, "tui", "scroll");
             l.pushInteger(if (m.button == .wheel_up) 1 else -1);
-            lu.doCall(l, 1, 0);
+            l.call(1, 0);
         },
         else => {
             var buf: [128]u8 = undefined;
@@ -207,10 +207,10 @@ fn init(m: *Module, l: *Lua, allocator: std.mem.Allocator) anyerror!void {
     m.self = self;
     self.* = .{
         .l = l,
+        .tty = try vx.Tty.init(),
         .vaxis = try vx.Vaxis.init(allocator, .{
             .system_clipboard_allocator = allocator,
         }),
-        .tty = null,
     };
     @import("tui/color.zig").registerSeamstress(l);
     @import("tui/style.zig").registerSeamstress(l);
@@ -219,30 +219,29 @@ fn init(m: *Module, l: *Lua, allocator: std.mem.Allocator) anyerror!void {
     lu.registerSeamstress(l, "tui", "redraw", redraw, self);
 }
 
-fn deinit(m: *const Module, _: *Lua, allocator: std.mem.Allocator, kind: Cleanup) void {
+fn deinit(m: *Module, l: *Lua, allocator: std.mem.Allocator, kind: Cleanup) void {
     const self: *Tui = @ptrCast(@alignCast(m.self orelse return));
-    if (self.tty) |*tty| {
-        self.vaxis.deinit(if (kind == .full) allocator else null, tty.anyWriter());
-        tty.deinit();
-    } else {
-        self.vaxis.deinit(if (kind == .full) allocator else null, std.io.null_writer.any());
-    }
+    const wheel = lu.getWheel(l);
+    wheel.render = null;
+    self.vaxis.deinit(allocator, self.tty.anyWriter());
+    self.tty.deinit();
     if (kind != .full) return;
     allocator.destroy(self);
+    m.self = null;
 }
 
-fn launch(m: *const Module, l: *Lua, wheel: *Wheel) anyerror!void {
-    _ = l; // autofix
+fn launch(m: *const Module, _: *Lua, wheel: *Wheel) anyerror!void {
     const self: *Tui = @ptrCast(@alignCast(m.self.?));
-    self.tty = try vx.Tty.init();
-    try self.watcher.init(&self.tty.?, &self.vaxis, &wheel.loop, self, callback);
+    if (self.launched) return;
+    self.launched = true;
     wheel.render = .{
         .ctx = self,
         .render_fn = render,
     };
-    try self.vaxis.enterAltScreen(self.tty.?.anyWriter());
-    try self.vaxis.queryTerminalSend(self.tty.?.anyWriter());
-    try self.vaxis.setMouseMode(self.tty.?.anyWriter(), true);
+    try self.watcher.init(&self.tty, &self.vaxis, &wheel.loop, self, callback);
+    try self.vaxis.enterAltScreen(self.tty.anyWriter());
+    try self.vaxis.setMouseMode(self.tty.anyWriter(), true);
+    try self.vaxis.queryTerminalSend(self.tty.anyWriter());
 }
 
 pub fn module() Module {
@@ -274,3 +273,11 @@ const lu = @import("../lua_util.zig");
 const xev = @import("xev");
 const builtin = @import("builtin");
 const logger = std.log.scoped(.tui);
+
+test "ref" {
+    _ = Tui;
+    _ = @import("tui/canvas.zig");
+    _ = @import("tui/color.zig");
+    _ = @import("tui/line.zig");
+    _ = @import("tui/style.zig");
+}

@@ -1,11 +1,9 @@
 pub fn registerSeamstress(l: *Lua, tui: *Tui) void {
+    const n = l.getTop();
     lu.registerSeamstress(l, "tui", "drawInBox", display, tui);
     lu.registerSeamstress(l, "tui", "clearBox", clear, tui);
     lu.registerSeamstress(l, "tui", "showCursorInBox", showCursor, tui);
-    // lu.getSeamstress(l);
-    // l.pushFunction(ziglua.wrap(printFn));
-    // l.setField(-2, "_print");
-    // l.pop(1);
+    std.debug.assert(n == l.getTop());
 }
 
 fn showCursor(l: *Lua) i32 {
@@ -221,7 +219,7 @@ fn display(l: *Lua) i32 {
     const t1 = l.typeOf(1);
     switch (t1) {
         .userdata => {
-            _ = l.checkUserdata(Line, 1, "tui.Line");
+            _ = l.checkUserdata(Line, 1, "seamstress.tui.Line");
             _ = l.getUserValue(-1, 1) catch unreachable;
             const text = l.toString(-1) catch unreachable;
             if (l.getUserValue(-2, 2) catch unreachable == .userdata and text.len > 0) {

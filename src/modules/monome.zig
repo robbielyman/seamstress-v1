@@ -843,3 +843,7 @@ const Lua = ziglua.Lua;
 const lu = @import("../lua_util.zig");
 const Seamstress = @import("../seamstress.zig");
 const panic = std.debug.panic;
+
+test "ref" {
+    _ = Monome;
+}

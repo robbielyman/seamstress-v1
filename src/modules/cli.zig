@@ -7,6 +7,7 @@ stdout: BufferedWriter,
 stdin_buf: std.ArrayList(u8),
 file: xev.File,
 c: xev.Completion = .{},
+c_c: xev.Completion = .{},
 continuing: bool = false,
 dirty: bool = false,
 
@@ -44,6 +45,7 @@ fn handleStdin(
     self.?.continuing = lu.processChunk(self.?.l, self.?.stdin_buf.items);
     if (!self.?.continuing) self.?.stdin_buf.clearRetainingCapacity();
     lu.luaPrint(self.?.l);
+    self.?.dirty = true;
     f.read(l, c, .{ .slice = self.?.stdin_buf.unusedCapacitySlice() }, Cli, self, handleStdin);
     return .disarm;
 }
@@ -68,10 +70,6 @@ pub fn printFn(l: *Lua) i32 {
     const ctx = self.stdout.writer();
     // printing nothing should do nothing
     if (n == 0) return 0;
-    defer {
-        self.dirty = true;
-        render(self, 0);
-    }
     // while loop because for loops are limited to `usize` in zig
     var i: i32 = 1;
     while (i <= n) : (i += 1) {
@@ -108,6 +106,8 @@ pub fn printFn(l: *Lua) i32 {
     }
     // finish with a newline
     ctx.writeAll("\n") catch {};
+    const wheel = lu.getWheel(l);
+    wheel.awaken();
     return 0;
 }
 
@@ -130,12 +130,33 @@ fn init(m: *Module, l: *Lua, allocator: std.mem.Allocator) anyerror!void {
     lu.registerSeamstress(l, null, "hello", hello, self);
 }
 
-fn deinit(m: *const Module, _: *Lua, allocator: std.mem.Allocator, kind: Cleanup) void {
+fn cancelCallback(ud: ?*anyopaque, l: *xev.Loop, _: *xev.Completion, r: xev.Result) xev.CallbackAction {
+    _ = r.cancel catch unreachable;
+    const m: *Module = @ptrCast(@alignCast(ud.?));
+    const lua = Wheel.getLua(l);
+    m.deinit(lua, lua.allocator(), .full);
+    return .disarm;
+}
+
+fn deinit(m: *Module, l: *Lua, allocator: std.mem.Allocator, kind: Cleanup) void {
+    if (kind == .canceled) {
+        const wheel = lu.getWheel(l);
+        const self: *Cli = @ptrCast(@alignCast(m.self orelse return));
+        self.c_c = .{
+            .op = .{ .cancel = .{ .c = &self.c } },
+            .userdata = m,
+            .callback = cancelCallback,
+        };
+        wheel.loop.add(&self.c_c);
+        return;
+    }
     if (kind != .full) return;
     const self: *Cli = @ptrCast(@alignCast(m.self orelse return));
+    self.stdout.flush() catch {};
     self.stdin_buf.deinit();
     allocator.destroy(@as(*const std.fs.File.Writer, @ptrCast(@alignCast(self.stdout.unbuffered_writer.context))));
     allocator.destroy(self);
+    m.self = null;
 }
 
 fn launch(m: *const Module, l: *Lua, wheel: *Wheel) anyerror!void {
@@ -169,3 +190,7 @@ const std = @import("std");
 const xev = @import("xev");
 const panic = std.debug.panic;
 const lu = @import("../lua_util.zig");
+
+test "ref" {
+    _ = Cli;
+}

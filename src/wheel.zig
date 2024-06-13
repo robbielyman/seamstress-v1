@@ -4,7 +4,7 @@ const Wheel = @This();
 loop: xev.Loop,
 pool: xev.ThreadPool,
 quit_flag: bool = false,
-quit_ev: xev.Async,
+awake: xev.Async,
 render: ?struct {
     ctx: *anyopaque,
     render_fn: *const fn (*anyopaque, u64) void,
@@ -15,6 +15,7 @@ kind: Seamstress.Cleanup = switch (builtin.mode) {
     .ReleaseFast, .ReleaseSmall => .clean,
 },
 
+// creates the event loop and the quit signaler
 pub fn init(self: *Wheel) void {
     self.* = .{
         .pool = xev.ThreadPool.init(.{}),
@@ -22,15 +23,13 @@ pub fn init(self: *Wheel) void {
             .thread_pool = &self.pool,
         }) catch |err| panic("error initializing event loop! {s}", .{@errorName(err)}),
         .timer = std.time.Timer.start() catch unreachable,
-        .quit_ev = xev.Async.init() catch |err| panic("error initializing event loop! {s}", .{@errorName(err)}),
+        .awake = xev.Async.init() catch |err| panic("error initializing event loop! {s}", .{@errorName(err)}),
     };
 }
 
 /// the main event loop; blocks until self.quit becomes true
 pub fn run(self: *Wheel) void {
     defer {
-        self.pool.shutdown();
-        self.pool.deinit();
         self.loop.deinit();
     }
     var c1: xev.Completion = .{};
@@ -38,7 +37,7 @@ pub fn run(self: *Wheel) void {
     render_timer.run(&self.loop, &c1, 17, xev.Timer, &render_timer, render);
     _ = self.timer.lap();
     var c2: xev.Completion = .{};
-    self.quit_ev.wait(&self.loop, &c2, Wheel, self, callback);
+    self.awake.wait(&self.loop, &c2, Wheel, self, callback);
     var c3: xev.Completion = .{};
     const timer = xev.Timer.init() catch unreachable;
     const seamstress: *Seamstress = @fieldParentPtr("loop", self);
@@ -46,17 +45,19 @@ pub fn run(self: *Wheel) void {
     while (!self.quit_flag) {
         self.loop.run(.once) catch |err| panic("error running event loop! {s}", .{@errorName(err)});
         const lap_time = self.timer.lap();
-        if (self.render) |r| r.render_fn(r.ctx, lap_time);
+        if (self.render) |r| r.render_fn(r.ctx, lap_time) else std.log.debug("whoopsie", .{});
     }
 }
 
+// just wakes up the event loop
 fn callback(w: ?*Wheel, l: *xev.Loop, c: *xev.Completion, r: xev.Async.WaitError!void) xev.CallbackAction {
     const wheel = w.?;
     _ = r catch unreachable;
-    wheel.quit_ev.wait(l, c, Wheel, w, callback);
+    wheel.awake.wait(l, c, Wheel, w, callback);
     return .disarm;
 }
 
+// just wakes up the event loop
 fn render(w: ?*xev.Timer, l: *xev.Loop, c: *xev.Completion, r: xev.Timer.RunError!void) xev.CallbackAction {
     const render_timer = w.?;
     _ = r catch return .disarm;
@@ -64,19 +65,33 @@ fn render(w: ?*xev.Timer, l: *xev.Loop, c: *xev.Completion, r: xev.Timer.RunErro
     return .disarm;
 }
 
-pub fn quit(self: *Wheel) void {
-    self.quit_flag = true;
-    self.quit_ev.notify() catch |err| panic("error while quitting! {s}", .{@errorName(err)});
+pub fn awaken(self: *Wheel) void {
+    self.awake.notify() catch |err| panic("error while waking! {s}", .{@errorName(err)});
 }
 
+// sets the quit flag and attempts to wake up the event loop
+pub fn quit(self: *Wheel) void {
+    self.quit_flag = true;
+    self.awake.notify() catch |err| panic("error while quitting! {s}", .{@errorName(err)});
+}
+
+// we run this through the event loop in order to capture any events that have already arrived before calling init
 fn callInit(lua: ?*Lua, _: *xev.Loop, _: *xev.Completion, r: xev.Timer.RunError!void) xev.CallbackAction {
     const l = lua.?;
     _ = r catch |err| panic("timer error: {s}", .{@errorName(err)});
     lu.getSeamstress(l);
     _ = l.getField(-1, "_start");
     l.remove(-2);
-    lu.doCall(l, 0, 0);
+    l.call(0, 0);
     return .disarm;
+}
+
+// grabs a handle to the Lua VM
+// pub for use from within event callbacks
+pub fn getLua(l: *xev.Loop) *Lua {
+    const wheel: *Wheel = @fieldParentPtr("loop", l);
+    const seamstress: *Seamstress = @fieldParentPtr("loop", wheel);
+    return seamstress.l;
 }
 
 const Seamstress = @import("seamstress.zig");

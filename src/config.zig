@@ -15,15 +15,18 @@ fn loader(_: *Lua, ctx: *anyopaque) ?[]const u8 {
     if (done) return null;
     const seamstress: *Seamstress = @ptrCast(@alignCast(ctx));
     done = true;
+
     const home = std.process.getEnvVarOwned(seamstress.allocator, "SEAMSTRESS_HOME") catch blk: {
         const home = std.process.getEnvVarOwned(seamstress.allocator, "HOME") catch |err| panic("error getting $HOME: {s}", .{@errorName(err)});
         defer seamstress.allocator.free(home);
         break :blk std.fs.path.join(seamstress.allocator, &.{ home, "seamstress" }) catch panic("out of memory!", .{});
     };
     defer seamstress.allocator.free(home);
-    const cfg = std.fs.path.join(seamstress.allocator, &.{ home, "config.lua" }) catch panic("out of memory!", .{});
+    const filename: ?[]u8 = std.process.getEnvVarOwned(seamstress.allocator, "SEAMSTRESS_CONFIG_FILENAME") catch null;
+    defer if (filename) |f| seamstress.allocator.free(f);
+    const cfg = std.fs.path.join(seamstress.allocator, &.{ home, filename orelse "config.lua" }) catch panic("out of memory!", .{});
     defer seamstress.allocator.free(cfg);
-    interpolated = std.fmt.allocPrint(seamstress.allocator, comptime script, .{cfg}) catch panic("out of memory!", .{});
+    interpolated = std.fmt.allocPrint(seamstress.allocator, script, .{cfg}) catch panic("out of memory!", .{});
     return interpolated;
 }
 

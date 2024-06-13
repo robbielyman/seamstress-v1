@@ -15,20 +15,23 @@ pub fn checkNumArgs(l: *Lua, n: i32) void {
 /// makes me feel fancy
 /// the closure has one "upvalue" in Lua terms: ptr
 pub fn registerSeamstress(l: *Lua, submodule: ?[:0]const u8, field_name: [:0]const u8, comptime f: ziglua.ZigFn, ptr: *anyopaque) void {
+    const n = l.getTop();
     // pushes _seamstress onto the stack
     getSeamstress(l);
     if (submodule) |s| {
         _ = l.getField(-1, s);
-        l.remove(2);
+        l.remove(-2);
     }
+    _ = l.pushStringZ(field_name);
     // pushes our upvalue
     l.pushLightUserdata(ptr);
     // creates the function (consuming the upvalue)
     l.pushClosure(ziglua.wrap(f), 1);
     // assigns it to _seamstress.field_name
-    l.setField(-2, field_name);
+    l.setTable(-3);
     // and removes _seamstress from the stack
     l.pop(1);
+    std.debug.assert(n == l.getTop());
 }
 
 /// must be called within a closure with a single upvalue.
@@ -56,7 +59,7 @@ pub fn getMethod(l: *Lua, field: [:0]const u8, method: [:0]const u8) void {
     if (t != .table) panic("seamstress corrupted! table expected for field {s}, got {s}", .{ field, @tagName(t) });
     l.remove(-2);
     const t2 = l.getField(-1, method);
-    if (t2 != .function) panic("seamstress corrupted! function expected for field {s}, got {s}", .{ method, @tagName(t2) });
+    if (t2 != .function and t2 != .table and t2 != .userdata) panic("seamstress corrupted! function expected for field {s}, got {s}", .{ method, @tagName(t2) });
     l.remove(-2);
 }
 

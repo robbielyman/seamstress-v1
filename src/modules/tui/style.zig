@@ -1,8 +1,10 @@
 pub fn registerSeamstress(l: *Lua) void {
-    l.newMetatable("seamstress.tui.Style") catch unreachable;
-    l.setFuncs(functions, 0);
+    const n = l.getTop();
+    blk: {
+        l.newMetatable("seamstress.tui.Style") catch break :blk;
+        l.setFuncs(functions, 0);
+    }
     l.pop(1);
-
     lu.getSeamstress(l);
     _ = l.getField(-1, "tui");
     l.remove(-2);
@@ -10,6 +12,7 @@ pub fn registerSeamstress(l: *Lua) void {
     l.pushFunction(ziglua.wrap(new));
     l.setTable(-3);
     l.pop(1);
+    std.debug.assert(n == l.getTop());
 }
 
 const functions: []const ziglua.FnReg = &.{ .{

@@ -20,8 +20,8 @@
             .hash = "1220fd302a49120bbbd197448825c4254a8471e74cdd7c136870ff696361c96c7124",
         },
         .vaxis = .{
-            .url = "git+https://github.com/rockorager/libvaxis#b7946a33939af94236348dcb9be424d43fc39286",
-            .hash = "1220fbb1b748ced787d6a19d3be8a28839e000548b76bae0f183a6e13504e6bc7b20",
+            .url = "git+https://github.com/rockorager/libvaxis#975dd01a7701d3e431261061f174855d082a3417",
+            .hash = "12208c10eaffa613dbbf28e680b2027eb82c4ae492b0159f33cf30988ce6887c6f3a",
         },
     },
 }

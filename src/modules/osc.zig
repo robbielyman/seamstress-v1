@@ -420,3 +420,8 @@ const lo = @import("ziglo");
 const lu = @import("../lua_util.zig");
 const std = @import("std");
 const panic = std.debug.panic;
+
+test "ref" {
+    _ = Osc;
+    _ = @import("monome.zig");
+}

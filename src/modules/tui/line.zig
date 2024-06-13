@@ -1,42 +1,54 @@
 /// @module _seamstress.tui.Line
 pub fn registerSeamstress(l: *Lua, tui: *Tui) void {
-    l.newMetatable("seamstress.tui.Line") catch unreachable;
+    const n = l.getTop();
+    blk: {
+        l.newMetatable("seamstress.tui.Line") catch {
+            break :blk;
+        };
 
-    _ = l.pushStringZ("__index");
-    _ = l.pushValue(1); // push the metatable
-    l.setTable(-3); // metatable.__index = metatable
+        _ = l.pushStringZ("__index");
+        _ = l.pushValue(1); // push the metatable
+        l.setTable(-3); // metatable.__index = metatable
 
-    _ = l.pushStringZ("__tostring");
-    l.pushFunction(ziglua.wrap(toString));
-    l.setTable(-3); // metatable.__tostring = toString
+        _ = l.pushStringZ("__tostring");
+        l.pushFunction(ziglua.wrap(toString));
+        l.setTable(-3); // metatable.__tostring = toString
 
-    _ = l.pushStringZ("__concat");
-    l.pushFunction(ziglua.wrap(concat));
-    l.setTable(-3); // metatable.__concat = concat
+        _ = l.pushStringZ("__concat");
+        l.pushFunction(ziglua.wrap(concat));
+        l.setTable(-3); // metatable.__concat = concat
 
-    _ = l.pushStringZ("__len");
-    l.pushFunction(ziglua.wrap(lenFn));
-    l.setTable(-3); // metatable.len = len
+        _ = l.pushStringZ("__len");
+        l.pushFunction(ziglua.wrap(lenFn));
+        l.setTable(-3); // metatable.len = len
 
-    _ = l.pushStringZ("width");
-    l.pushFunction(ziglua.wrap(widthFn));
-    l.setTable(-3); // metatable.width = width
+        _ = l.pushStringZ("width");
+        l.pushFunction(ziglua.wrap(widthFn));
+        l.setTable(-3); // metatable.width = width
 
-    _ = l.pushStringZ("sub");
-    l.pushLightUserdata(tui);
-    l.pushClosure(ziglua.wrap(sub), 1);
-    l.setTable(-3); // metatable.sub = sub
+        _ = l.pushStringZ("sub");
+        l.pushLightUserdata(tui);
+        l.pushClosure(ziglua.wrap(sub), 1);
+        l.setTable(-3); // metatable.sub = sub
 
-    _ = l.pushStringZ("find");
-    l.pushFunction(ziglua.wrap(find));
-    l.setTable(-3); // metatable.find = find
+        _ = l.pushStringZ("find");
+        l.pushFunction(ziglua.wrap(find));
+        l.setTable(-3); // metatable.find = find
 
-    _ = l.pushString("__eq");
-    l.pushFunction(ziglua.wrap(eql));
-    l.setTable(-3); // metatable.eq = eq
-
+        _ = l.pushString("__eq");
+        l.pushFunction(ziglua.wrap(eql));
+        l.setTable(-3); // metatable.eq = eq
+    }
     l.pop(1);
-    lu.registerSeamstress(l, "tui", "Line", newFromStringAndStyle, tui);
+    lu.getSeamstress(l);
+    _ = l.getField(-1, "tui");
+    l.remove(-2);
+    _ = l.pushStringZ("Line");
+    l.pushLightUserdata(tui);
+    l.pushClosure(ziglua.wrap(newFromStringAndStyle), 1);
+    l.setTable(-3);
+    l.pop(1);
+    std.debug.assert(n == l.getTop());
 }
 
 /// a Line is a Lua-managed collection of Segments containing no newlines
@@ -83,9 +95,7 @@ fn find(l: *Lua) i32 {
             _ = l.getUserValue(2, 1) catch unreachable;
             const needle = l.toString(-1) catch unreachable;
             if (std.mem.indexOf(u8, haystack, needle)) |idx| {
-                lu.getSeamstress(l);
-                _ = l.getField(-1, "tuiLineNew");
-                l.remove(-2);
+                lu.getMethod(l, "tui", "Line");
                 _ = l.pushString(haystack[0..idx]);
                 l.call(1, 1);
                 l.len(-1);
@@ -119,17 +129,13 @@ fn find(l: *Lua) i32 {
             _ = l.getUserValue(1, 1) catch unreachable;
             const haystack = l.toString(-1) catch unreachable;
             if (std.mem.indexOf(u8, haystack, needle)) |idx| {
-                lu.getSeamstress(l);
-                _ = l.getField(-1, "tuiLineNew");
-                l.remove(-2);
+                lu.getMethod(l, "tui", "Line");
                 _ = l.pushString(haystack[0..idx]);
                 l.call(1, 1);
                 l.len(-1);
                 const offset = l.toInteger(-1) catch unreachable;
                 l.pop(2);
-                lu.getSeamstress(l);
-                _ = l.getField(-1, "tuiLineNew");
-                l.remove(-2);
+                lu.getMethod(l, "tui", "Line");
                 l.pushValue(2);
                 l.call(1, 1);
                 l.len(-1);
@@ -250,9 +256,7 @@ fn newFromStringAndStyle(l: *Lua) i32 {
             l.pushValue(2);
         },
         else => {
-            lu.getSeamstress(l);
-            _ = l.getField(-1, "tuiStyleNew");
-            l.remove(-2);
+            lu.getMethod(l, "tui", "Style");
             l.pushValue(2);
             l.call(1, 1);
         },
@@ -299,9 +303,7 @@ fn concat(l: *Lua) i32 {
     switch (t1) {
         .number, .string => {
             _ = l.toString(1) catch unreachable;
-            lu.getSeamstress(l);
-            _ = l.getField(-1, "tuiLineNew");
-            l.remove(-2);
+            lu.getMethod(l, "tui", "Line");
             l.pushValue(1);
             l.call(1, ziglua.mult_return);
             _ = l.checkUserdata(Line, 2, "seamstress.tui.Line");
@@ -313,9 +315,7 @@ fn concat(l: *Lua) i32 {
             switch (t2) {
                 .number, .string => {
                     _ = l.toString(2) catch unreachable;
-                    lu.getSeamstress(l);
-                    _ = l.getField(-1, "tuiLineNew");
-                    l.remove(-2);
+                    lu.getMethod(l, "tui", "Line");
                     _ = l.pushValue(2);
                     l.call(1, ziglua.mult_return);
                     // l.rotate(3, -1);

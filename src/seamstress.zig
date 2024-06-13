@@ -14,7 +14,8 @@ pub const version: std.SemanticVersion = .{
 
 /// the seamstress loop
 pub fn run(self: *Seamstress) void {
-    self.module_list.get("cli").?.launch(self.l, &self.loop) catch |err| std.debug.panic("unable to start CLI I/O! {s}", .{@errorName(err)});
+    self.module_list.get("tui").?.launch(self.l, &self.loop) catch |err| std.debug.panic("unable to start CLI I/O! {s}", .{@errorName(err)});
+    self.module_list.get("async").?.launch(self.l, &self.loop) catch |err| std.debug.panic("unable to start async runtime! {s}", .{@errorName(err)});
     // runs after any events which have already accumulated
     // queueInit(&self.loop.loop);
     // run the event loop; blocks until we exit
@@ -23,16 +24,17 @@ pub fn run(self: *Seamstress) void {
 }
 
 // a member function so that elements of this struct have a stable pointer
-pub fn init(self: *Seamstress, allocator: *const std.mem.Allocator, logger: ?*BufferedWriter) void {
+pub fn init(self: *Seamstress, allocator: *const std.mem.Allocator, logger: ?*BufferedWriter, script: ?[:0]const u8) void {
     self.allocator = allocator.*;
     self.logger = logger;
     // set up the event loop
     self.loop.init();
     // set up the lua vm
-    self.l = spindle.init(allocator, self);
+    self.l = spindle.init(allocator, self, script);
     self.module_list = Module.list(self.allocator) catch std.debug.panic("out of memory!", .{});
     // set up the REPL at a minimum
-    self.module_list.get("cli").?.init(self.l, self.allocator) catch |err| std.debug.panic("unable to start CLI I/O! {s}", .{@errorName(err)});
+    self.module_list.get("tui").?.init(self.l, self.allocator) catch |err| std.debug.panic("unable to start CLI I/O! {s}", .{@errorName(err)});
+    self.module_list.get("async").?.init(self.l, self.allocator) catch |err| std.debug.panic("unable to start async runtime! {s}", .{@errorName(err)});
     @import("config.zig").configure(self);
 }
 
@@ -56,7 +58,8 @@ pub fn panicCleanup(self: *Seamstress) void {
 /// panic: something has gone wrong; clean up the bare minimum so that seamstress is a good citizen
 /// clean: we're exiting normally, but don't bother freeing memory
 /// full: we're exiting normally, but clean up everything
-pub const Cleanup = enum { panic, clean, full };
+/// canceled: we've been asked by Lua to stop, but the program as a whole will continue
+pub const Cleanup = enum { panic, clean, full, canceled };
 
 /// pub because it's called by the loop using @fieldParentPtr
 /// returns true if seamstress should start again
@@ -89,6 +92,7 @@ pub fn deinit(self: *Seamstress, kind: Cleanup) void {
 
 /// should always simply print to stdout
 fn sayGoodbye() void {
+    if (builtin.is_test) return;
     var bw = std.io.bufferedWriter(std.io.getStdOut().writer());
     const stdout = bw.writer();
     stdout.print("goodbye\n", .{}) catch return;
@@ -116,3 +120,17 @@ const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
 const Wheel = @import("wheel.zig");
 const BufferedWriter = std.io.BufferedWriter(4096, std.io.AnyWriter);
+
+test "ref" {
+    _ = spindle;
+    _ = Wheel;
+    _ = Module;
+}
+
+test "lifecycle" {
+    var s: Seamstress = undefined;
+    s.init(&std.testing.allocator, null, null);
+    s.loop.quit_flag = true;
+    s.run();
+    try std.testing.expect(s.loop.quit_flag);
+}

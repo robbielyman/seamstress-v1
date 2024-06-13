@@ -8,7 +8,7 @@ vtable: *const Vtable,
 
 pub const Vtable = struct {
     init_fn: *const fn (*Module, *Lua, std.mem.Allocator) anyerror!void,
-    deinit_fn: *const fn (*const Module, *Lua, std.mem.Allocator, Cleanup) void,
+    deinit_fn: *const fn (*Module, *Lua, std.mem.Allocator, Cleanup) void,
     launch_fn: *const fn (*const Module, *Lua, *Wheel) anyerror!void,
 };
 
@@ -24,7 +24,7 @@ pub fn init(m: *Module, l: *Lua, allocator: std.mem.Allocator) !void {
 }
 
 /// shuts down the module, respecting the Cleanup level
-pub fn deinit(m: *const Module, l: *Lua, allocator: std.mem.Allocator, cleanup: Cleanup) void {
+pub fn deinit(m: *Module, l: *Lua, allocator: std.mem.Allocator, cleanup: Cleanup) void {
     m.vtable.deinit_fn(m, l, allocator, cleanup);
 }
 
@@ -45,8 +45,9 @@ const module_list = [_]struct { []const u8, Module }{
     //.{ "osc", @import("modules/osc.zig").module() },
     //.{ "clock", @import("modules/clock.zig").module() },
     // .{ "metros", @import("modules/metros.zig").module() },
-    .{ "cli", @import("modules/cli.zig").module() },
+    // .{ "cli", @import("modules/cli.zig").module() },
     .{ "tui", @import("modules/tui.zig").module() },
+    .{ "async", @import("modules/async.zig").module() },
 };
 
 pub fn list(allocator: std.mem.Allocator) !std.StaticStringMap(*Module) {
@@ -64,4 +65,8 @@ pub fn list(allocator: std.mem.Allocator) !std.StaticStringMap(*Module) {
         tuple[i][1] = mod;
     }
     return std.StaticStringMap(*Module).init(tuple, allocator);
+}
+
+test "ref" {
+    _ = module_list;
 }

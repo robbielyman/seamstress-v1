@@ -28,6 +28,7 @@ pub fn main() void {
         if (std.mem.startsWith(u8, arg, "-v") or std.mem.startsWith(u8, arg, "--v") or std.mem.startsWith(u8, arg, "-h") or std.mem.startsWith(u8, arg, "--h"))
             printSweetNothingsAndExit();
     }
+    const filename: ?[:0]const u8 = if (args.len > 1) args[1] else null;
 
     var act: std.posix.Sigaction = .{
         .handler = .{ .handler = handleAbrt },
@@ -42,10 +43,11 @@ pub fn main() void {
 
     // stack-allocated, baby!
     var seamstress: Seamstress = undefined;
+    // allows for hot reload
     var go_again = true;
     while (go_again) {
         // initialize
-        seamstress.init(&allocator, if (bw) |*ptr| ptr else null);
+        seamstress.init(&allocator, if (bw) |*ptr| ptr else null, filename);
 
         // ensures that we clean things up however we panic
         panic_closure = .{
@@ -54,6 +56,7 @@ pub fn main() void {
         };
         // gooooooooo
         seamstress.run();
+        // should we go again?
         go_again = seamstress.go_again;
         seamstress.go_again = false;
     }
@@ -122,3 +125,7 @@ fn printSweetNothingsAndExit() void {
 const std = @import("std");
 const builtin = @import("builtin");
 const Seamstress = @import("seamstress.zig");
+
+test "ref" {
+    _ = Seamstress;
+}

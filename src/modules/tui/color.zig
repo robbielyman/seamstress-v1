@@ -1,14 +1,15 @@
 /// @module _seamstress.tui.Color
 pub fn registerSeamstress(l: *Lua) void {
-    l.newMetatable("seamstress.tui.Color") catch std.debug.panic("wtf!?", .{});
-    for (functions) |val| {
-        _ = l.pushStringZ(val.name);
-        l.pushFunction(val.func.?);
-        l.setTable(-3);
+    const n = l.getTop();
+    blk: {
+        l.newMetatable("seamstress.tui.Color") catch break :blk;
+        for (functions) |val| {
+            _ = l.pushStringZ(val.name);
+            l.pushFunction(val.func.?);
+            l.setTable(-3);
+        }
     }
-
     l.pop(1);
-
     lu.getSeamstress(l);
     _ = l.getField(-1, "tui");
     l.remove(-2);
@@ -16,6 +17,7 @@ pub fn registerSeamstress(l: *Lua) void {
     l.pushFunction(ziglua.wrap(new));
     l.setTable(-3); // _seamstress.tuiColorNew = new
     l.pop(1);
+    std.debug.assert(n == l.getTop());
 }
 
 const functions: []const ziglua.FnReg = &.{ .{
@@ -403,22 +405,50 @@ fn call(l: *Lua) i32 {
     switch (t2) {
         .number, .string => {
             _ = l.toString(2) catch unreachable;
-            lu.getSeamstress(l);
-            _ = l.getField(-1, "tuiLineNew");
-            l.remove(-2);
+            const old = l.getTop();
+            lu.getMethod(l, "tui", "Line");
             l.pushValue(2);
-            l.call(1, 1);
+            l.call(1, ziglua.mult_return);
+            const n = l.getTop() - old;
+            var i: ziglua.Integer = 1;
+            while (i <= n) : (i += 1) {
+                _ = l.getMetaField(1, "__call") catch unreachable;
+                l.pushValue(1);
+                l.pushValue(@intCast(-n - 2));
+                l.pushValue(3);
+                l.call(3, 1);
+                l.remove(@intCast(-n - 1));
+            }
+            return n;
         },
         .userdata => {
             const line = l.checkUserdata(Line, 2, "seamstress.tui.Line");
             const new_line = l.newUserdata(Line, 2);
+            _ = l.getMetatableRegistry("seamstress.tui.Line");
+            l.setMetatable(-2);
             new_line.* = line.*;
             _ = l.getUserValue(2, 1) catch unreachable;
             l.setUserValue(-2, 1) catch unreachable;
             _ = l.getUserValue(2, 2) catch unreachable;
             l.setUserValue(-2, 2) catch unreachable;
         },
-        else => l.typeError(2, "line or string"),
+        .table => {
+            l.len(2);
+            const n = l.toInteger(-1) catch unreachable;
+            l.pop(1);
+            var i: ziglua.Integer = 1;
+            l.createTable(@intCast(n), 0);
+            while (i <= n) : (i += 1) {
+                _ = l.getMetaField(1, "__call") catch unreachable;
+                l.pushValue(1);
+                _ = l.getIndex(2, i);
+                l.pushValue(3);
+                l.call(3, 1);
+                l.setIndex(-2, i);
+            }
+            return 1;
+        },
+        else => l.typeError(2, "line or string or array thereof"),
     }
     // l.pushValue(-1); // copy the line three times
     // l.pushValue(-1);
@@ -443,6 +473,7 @@ fn call(l: *Lua) i32 {
             inline for (colors) |mod| {
                 if (std.mem.eql(u8, mod, which)) {
                     @field(segment.style, mod) = color.*;
+                    break;
                 }
             }
         }
