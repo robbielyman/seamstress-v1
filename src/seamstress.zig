@@ -14,10 +14,11 @@ pub const version: std.SemanticVersion = .{
 
 /// the seamstress loop
 pub fn run(self: *Seamstress) void {
-    self.module_list.get("tui").?.launch(self.l, &self.loop) catch |err| std.debug.panic("unable to start CLI I/O! {s}", .{@errorName(err)});
-    self.module_list.get("async").?.launch(self.l, &self.loop) catch |err| std.debug.panic("unable to start async runtime! {s}", .{@errorName(err)});
-    // runs after any events which have already accumulated
-    // queueInit(&self.loop.loop);
+    const io: []const []const u8 = &.{ "cli", "tui" };
+    for (io) |str| {
+        const m = self.module_list.get(str).?;
+        if (m.self) |_| m.launch(self.l, &self.loop) catch |err| std.debug.panic("unable to start terminal I/O {s}", .{@errorName(err)});
+    }
     // run the event loop; blocks until we exit
     self.loop.run();
     self.deinit(self.loop.kind);
@@ -33,8 +34,14 @@ pub fn init(self: *Seamstress, allocator: *const std.mem.Allocator, logger: ?*Bu
     self.l = spindle.init(allocator, self, script);
     self.module_list = Module.list(self.allocator) catch std.debug.panic("out of memory!", .{});
     // set up the REPL at a minimum
-    self.module_list.get("tui").?.init(self.l, self.allocator) catch |err| std.debug.panic("unable to start CLI I/O! {s}", .{@errorName(err)});
-    self.module_list.get("async").?.init(self.l, self.allocator) catch |err| std.debug.panic("unable to start async runtime! {s}", .{@errorName(err)});
+    const term = std.process.getEnvVarOwned(self.allocator, "TERM") catch {
+        self.module_list.get("cli").?.init(self.l, self.allocator) catch |err| std.debug.panic("unable to start CLI I/O! {s}", .{@errorName(err)});
+        @import("config.zig").configure(self);
+        return;
+    };
+    defer self.allocator.free(term);
+    const which = if (std.mem.startsWith(u8, term, "dumb") or std.mem.startsWith(u8, term, "emacs")) "cli" else "tui";
+    self.module_list.get(which).?.init(self.l, self.allocator) catch |err| std.debug.panic("unable to start CLI I/O! {s}", .{@errorName(err)});
     @import("config.zig").configure(self);
 }
 
@@ -58,8 +65,7 @@ pub fn panicCleanup(self: *Seamstress) void {
 /// panic: something has gone wrong; clean up the bare minimum so that seamstress is a good citizen
 /// clean: we're exiting normally, but don't bother freeing memory
 /// full: we're exiting normally, but clean up everything
-/// canceled: we've been asked by Lua to stop, but the program as a whole will continue
-pub const Cleanup = enum { panic, clean, full, canceled };
+pub const Cleanup = enum { panic, clean, full };
 
 /// pub because it's called by the loop using @fieldParentPtr
 /// returns true if seamstress should start again

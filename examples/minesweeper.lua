@@ -46,7 +46,7 @@ Cell.new = function(x, y)
 end
 
 local t = 0
-seamstress.tui.update:add(function(_, dt)
+seamstress.tui.update:add(function(dt)
   t = t + dt
   local col = math.abs(255 * math.sin(t))
   palette.clickable = clickable + seamstress.tui.Color(col, col, col)
@@ -182,7 +182,7 @@ function GameState.finish(won)
     seamstress.quit()
   end)
   local dirty = true
-  seamstress.tui.update:add(function(_, dt)
+  seamstress.tui.update:add(function(dt)
     t = t + dt
     local col = math.abs(255 * math.sin(t))
     palette.clickable = clickable + seamstress.tui.Color(col, col, col)

@@ -41,24 +41,29 @@ local function setupPath(s)
   }
 end
 
+local modules = {}
+
 --- the global seamstress object.
 -- modules are loaded by seamstress when referenced.
--- setmetatable(seamstress, {
-  -- __index = function(t, key)
-    -- local found = modules[key]
-    -- if found then
-      -- rawset(t, key, require('seamstress.' .. key))
-      -- seamstress._load(key)
-      -- return rawget(t, key)
-    -- else
-      -- return rawget(t, key)
-    -- end
-  -- end
--- })
+setmetatable(seamstress, {
+  __index = function(t, key)
+    local found = modules[key]
+    if found then
+      rawset(t, key, require('seamstress.' .. key))
+      seamstress._load(key)
+      return rawget(t, key)
+    else
+      return rawget(t, key)
+    end
+  end
+})
 seamstress.path = setupPath(seamstress)
 
-seamstress.async = require 'seamstress.async'
-seamstress.tui = require 'seamstress.tui'
+local term = os.getenv("TERM")
+if term ~= 'dumb' and term ~= 'emacs' then
+	seamstress.tui = require 'seamstress.tui'
+end
+
 
 seamstress.cleanup = function()
   if cleanup then cleanup() end
@@ -67,20 +72,27 @@ seamstress.init = function()
   if init then init() end
 end
 seamstress._start = function()
-    local filename = seamstress.config.script_name
-    local ok, err = true, nil
-    if filename == "test" or filename == "test.lua" then
-      local tests = require('seamstress.test.init')
-      tests.run()
-      return
-    elseif filename then
-      local suffixed = filename:find(".lua")
-      ok, err = pcall(require, suffixed and filename:sub(1, suffixed - 1) or filename)
-      if not ok then
-        print("ERROR: " .. err)
-        print("seamstress will continue as a REPL")
-      end
+  local filename = seamstress.config.script_name
+  local ok, err = true, nil
+  if filename == "test" or filename == "test.lua" then
+    local tests = require('seamstress.test.init')
+    tests.run()
+    return
+  elseif filename then
+    local suffixed = filename:find(".lua")
+    ok, err = pcall(require, suffixed and filename:sub(1, suffixed - 1) or filename)
+    if not ok then
+      print("ERROR: " .. err)
+      print("seamstress will continue as a REPL")
     end
-    if ok and seamstress.hello then seamstress.hello(seamstress.version) end
-    if ok then seamstress.init() end
+  end
+  if ok and seamstress.hello then seamstress.hello(seamstress.version) end
+  if ok then seamstress.init() end
+end
+
+seamstress._unload = function(which)
+  if modules[which] then
+    local promise = seamstress.__unload(which):anon(function() seamstress.___unload(which) end)
+    return promise
+  end
 end

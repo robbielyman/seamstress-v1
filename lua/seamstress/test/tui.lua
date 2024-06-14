@@ -82,17 +82,17 @@ busted.describe(
         local done = false
         local t = 0
         local logo
-        seamstress.tui.update = function(dt)
+        seamstress.tui.update = seamstress.tui.Handler.new(function(dt)
           t = t + dt
           fg = seamstress.tui.Color(math.abs(255 * math.cos(t)), math.abs(255 * math.sin(t + math.pi)), math.abs(255 * math.sin(t)))
           logo = fg(logo, 'fg')
           if t > 1 then
             done = true
           end
-        end
-        seamstress.tui.draw = function()
+        end)
+        seamstress.tui.draw = seamstress.tui.Handler.new(function()
           seamstress.tui.drawInBox(logo, { x = { 1, -1 }, y = { 1, -1 } })
-        end
+        end)
           local fg = seamstress.tui.Color('#ff8800')
           logo = { fg([[
                                                 /**
@@ -103,12 +103,8 @@ busted.describe(
  ****** //******//******** *** /** /** ******   //** /***   //****** ******  ******
 //////   //////  //////// ///  //  // //////     //  ///     ////// //////  //////
 ]], 'fg') }
-
-          seamstress.tui.redraw()
           repeat
             coroutine.yield()
           until done
-          seamstress._unload('tui')
-          coroutine.yield()
       end) --)
   end)

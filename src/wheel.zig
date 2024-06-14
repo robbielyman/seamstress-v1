@@ -46,6 +46,7 @@ pub fn run(self: *Wheel) void {
         self.loop.run(.once) catch |err| panic("error running event loop! {s}", .{@errorName(err)});
         const lap_time = self.timer.lap();
         if (self.render) |r| r.render_fn(r.ctx, lap_time) else std.log.debug("whoopsie", .{});
+        if (seamstress.logger) |l| l.flush() catch unreachable;
     }
 }
 

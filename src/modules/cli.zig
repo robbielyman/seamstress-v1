@@ -33,7 +33,7 @@ fn handleStdin(
     buf: xev.ReadBuffer,
     r: xev.ReadError!usize,
 ) xev.CallbackAction {
-    const len = r catch 0;
+    const len = r catch return .disarm;
     if (std.mem.indexOf(u8, buf.slice, "quit\n")) |idx| {
         if (idx == 0 or buf.slice[idx - 1] == '\n') {
             const wheel: *Wheel = @fieldParentPtr("loop", l);
@@ -130,26 +130,12 @@ fn init(m: *Module, l: *Lua, allocator: std.mem.Allocator) anyerror!void {
     lu.registerSeamstress(l, null, "hello", hello, self);
 }
 
-fn cancelCallback(ud: ?*anyopaque, l: *xev.Loop, _: *xev.Completion, r: xev.Result) xev.CallbackAction {
-    _ = r.cancel catch unreachable;
-    const m: *Module = @ptrCast(@alignCast(ud.?));
-    const lua = Wheel.getLua(l);
-    m.deinit(lua, lua.allocator(), .full);
-    return .disarm;
+fn cancel(_: *Module, _: *Lua, _: *Wheel) anyerror!i32 {
+    return error.NotSupported;
 }
 
 fn deinit(m: *Module, l: *Lua, allocator: std.mem.Allocator, kind: Cleanup) void {
-    if (kind == .canceled) {
-        const wheel = lu.getWheel(l);
-        const self: *Cli = @ptrCast(@alignCast(m.self orelse return));
-        self.c_c = .{
-            .op = .{ .cancel = .{ .c = &self.c } },
-            .userdata = m,
-            .callback = cancelCallback,
-        };
-        wheel.loop.add(&self.c_c);
-        return;
-    }
+    _ = l; // autofix
     if (kind != .full) return;
     const self: *Cli = @ptrCast(@alignCast(m.self orelse return));
     self.stdout.flush() catch {};
@@ -157,6 +143,7 @@ fn deinit(m: *Module, l: *Lua, allocator: std.mem.Allocator, kind: Cleanup) void
     allocator.destroy(@as(*const std.fs.File.Writer, @ptrCast(@alignCast(self.stdout.unbuffered_writer.context))));
     allocator.destroy(self);
     m.self = null;
+    logger.debug("closed CLI", .{});
 }
 
 fn launch(m: *const Module, l: *Lua, wheel: *Wheel) anyerror!void {
@@ -168,6 +155,7 @@ fn launch(m: *const Module, l: *Lua, wheel: *Wheel) anyerror!void {
         .render_fn = render,
     };
     self.file.read(&wheel.loop, &self.c, .{ .slice = slice[0..@min(slice.len, 4096)] }, Cli, self, handleStdin);
+    logger.debug("launched CLI", .{});
     _ = l; // autofix
 }
 
@@ -176,10 +164,12 @@ pub fn module() Module {
         .init_fn = init,
         .deinit_fn = deinit,
         .launch_fn = launch,
+        .cancel_fn = cancel,
     } };
 }
 
 const BufferedWriter = std.io.BufferedWriter(4096, std.io.AnyWriter);
+const Promise = @import("../async.zig");
 const Module = @import("../module.zig");
 const Spindle = @import("../spindle.zig");
 const Wheel = @import("../wheel.zig");
@@ -190,6 +180,7 @@ const std = @import("std");
 const xev = @import("xev");
 const panic = std.debug.panic;
 const lu = @import("../lua_util.zig");
+const logger = std.log.scoped(.cli);
 
 test "ref" {
     _ = Cli;

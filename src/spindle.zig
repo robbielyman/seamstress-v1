@@ -12,24 +12,23 @@ pub fn cleanup(l: *Lua) void {
     lu.doCall(l, 0, 0);
 }
 
+/// begins to unload a Module, calling its cancel function
+/// returns a Promise
+fn cancel(l: *Lua) i32 {
+    const seamstress = lu.closureGetContext(l, Seamstress);
+    const str = l.toStringEx(1);
+    const m = seamstress.module_list.get(str) orelse l.raiseErrorStr("module %s not found", .{str.ptr});
+    const promise = m.cancel(l, lu.getWheel(l)) catch |err| l.raiseErrorStr("unable to cancel! %s", .{@errorName(err).ptr});
+    _ = l.rawGetIndex(ziglua.registry_index, promise);
+    return 1;
+}
+
 /// unloads a Module, calling its deinit function
 fn unload(l: *Lua) i32 {
     const seamstress = lu.closureGetContext(l, Seamstress);
     const str = l.toStringEx(1);
     const m = seamstress.module_list.get(str) orelse l.raiseErrorStr("module %s not found", .{str.ptr});
-    m.deinit(seamstress.l, seamstress.allocator, .canceled);
-    lu.getSeamstress(l);
-    _ = l.pushStringZ(str);
-    l.pushNil();
-    l.rawSetTable(-3);
-    l.pop(1);
-    // if (std.mem.eql(u8, str, "tui")) {
-    //     const n = seamstress.module_list.get("cli").?;
-    //     n.deinit(l, seamstress.allocator, .full);
-    //     n.self = null;
-    //     n.init(l, seamstress.allocator) catch |err| std.debug.panic("unable to resume CLI mode! {s}", .{@errorName(err)});
-    //     n.launch(l, lu.getWheel(l)) catch |err| std.debug.panic("unable to resume CLI mode! {s}", .{@errorName(err)});
-    // }
+    m.deinit(l, l.allocator(), .full);
     return 0;
 }
 
@@ -138,8 +137,11 @@ fn setUpSeamstress(l: *Lua, seamstress: *Seamstress, script: ?[:0]const u8) !voi
     l.pushClosure(ziglua.wrap(launch), 1);
     l.setField(-2, "_launch");
     l.pushLightUserdata(seamstress);
+    l.pushClosure(ziglua.wrap(cancel), 1);
+    l.setField(-2, "__unload");
+    l.pushLightUserdata(seamstress);
     l.pushClosure(ziglua.wrap(unload), 1);
-    l.setField(-2, "_unload");
+    l.setField(-2, "___unload");
     l.pushFunction(ziglua.wrap(log));
     l.setField(-2, "log");
     // and another one
@@ -163,6 +165,7 @@ fn setUpSeamstress(l: *Lua, seamstress: *Seamstress, script: ?[:0]const u8) !voi
         l.setField(-2, "version");
     }
     l.pop(1);
+    try Promise.registerSeamstress(l);
 }
 
 /// starts the lua VM and sets up the seamstress table
@@ -195,6 +198,7 @@ fn luaPanic(l: *Lua) i32 {
 const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
 const Seamstress = @import("seamstress.zig");
+const Promise = @import("async.zig");
 const std = @import("std");
 const panic = std.debug.panic;
 const lu = @import("lua_util.zig");

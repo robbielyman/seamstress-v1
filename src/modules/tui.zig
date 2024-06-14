@@ -7,6 +7,7 @@ vaxis: vx.Vaxis,
 tty: vx.Tty,
 watcher: vx.xev.TtyWatcher(Tui) = undefined,
 launched: bool = false,
+c_c: xev.Completion = .{},
 
 fn render(ctx: *anyopaque, lap_time_ns: u64) void {
     const lap_time_float: f64 = @floatFromInt(lap_time_ns);
@@ -15,12 +16,10 @@ fn render(ctx: *anyopaque, lap_time_ns: u64) void {
     tui.vaxis.window().hideCursor();
 
     lu.getMethod(tui.l, "tui", "update");
-    lu.getMethod(tui.l, "tui", "update");
     tui.l.pushNumber(dt);
-    tui.l.call(2, 0);
-    lu.getMethod(tui.l, "tui", "draw");
-    lu.getMethod(tui.l, "tui", "draw");
     tui.l.call(1, 0);
+    lu.getMethod(tui.l, "tui", "draw");
+    tui.l.call(0, 0);
 
     tui.vaxis.render(tui.tty.anyWriter()) catch panic("unable to draw to the terminal!", .{});
 }
@@ -200,6 +199,10 @@ fn paste(l: *Lua, txt: []const u8) void {
     lu.doCall(l, 1, 0);
 }
 
+fn cancel(_: *Module, _: *Lua, _: *Wheel) anyerror!i32 {
+    return error.NotSupported;
+}
+
 fn init(m: *Module, l: *Lua, allocator: std.mem.Allocator) anyerror!void {
     if (m.self) |_| return;
     const self = try allocator.create(Tui);
@@ -217,12 +220,12 @@ fn init(m: *Module, l: *Lua, allocator: std.mem.Allocator) anyerror!void {
     @import("tui/line.zig").registerSeamstress(l, self);
     @import("tui/canvas.zig").registerSeamstress(l, self);
     lu.registerSeamstress(l, "tui", "redraw", redraw, self);
+    logger.debug("init TUI", .{});
 }
 
 fn deinit(m: *Module, l: *Lua, allocator: std.mem.Allocator, kind: Cleanup) void {
+    _ = l; // autofix
     const self: *Tui = @ptrCast(@alignCast(m.self orelse return));
-    const wheel = lu.getWheel(l);
-    wheel.render = null;
     self.vaxis.deinit(allocator, self.tty.anyWriter());
     self.tty.deinit();
     if (kind != .full) return;
@@ -242,6 +245,7 @@ fn launch(m: *const Module, _: *Lua, wheel: *Wheel) anyerror!void {
     try self.vaxis.enterAltScreen(self.tty.anyWriter());
     try self.vaxis.setMouseMode(self.tty.anyWriter(), true);
     try self.vaxis.queryTerminalSend(self.tty.anyWriter());
+    logger.debug("launch TUI", .{});
 }
 
 pub fn module() Module {
@@ -249,6 +253,7 @@ pub fn module() Module {
         .init_fn = init,
         .deinit_fn = deinit,
         .launch_fn = launch,
+        .cancel_fn = cancel,
     } };
 }
 
@@ -260,6 +265,7 @@ fn redraw(l: *Lua) i32 {
 }
 
 const BufferedWriter = std.io.BufferedWriter(4096, std.io.AnyWriter);
+const Promise = @import("../async.zig");
 const Module = @import("../module.zig");
 const Seamstress = @import("../seamstress.zig");
 const Cleanup = Seamstress.Cleanup;

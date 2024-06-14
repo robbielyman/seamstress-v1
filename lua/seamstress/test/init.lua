@@ -2,14 +2,13 @@ local tests = {
   run = function()
     local ok, runner = pcall(require, 'busted.runner')
     if ok then
-      local comp = require'busted.compatibility'
-      local exit = comp.exit
-      comp.exit = function(code, force)
+      os.exit = function(code, close)
+        if code ~= 0 then error("exiting with code " .. code) end
         seamstress.quit()
       end
       test_runner = seamstress.async.Promise(function()
-          runner()
-        require('seamstress.test.tui')
+        runner()
+        if seamstress.tui then require('seamstress.test.tui') end
         require('seamstress.test.async')
       end)
       return

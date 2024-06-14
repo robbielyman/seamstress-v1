@@ -6,11 +6,7 @@ const Module = @This();
 self: ?*anyopaque = null,
 vtable: *const Vtable,
 
-pub const Vtable = struct {
-    init_fn: *const fn (*Module, *Lua, std.mem.Allocator) anyerror!void,
-    deinit_fn: *const fn (*Module, *Lua, std.mem.Allocator, Cleanup) void,
-    launch_fn: *const fn (*const Module, *Lua, *Wheel) anyerror!void,
-};
+pub const Vtable = struct { init_fn: *const fn (*Module, *Lua, std.mem.Allocator) anyerror!void, deinit_fn: *const fn (*Module, *Lua, std.mem.Allocator, Cleanup) void, launch_fn: *const fn (*const Module, *Lua, *Wheel) anyerror!void, cancel_fn: *const fn (*Module, *Lua, *Wheel) anyerror!i32 };
 
 /// sets up the module without starting it
 /// should not assume that, for example, the event loop is already running
@@ -19,13 +15,23 @@ pub const Vtable = struct {
 /// monome.zig does not export a Module but instead is set up by osc.zig
 /// clock.zig gets MIDI clock from the midi module by exporting a Lua function
 /// tui.zig asks cli.zig to shut down via the Lua VM
-pub fn init(m: *Module, l: *Lua, allocator: std.mem.Allocator) !void {
+pub fn init(m: *Module, l: *Lua, allocator: std.mem.Allocator) anyerror!void {
     try m.vtable.init_fn(m, l, allocator);
 }
 
 /// shuts down the module, respecting the Cleanup level
+/// should set m.self to null when cleanup is .full
 pub fn deinit(m: *Module, l: *Lua, allocator: std.mem.Allocator, cleanup: Cleanup) void {
     m.vtable.deinit_fn(m, l, allocator, cleanup);
+}
+
+/// shuts down the module when seamstress itself is not shutting down
+/// in the event that in-flight event loop items need to be canceled,
+/// the implementing function should create a promise using async.zig's Promise.new function
+/// and resolve it when finished by calling notify on its xev.Async instance
+/// the return value should be the promise's handle
+pub fn cancel(m: *Module, l: *Lua, wheel: *Wheel) anyerror!i32 {
+    return m.vtable.cancel_fn(m, l, wheel);
 }
 
 /// actually puts the module into operation
@@ -39,15 +45,15 @@ const Wheel = @import("wheel.zig");
 const Seamstress = @import("seamstress.zig");
 const Cleanup = Seamstress.Cleanup;
 const std = @import("std");
+const Promise = @import("async.zig");
 
 /// the full list of modules available to seamstress
 const module_list = [_]struct { []const u8, Module }{
     //.{ "osc", @import("modules/osc.zig").module() },
     //.{ "clock", @import("modules/clock.zig").module() },
     // .{ "metros", @import("modules/metros.zig").module() },
-    // .{ "cli", @import("modules/cli.zig").module() },
+    .{ "cli", @import("modules/cli.zig").module() },
     .{ "tui", @import("modules/tui.zig").module() },
-    .{ "async", @import("modules/async.zig").module() },
 };
 
 pub fn list(allocator: std.mem.Allocator) !std.StaticStringMap(*Module) {

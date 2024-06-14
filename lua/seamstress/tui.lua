@@ -105,6 +105,9 @@ local tui = {
 
   palette = {},
   styles = {},
+
+  rows = 0,
+  cols = 0,
   --  palette = seamstress.config.palette and seamstress.config.palette or {},
   --  styles = seamstress.config.styles and seamstress.config.styles or {},
 }
@@ -169,29 +172,5 @@ local _print = function(...)
   tui.stdout.data[n] = line
   tui.stdout.dirty = true
 end
-
-local launched = false
-local metatable = {
-  __newindex = function(t, key, val)
-    if methods[key] and not launched then
-      seamstress._launch('tui')
-      print = _print
-      launched = true
-      rawset(t, key, val)
-    else
-      rawset(t, key, val)
-    end
-  end,
-  __index = function(t, key)
-    if methods[key] and not launched then
-      seamstress._launch("tui")
-      print = _print
-      launched = true
-      return t[key]
-    else
-      return rawget(t, key)
-    end
-  end
-}
 
 return tui
