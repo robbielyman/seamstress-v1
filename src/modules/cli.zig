@@ -2,7 +2,6 @@
 // @module seamstress.cli
 const Cli = @This();
 
-l: *Lua,
 stdout: BufferedWriter,
 stdin_buf: std.ArrayList(u8),
 file: xev.File,
@@ -12,7 +11,7 @@ continuing: bool = false,
 dirty: bool = false,
 
 /// flushes stdout and stderr, and re-prompts (usually)
-fn render(ctx: *anyopaque, _: u64) void {
+fn render(ctx: *anyopaque, _: *Wheel, _: u64) void {
     const self: *Cli = @ptrCast(@alignCast(ctx));
     if (!self.dirty) return;
     self.dirty = false;
@@ -27,38 +26,28 @@ fn render(ctx: *anyopaque, _: u64) void {
 /// processes a chunk of stdin, renders, rinses and repeats
 fn handleStdin(
     self: ?*Cli,
-    l: *xev.Loop,
+    loop: *xev.Loop,
     c: *xev.Completion,
     f: xev.File,
     buf: xev.ReadBuffer,
     r: xev.ReadError!usize,
 ) xev.CallbackAction {
+    const l = Wheel.getLua(loop);
     const len = r catch return .disarm;
     if (std.mem.indexOf(u8, buf.slice, "quit\n")) |idx| {
         if (idx == 0 or buf.slice[idx - 1] == '\n') {
-            const wheel: *Wheel = @fieldParentPtr("loop", l);
+            const wheel: *Wheel = @fieldParentPtr("loop", loop);
             wheel.quit();
             return .disarm;
         }
     }
     self.?.stdin_buf.items.len += len;
-    self.?.continuing = lu.processChunk(self.?.l, self.?.stdin_buf.items);
+    self.?.continuing = lu.processChunk(l, self.?.stdin_buf.items);
     if (!self.?.continuing) self.?.stdin_buf.clearRetainingCapacity();
-    lu.luaPrint(self.?.l);
+    lu.luaPrint(l);
     self.?.dirty = true;
-    f.read(l, c, .{ .slice = self.?.stdin_buf.unusedCapacitySlice() }, Cli, self, handleStdin);
+    f.read(loop, c, .{ .slice = self.?.stdin_buf.unusedCapacitySlice() }, Cli, self, handleStdin);
     return .disarm;
-}
-
-/// says hello
-fn hello(l: *Lua) i32 {
-    const self: *Cli = lu.closureGetContext(l, Cli);
-    const writer = self.stdout.writer();
-    writer.print("SEAMSTRESS\n", .{}) catch return 0;
-    writer.print("seamstress version: {}\n", .{@import("../seamstress.zig").version}) catch return 0;
-    self.dirty = true;
-    render(self, 0);
-    return 0;
 }
 
 /// replaces `print`
@@ -119,7 +108,6 @@ fn init(m: *Module, l: *Lua, allocator: std.mem.Allocator) anyerror!void {
     stdout_backing.* = std.io.getStdOut().writer();
     m.self = self;
     self.* = .{
-        .l = l,
         .stdout = std.io.bufferedWriter(stdout_backing.any()),
         .stdin_buf = std.ArrayList(u8).init(allocator),
         .file = xev.File.init(std.io.getStdIn()) catch panic("unable to open stdin!", .{}),
@@ -127,15 +115,9 @@ fn init(m: *Module, l: *Lua, allocator: std.mem.Allocator) anyerror!void {
     l.pushLightUserdata(self);
     l.pushClosure(ziglua.wrap(printFn), 1);
     l.setGlobal("print");
-    lu.registerSeamstress(l, null, "hello", hello, self);
 }
 
-fn cancel(_: *Module, _: *Lua, _: *Wheel) anyerror!i32 {
-    return error.NotSupported;
-}
-
-fn deinit(m: *Module, l: *Lua, allocator: std.mem.Allocator, kind: Cleanup) void {
-    _ = l; // autofix
+fn deinit(m: *Module, _: *Lua, allocator: std.mem.Allocator, kind: Cleanup) void {
     if (kind != .full) return;
     const self: *Cli = @ptrCast(@alignCast(m.self orelse return));
     self.stdout.flush() catch {};
@@ -146,7 +128,7 @@ fn deinit(m: *Module, l: *Lua, allocator: std.mem.Allocator, kind: Cleanup) void
     logger.debug("closed CLI", .{});
 }
 
-fn launch(m: *const Module, l: *Lua, wheel: *Wheel) anyerror!void {
+fn launch(m: *const Module, _: *Lua, wheel: *Wheel) anyerror!void {
     const self: *Cli = @ptrCast(@alignCast(m.self.?));
     try self.stdin_buf.ensureUnusedCapacity(4096);
     const slice = self.stdin_buf.unusedCapacitySlice();
@@ -155,8 +137,6 @@ fn launch(m: *const Module, l: *Lua, wheel: *Wheel) anyerror!void {
         .render_fn = render,
     };
     self.file.read(&wheel.loop, &self.c, .{ .slice = slice[0..@min(slice.len, 4096)] }, Cli, self, handleStdin);
-    logger.debug("launched CLI", .{});
-    _ = l; // autofix
 }
 
 pub fn module() Module {
@@ -164,7 +144,6 @@ pub fn module() Module {
         .init_fn = init,
         .deinit_fn = deinit,
         .launch_fn = launch,
-        .cancel_fn = cancel,
     } };
 }
 

@@ -1,4 +1,4 @@
-/// @module _seamstress.tui.Line
+/// @module seamstress.tui
 pub fn registerSeamstress(l: *Lua, tui: *Tui) void {
     const n = l.getTop();
     blk: {
@@ -51,12 +51,11 @@ pub fn registerSeamstress(l: *Lua, tui: *Tui) void {
     std.debug.assert(n == l.getTop());
 }
 
-/// a Line is a Lua-managed collection of Segments containing no newlines
-/// Lines are immutable
+/// @type seamstress.tui.Line
 pub const Line = struct {
-    /// a Segment is a contiguous run of text containing no newlines
-    /// together with a Style
-    /// Segments are immutable
+    // a Segment is a contiguous run of text containing no newlines
+    // together with a Style
+    // Segments are immutable
     pub const Segment = struct {
         byte_len: usize,
         grapheme_len: usize,
@@ -78,6 +77,11 @@ pub const Line = struct {
     }
 };
 
+/// Operates like `string:find` but for `Line` objects.
+/// @function Line:find
+/// @tparam Line|string needle sub-line or string to be found
+/// @treturn integer start
+/// @treturn integer end
 fn find(l: *Lua) i32 {
     _ = l.checkUserdata(Line, 1, "seamstress.tui.Line");
     const t = l.typeOf(2);
@@ -155,6 +159,8 @@ fn find(l: *Lua) i32 {
     }
 }
 
+/// Tests two `Line` objects for equality
+/// @function Line.__eq
 fn eql(l: *Lua) i32 {
     const line = l.checkUserdata(Line, 1, "seamstress.tui.Line");
     const other = l.checkUserdata(Line, 2, "seamstress.tui.Line");
@@ -193,12 +199,16 @@ fn eql(l: *Lua) i32 {
     return 1;
 }
 
+/// Returns the length of the line in graphemes.
+/// @function Line.__len
 fn lenFn(l: *Lua) i32 {
     const line = l.checkUserdata(Line, 1, "seamstress.tui.Line");
     l.pushInteger(@intCast(line.grapheme_len));
     return 1;
 }
 
+/// Returns the width of the line in cells
+/// @function Line:width
 fn widthFn(l: *Lua) i32 {
     const line = l.checkUserdata(Line, 1, "seamstress.tui.Line");
     l.pushInteger(@intCast(line.width));
@@ -211,25 +221,30 @@ fn toString(l: *Lua) i32 {
     return 1;
 }
 
-/// returns one or more Lines, all with the same style
+/// Constructs `Line` objects from strings.
+/// Since `Line` objects should not have newlines, an array split by newline is returned.
+/// @function seamstress.tui.Line
+/// @tparam string|{string,...} text
+/// @tparam[opt] Style style
+/// @treturn {Line,...}
 fn newFromStringAndStyle(l: *Lua) i32 {
     const tui = lu.closureGetContext(l, Tui);
     const t1 = l.typeOf(1);
     switch (t1) {
         .userdata => {
-            l.getMetatable(1) catch unreachable;
+            l.getMetatable(1) catch unreachable; // is the argument a Line?
             _ = l.getMetatableRegistry("seamstress.tui.Line");
             if (l.rawEqual(-1, -2)) {
-                l.pop(2);
-                l.pushValue(1);
+                l.pop(2); // yep!
+                l.pushValue(1); // let's return it
                 return 1;
             }
-            l.pop(2);
-            _ = l.toStringEx(1);
+            l.pop(2); // nope!
+            _ = l.toStringEx(1); // let's push its string value
             l.pushValue(1);
         },
         else => {
-            _ = l.toStringEx(1);
+            _ = l.toStringEx(1); // let's push its string value
             l.pushValue(1);
         },
     }
@@ -252,11 +267,11 @@ fn newFromStringAndStyle(l: *Lua) i32 {
     const t = l.typeOf(2);
     switch (t) {
         .userdata => {
-            _ = l.checkUserdata(vx.Style, 2, "tui.Style");
-            l.pushValue(2);
+            _ = l.checkUserdata(vx.Style, 2, "tui.Style"); // is the second argument a Style?
+            l.pushValue(2); // push it
         },
         else => {
-            lu.getMethod(l, "tui", "Style");
+            lu.getMethod(l, "tui", "Style"); // can we make it one?
             l.pushValue(2);
             l.call(1, 1);
         },
@@ -266,6 +281,7 @@ fn newFromStringAndStyle(l: *Lua) i32 {
     };
     var tokenizer = std.mem.splitScalar(u8, str, '\n');
     var count: i32 = 0;
+    l.newTable();
     while (tokenizer.next()) |token| {
         count += 1;
         const line = l.newUserdata(Line, 2);
@@ -290,38 +306,46 @@ fn newFromStringAndStyle(l: *Lua) i32 {
         l.setUserValue(-2, 2) catch unreachable;
         line.grapheme_len = len;
         line.width = width;
+        l.setIndex(-2, count);
     }
-    l.remove(-count - 1);
-    l.remove(-count - 1);
-    return count;
+    l.remove(-2);
+    l.remove(-2);
+    return 1;
 }
 
 /// concatenates two Lines or a line and a string
+/// @function Line.__concat
+/// @treturn Line|{Line,...}
 fn concat(l: *Lua) i32 {
     const t1 = l.typeOf(1);
     const t2 = l.typeOf(2);
+    var theres_a_table: i2 = 0;
     switch (t1) {
         .number, .string => {
             _ = l.toString(1) catch unreachable;
             lu.getMethod(l, "tui", "Line");
             l.pushValue(1);
-            l.call(1, ziglua.mult_return);
+            l.call(1, 1);
+            theres_a_table = -1;
+            _ = l.rawGetIndex(-1, @intCast(l.rawLen(-1)));
             _ = l.checkUserdata(Line, 2, "seamstress.tui.Line");
             l.pushValue(2);
         },
         .userdata => {
             _ = l.checkUserdata(Line, 1, "seamstress.tui.Line");
-            l.pushValue(1);
             switch (t2) {
                 .number, .string => {
                     _ = l.toString(2) catch unreachable;
                     lu.getMethod(l, "tui", "Line");
                     _ = l.pushValue(2);
-                    l.call(1, ziglua.mult_return);
-                    // l.rotate(3, -1);
+                    l.call(1, 1);
+                    theres_a_table = 1;
+                    l.pushValue(1);
+                    _ = l.rawGetIndex(-2, 1);
                 },
                 .userdata => {
                     _ = l.checkUserdata(Line, 2, "seamstress.tui.Line");
+                    l.pushValue(1);
                     l.pushValue(2);
                 },
                 else => l.typeError(2, "line or string"),
@@ -409,10 +433,19 @@ fn concat(l: *Lua) i32 {
     l.pop(2);
     l.remove(-2);
     l.remove(-2);
-    if (l.getTop() > 3) l.rotate(3, 1);
-    return l.getTop() - 2;
+    switch (theres_a_table) {
+        0 => {},
+        1 => l.setIndex(-2, 1),
+        -1 => l.setIndex(-2, @intCast(l.rawLen(-2))),
+        else => unreachable,
+    }
+    return 1;
 }
 
+/// Behaves like `string:sub` but operates on `Line` objects
+/// @function Line:sub
+/// @tparam integer start
+/// @tparam[opt=-1] integer end
 fn sub(l: *Lua) i32 {
     const tui = lu.closureGetContext(l, Tui);
     const line = l.checkUserdata(Line, 1, "seamstress.tui.Line");

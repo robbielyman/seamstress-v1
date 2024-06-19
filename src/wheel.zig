@@ -7,7 +7,7 @@ quit_flag: bool = false,
 awake: xev.Async,
 render: ?struct {
     ctx: *anyopaque,
-    render_fn: *const fn (*anyopaque, u64) void,
+    render_fn: *const fn (*anyopaque, *Wheel, u64) void,
 } = null,
 timer: std.time.Timer,
 kind: Seamstress.Cleanup = switch (builtin.mode) {
@@ -45,7 +45,7 @@ pub fn run(self: *Wheel) void {
     while (!self.quit_flag) {
         self.loop.run(.once) catch |err| panic("error running event loop! {s}", .{@errorName(err)});
         const lap_time = self.timer.lap();
-        if (self.render) |r| r.render_fn(r.ctx, lap_time) else std.log.debug("whoopsie", .{});
+        if (self.render) |r| r.render_fn(r.ctx, self, lap_time) else std.log.debug("whoopsie", .{});
         if (seamstress.logger) |l| l.flush() catch unreachable;
     }
 }

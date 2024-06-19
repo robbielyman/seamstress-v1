@@ -51,6 +51,19 @@ pub fn getSeamstress(l: *Lua) void {
     panic("seamstress corrupted!", .{});
 }
 
+/// pushes seamstress.event.publish onto the stack
+/// also pushes the strings given as the namespace as the first argument
+/// if namespace is empty, does nothing!
+pub fn preparePublish(l: *Lua, namespace: []const []const u8) void {
+    if (namespace.len == 0) return;
+    getMethod(l, "event", "publish");
+    l.createTable(@intCast(namespace.len), 0);
+    for (namespace, 1..) |str, i| {
+        _ = l.pushString(str);
+        l.setIndex(-2, @intCast(i));
+    }
+}
+
 // attempts to get the method specified by name onto the stack
 pub fn getMethod(l: *Lua, field: [:0]const u8, method: [:0]const u8) void {
     getSeamstress(l);
@@ -195,6 +208,26 @@ pub fn luaPrint(l: *Lua) void {
 pub fn render(l: *Lua) void {
     const wheel = getWheel(l);
     if (wheel.render) |r| {
-        r.render_fn(r.ctx, wheel.timer.lap());
+        r.render_fn(r.ctx, wheel, wheel.timer.lap());
     }
+}
+
+/// checks whether the given argument is callable, raises a type error if not
+/// if so, pushes the relevant function onto the stack
+pub fn checkCallable(l: *Lua, arg: i32) void {
+    const t = l.typeOf(arg);
+    switch (t) {
+        .function => {
+            l.pushValue(arg);
+            return;
+        },
+        .table, .userdata => {
+            if ((l.getMetaField(arg, "__call") catch .nil) == .function) {
+                return;
+            }
+            l.pop(1);
+        },
+        else => {},
+    }
+    l.typeError(arg, "callable value");
 }

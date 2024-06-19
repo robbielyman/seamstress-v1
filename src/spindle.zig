@@ -12,31 +12,12 @@ pub fn cleanup(l: *Lua) void {
     lu.doCall(l, 0, 0);
 }
 
-/// begins to unload a Module, calling its cancel function
-/// returns a Promise
-fn cancel(l: *Lua) i32 {
-    const seamstress = lu.closureGetContext(l, Seamstress);
-    const str = l.toStringEx(1);
-    const m = seamstress.module_list.get(str) orelse l.raiseErrorStr("module %s not found", .{str.ptr});
-    const promise = m.cancel(l, lu.getWheel(l)) catch |err| l.raiseErrorStr("unable to cancel! %s", .{@errorName(err).ptr});
-    _ = l.rawGetIndex(ziglua.registry_index, promise);
-    return 1;
-}
-
-/// unloads a Module, calling its deinit function
-fn unload(l: *Lua) i32 {
-    const seamstress = lu.closureGetContext(l, Seamstress);
-    const str = l.toStringEx(1);
-    const m = seamstress.module_list.get(str) orelse l.raiseErrorStr("module %s not found", .{str.ptr});
-    m.deinit(l, l.allocator(), .full);
-    return 0;
-}
-
 /// loads a Module, calling its init function
 fn load(l: *Lua) i32 {
     const seamstress = lu.closureGetContext(l, Seamstress);
     const str = l.toStringEx(1);
     const m = seamstress.module_list.get(str) orelse l.raiseErrorStr("module %s not found", .{str.ptr});
+    if (m.self) |_| return 0;
     m.init(seamstress.l, seamstress.allocator) catch |err| l.raiseErrorStr("error while loading module %s: %s", .{ str.ptr, @errorName(err).ptr });
     return 0;
 }
@@ -46,11 +27,6 @@ fn launch(l: *Lua) i32 {
     const seamstress = lu.closureGetContext(l, Seamstress);
     const str = l.toStringEx(1);
     const m = seamstress.module_list.get(str) orelse l.raiseErrorStr("module %s not found", .{str.ptr});
-    if (std.mem.eql(u8, str, "tui")) {
-        const n = seamstress.module_list.get("cli").?;
-        n.deinit(l, seamstress.allocator, .full);
-        n.self = null;
-    }
     m.launch(seamstress.l, &seamstress.loop) catch |err| l.raiseErrorStr("error while launching module %s: %s", .{ str.ptr, @errorName(err).ptr });
     return 0;
 }
@@ -92,7 +68,7 @@ fn setUpSeamstress(l: *Lua, seamstress: *Seamstress, script: ?[:0]const u8) !voi
         const a = fba.allocator();
         const location = try std.fs.selfExeDirPathAlloc(a);
         defer a.free(location);
-        const path = try std.fs.path.joinZ(a, &.{ location, "..", "share", "seamstress", "lua" });
+        const path = std.process.getEnvVarOwned(a, "SEAMSTRESS_LUA_PATH") catch try std.fs.path.joinZ(a, &.{ location, "..", "share", "seamstress", "lua" });
         defer a.free(path);
         const prefix = std.fs.realpathAlloc(a, path) catch |err| {
             if (builtin.is_test) {
@@ -107,6 +83,14 @@ fn setUpSeamstress(l: *Lua, seamstress: *Seamstress, script: ?[:0]const u8) !voi
         };
         _ = l.pushString(prefix);
         l.setField(-2, "_prefix");
+        l.pushLightUserdata(seamstress);
+        l.pushClosure(ziglua.wrap(load), 1);
+        l.setField(-2, "_load");
+        l.pushLightUserdata(seamstress);
+        l.pushClosure(ziglua.wrap(launch), 1);
+        l.setField(-2, "_launch");
+        l.pushLightUserdata(&seamstress.loop);
+        l.setField(-2, "_loop");
         const seamstress_lua = try std.fs.path.joinZ(a, &.{ prefix, "seamstress", "seamstress.lua" });
         {
             var bbuf: [8 * 1024]u8 = undefined;
@@ -117,39 +101,22 @@ fn setUpSeamstress(l: *Lua, seamstress: *Seamstress, script: ?[:0]const u8) !voi
             _ = l.pushString(cwd);
             l.setField(-2, "_pwd");
         }
+        l.newTable();
+        if (script) |s| _ = l.pushStringZ(s) else l.pushNil();
+        l.setField(-2, "script_name");
+        l.setField(-2, "config");
         l.setGlobal("seamstress");
         defer a.free(seamstress_lua);
         try l.doFile(seamstress_lua);
     }
     lu.getSeamstress(l);
-    // push the event loop
-    l.pushLightUserdata(&seamstress.loop);
-    l.setField(-2, "_loop");
     // register the quit function
     l.pushFunction(ziglua.wrap(quit));
     l.setField(-2, "quit");
     l.pushFunction(ziglua.wrap(restart));
     l.setField(-2, "restart");
-    l.pushLightUserdata(seamstress);
-    l.pushClosure(ziglua.wrap(load), 1);
-    l.setField(-2, "_load");
-    l.pushLightUserdata(seamstress);
-    l.pushClosure(ziglua.wrap(launch), 1);
-    l.setField(-2, "_launch");
-    l.pushLightUserdata(seamstress);
-    l.pushClosure(ziglua.wrap(cancel), 1);
-    l.setField(-2, "__unload");
-    l.pushLightUserdata(seamstress);
-    l.pushClosure(ziglua.wrap(unload), 1);
-    l.setField(-2, "___unload");
     l.pushFunction(ziglua.wrap(log));
     l.setField(-2, "log");
-    // and another one
-    l.newTable();
-    if (script) |s| _ = l.pushStringZ(s) else l.pushNil();
-    l.setField(-2, "script_name");
-    // assign to the previous one
-    l.setField(-2, "config");
     {
         // push seamstress version information
         const version = Seamstress.version;
@@ -162,6 +129,8 @@ fn setUpSeamstress(l: *Lua, seamstress: *Seamstress, script: ?[:0]const u8) !voi
         l.setIndex(-2, 3);
         if (version.pre) |pre| _ = l.pushString(pre) else l.pushNil();
         l.setField(-2, "pre");
+        if (version.build) |build| _ = l.pushString(build) else l.pushNil();
+        l.setField(-2, "build");
         l.setField(-2, "version");
     }
     l.pop(1);
@@ -169,19 +138,19 @@ fn setUpSeamstress(l: *Lua, seamstress: *Seamstress, script: ?[:0]const u8) !voi
 }
 
 /// starts the lua VM and sets up the seamstress table
-pub fn init(allocator: *const std.mem.Allocator, seamstress: *Seamstress, script: ?[:0]const u8) *Lua {
+pub fn init(allocator: *const std.mem.Allocator, seamstress: *Seamstress, script: ?[:0]const u8) void {
     const l = Lua.init(allocator) catch |err| panic("error starting lua vm: {s}", .{@errorName(err)});
     errdefer l.close();
+    seamstress.l = l;
 
     // open lua libraries
     l.openLibs();
+    _ = l.atPanic(ziglua.wrap(luaPanic));
     setUpSeamstress(l, seamstress, script) catch {
         const msg = l.toStringEx(-1);
         l.traceback(l, msg, 1);
         panic("error setting up seamstress: {s}", .{msg});
     };
-    _ = l.atPanic(ziglua.wrap(luaPanic));
-    return l;
 }
 
 /// have lua crash via our panic rather than its own way

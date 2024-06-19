@@ -1,76 +1,103 @@
---- seamstress is an engine for art.
--- @module seamstress
+---seamstress is an engine for art.
+---@module 'seamstress'
 
-local old_exit = os.exit
-os.exit = function(...)
-  seamstress.quit()
-  old_exit(...)
-end
+local sys = seamstress._prefix
+package.path = sys ..
+    package.config:sub(1, 1) ..
+    package.config:sub(5, 5) ..
+    ".lua" ..
+    package.config:sub(3, 3) ..
+    package.path
 
-local function setupPath(s)
-  local sys = s._prefix
-  package.path = sys ..
-      package.config:sub(1, 1) ..
-      package.config:sub(5, 5) ..
-      ".lua" ..
-      package.config:sub(3, 3) ..
-      package.path
-  local home = os.getenv("SEAMSTRESS_HOME")
-  if not home then
-    local homedir = os.getenv("HOME")
-    if homedir then home = homedir .. package.config:sub(1, 1) .. "seamstress" end
-    if home then
-      package.path = home ..
-          package.config:sub(1, 1) ..
-          package.config:sub(5, 5) ..
-          '.lua' ..
-          package.config:sub(3, 3) ..
-          package.path
-    end
+local home = os.getenv("SEAMSTRESS_HOME")
+if not home then
+  local homedir = os.getenv("HOME")
+  if homedir then home = homedir .. package.config:sub(1, 1) .. "seamstress" end
+  if home then
+    package.path = home ..
+        package.config:sub(1, 1) ..
+        package.config:sub(5, 5) ..
+        '.lua' ..
+        package.config:sub(3, 3) ..
+        package.path
   end
-  package.path = s._pwd ..
-      package.config:sub(1, 1) ..
-      package.config:sub(5, 5) ..
-      '.lua' ..
-      package.config:sub(3, 3) ..
-      package.path
-  return {
-    sys = sys,
-    home = home,
-    pwd = s._pwd,
-  }
 end
+---@cast home string?
 
-local modules = {}
+package.path = seamstress._pwd ..
+    package.config:sub(1, 1) ..
+    package.config:sub(5, 5) ..
+    '.lua' ..
+    package.config:sub(3, 3) ..
+    package.path
+
+---path object
+seamstress.path = {
+  sys = sys,
+  home = home,
+  pwd = seamstress._pwd,
+}
+
+
+seamstress.event = require 'seamstress.event'
+
+seamstress.event.addSubscriber({ 'quit' }, function()
+  seamstress.quit()
+  return false
+end)
+
+seamstress.event.addSubscriber({ 'hello' }, function(...)
+  if seamstress.hello then seamstress.hello(...) end
+  if hello then hello(...) end
+  return true
+end)
+
+seamstress.event.addSubscriber({ 'init' }, function()
+  if seamstress.init then seamstress.init() end
+  if init then init() end
+  return true
+end)
+
+seamstress.event.addSubscriber({ 'cleanup' }, function()
+  if seamstress.cleanup then seamstress.cleanup() end
+  if cleanup then cleanup() end
+  return true
+end)
+
+local modules = {
+  tui = true,
+}
 
 --- the global seamstress object.
--- modules are loaded by seamstress when referenced.
+--- modules are loaded by seamstress when referenced.
 setmetatable(seamstress, {
   __index = function(t, key)
     local found = modules[key]
+    if found == true then
+      local val, launch = require('seamstress.' .. key)
+      t[key] = val
+      modules[key] = val
+      if launch == true then
+        seamstress._load(key)
+        seamstress._launch(key)
+      end
+    end
     if found then
-      rawset(t, key, require('seamstress.' .. key))
-      seamstress._load(key)
-      return rawget(t, key)
+      return modules[key]
     else
       return rawget(t, key)
     end
   end
 })
-seamstress.path = setupPath(seamstress)
 
-local term = os.getenv("TERM")
+local term = os.getenv('TERM')
 if term ~= 'dumb' and term ~= 'emacs' then
-	seamstress.tui = require 'seamstress.tui'
+  _ = seamstress.tui
+else
+  modules.tui = false
 end
 
-
-seamstress.cleanup = function()
-  if cleanup then cleanup() end
-end
-seamstress.init = function()
-  if init then init() end
-end
+---startup function
 seamstress._start = function()
   local filename = seamstress.config.script_name
   local ok, err = true, nil
@@ -86,13 +113,8 @@ seamstress._start = function()
       print("seamstress will continue as a REPL")
     end
   end
-  if ok and seamstress.hello then seamstress.hello(seamstress.version) end
-  if ok then seamstress.init() end
-end
-
-seamstress._unload = function(which)
-  if modules[which] then
-    local promise = seamstress.__unload(which):anon(function() seamstress.___unload(which) end)
-    return promise
+  if ok then
+    seamstress.event.publish({ 'hello' }, seamstress.version)
+    seamstress.event.publish({ 'init' })
   end
 end

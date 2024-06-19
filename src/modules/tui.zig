@@ -2,74 +2,70 @@
 // @module _seamstress.tui
 const Tui = @This();
 
-l: *Lua,
+launched: bool,
 vaxis: vx.Vaxis,
 tty: vx.Tty,
 watcher: vx.xev.TtyWatcher(Tui) = undefined,
-launched: bool = false,
 c_c: xev.Completion = .{},
 
-fn render(ctx: *anyopaque, lap_time_ns: u64) void {
+fn render(ctx: *anyopaque, wheel: *Wheel, lap_time_ns: u64) void {
     const lap_time_float: f64 = @floatFromInt(lap_time_ns);
     const dt = lap_time_float / std.time.ns_per_s;
     const tui: *Tui = @ptrCast(@alignCast(ctx));
-    tui.vaxis.window().hideCursor();
+    if (tui.launched) tui.vaxis.window().hideCursor();
+    const l = Wheel.getLua(&wheel.loop);
 
-    lu.getMethod(tui.l, "tui", "update");
-    tui.l.pushNumber(dt);
-    tui.l.call(1, 0);
-    lu.getMethod(tui.l, "tui", "draw");
-    tui.l.call(0, 0);
+    lu.preparePublish(l, &.{ "tui", "update" });
+    l.pushNumber(dt);
+    l.call(2, 0);
+    lu.preparePublish(l, &.{ "tui", "draw" });
+    l.call(1, 0);
 
-    tui.vaxis.render(tui.tty.anyWriter()) catch panic("unable to draw to the terminal!", .{});
+    if (tui.launched) tui.vaxis.render(tui.tty.anyWriter()) catch panic("unable to draw to the terminal!", .{});
 }
 
-fn callback(ud: ?*Tui, _: *xev.Loop, _: *vx.xev.TtyWatcher(Tui), event: vx.xev.Event) xev.CallbackAction {
+fn callback(ud: ?*Tui, loop: *xev.Loop, _: *vx.xev.TtyWatcher(Tui), event: vx.xev.Event) xev.CallbackAction {
     const tui = ud.?;
+    if (!tui.launched) return .rearm;
+    const l = Wheel.getLua(loop);
     switch (event) {
         inline .key_press, .key_release => |key| {
-            keyFn(tui.l, key, event == .key_press);
-            lu.render(tui.l);
+            keyFn(l, key, event == .key_press);
+            lu.render(l);
         },
-        .mouse => |m| mouse(tui.l, m),
+        .mouse => |m| mouse(l, m),
         .focus_in => {
-            lu.getMethod(tui.l, "tui", "window_focus");
-            tui.l.pushBoolean(true);
-            tui.l.call(1, 0);
+            lu.preparePublish(l, &.{ "tui", "window_focus" });
+            l.pushBoolean(true);
+            l.call(2, 0);
         },
         .focus_out => {
-            lu.getMethod(tui.l, "tui", "window_focus");
-            tui.l.pushBoolean(true);
-            tui.l.call(1, 0);
+            lu.preparePublish(l, &.{ "tui", "window_focus" });
+            l.pushBoolean(true);
+            l.call(2, 0);
         },
         .paste_start, .paste_end => {}, // since paste is already special, these seem not necessary?
         .paste => |txt| {
-            paste(tui.l, txt);
+            paste(l, txt);
             tui.vaxis.opts.system_clipboard_allocator.?.free(txt);
         },
         .color_report => |_| {},
-        .color_scheme => |scheme| lu.setConfig(tui.l, "color_scheme", @tagName(scheme)),
+        .color_scheme => |scheme| lu.setConfig(l, "color_scheme", @tagName(scheme)),
         .winsize => |winsize| {
-            tui.vaxis.resize(tui.l.allocator(), tui.tty.anyWriter(), winsize) catch panic("out of memory!", .{});
+            tui.vaxis.resize(l.allocator(), tui.tty.anyWriter(), winsize) catch panic("out of memory!", .{});
             tui.vaxis.queueRefresh();
-            lu.getSeamstress(tui.l);
-            if (tui.l.getField(-1, "tui") == .table) {
-                tui.l.remove(-2);
-                _ = tui.l.getField(-1, "resize");
-                tui.l.remove(-2);
-                tui.l.pushInteger(@intCast(winsize.cols));
-                tui.l.pushInteger(@intCast(winsize.rows));
-                tui.l.call(2, 0);
-            } else tui.l.pop(2);
-            lu.getSeamstress(tui.l);
-            _ = tui.l.getField(-1, "tui");
-            tui.l.remove(-2);
-            tui.l.pushInteger(@intCast(winsize.cols));
-            tui.l.setField(-2, "cols");
-            tui.l.pushInteger(@intCast(winsize.rows));
-            tui.l.setField(-2, "rows");
-            tui.l.pop(1);
-            lu.render(tui.l);
+            lu.preparePublish(l, &.{ "tui", "resize" });
+            l.pushInteger(@intCast(winsize.cols));
+            l.pushInteger(@intCast(winsize.rows));
+            l.call(3, 0);
+            lu.getSeamstress(l);
+            _ = l.getField(-1, "tui");
+            l.remove(-2);
+            l.pushInteger(@intCast(winsize.cols));
+            l.setField(-2, "cols");
+            l.pushInteger(@intCast(winsize.rows));
+            l.setField(-2, "rows");
+            l.pop(1);
         },
     }
     return .rearm;
@@ -141,11 +137,11 @@ fn formatKey(key: vx.Key, writer: anytype) !void {
 }
 
 fn keyFn(l: *Lua, key: vx.Key, is_press: bool) void {
-    lu.getMethod(l, "tui", if (is_press) "key_down" else "key_up");
     var buf: [256]u8 = undefined;
     var stream = std.io.fixedBufferStream(&buf);
     formatKey(key, stream.writer()) catch unreachable;
-    var nargs: i32 = 0;
+    lu.preparePublish(l, &.{ "tui", if (is_press) "key_down" else "key_up", buf[0..stream.pos] });
+    var nargs: i32 = 1;
     _ = l.pushString(buf[0..stream.pos]);
     nargs += 1;
     if (key.text) |txt| {
@@ -163,32 +159,33 @@ fn formatMouse(m: vx.Mouse, writer: anytype) !void {
 }
 
 fn mouse(l: *Lua, m: vx.Mouse) void {
+    logger.debug("{any}", .{m});
     switch (m.button) {
         .wheel_up, .wheel_down => {
-            lu.getMethod(l, "tui", "scroll");
+            lu.preparePublish(l, &.{ "tui", "scroll" });
             l.pushInteger(if (m.button == .wheel_up) 1 else -1);
-            l.call(1, 0);
+            l.call(2, 0);
         },
         else => {
             var buf: [128]u8 = undefined;
             var stream = std.io.fixedBufferStream(&buf);
             formatMouse(m, stream.writer()) catch unreachable;
             switch (m.type) {
-                .press => lu.getMethod(l, "tui", "mouse_down"),
-                .release => lu.getMethod(l, "tui", "mouse_up"),
-                .motion => lu.getMethod(l, "tui", "hover"),
-                .drag => lu.getMethod(l, "tui", "drag"),
+                .press => lu.preparePublish(l, &.{ "tui", "mouse_down", buf[0..stream.pos] }),
+                .release => lu.preparePublish(l, &.{ "tui", "mouse_up", buf[0..stream.pos] }),
+                .motion => lu.preparePublish(l, &.{ "tui", "hover", buf[0..stream.pos] }),
+                .drag => lu.preparePublish(l, &.{ "tui", "drag", buf[0..stream.pos] }),
             }
             _ = l.pushString(buf[0..stream.pos]);
             l.pushInteger(@intCast(m.col + 1));
             l.pushInteger(@intCast(m.row + 1));
-            l.call(3, 0);
+            l.call(4, 0);
         },
     }
 }
 
 fn paste(l: *Lua, txt: []const u8) void {
-    lu.getMethod(l, "tui", "paste");
+    lu.preparePublish(l, &.{ "tui", "paste" });
     var iterator = std.mem.splitScalar(u8, txt, '\n');
     var idx: ziglua.Integer = 1;
     l.newTable();
@@ -196,11 +193,7 @@ fn paste(l: *Lua, txt: []const u8) void {
         _ = l.pushString(token);
         l.setIndex(-2, idx);
     }
-    lu.doCall(l, 1, 0);
-}
-
-fn cancel(_: *Module, _: *Lua, _: *Wheel) anyerror!i32 {
-    return error.NotSupported;
+    lu.doCall(l, 2, 0);
 }
 
 fn init(m: *Module, l: *Lua, allocator: std.mem.Allocator) anyerror!void {
@@ -209,34 +202,103 @@ fn init(m: *Module, l: *Lua, allocator: std.mem.Allocator) anyerror!void {
     errdefer allocator.destroy(self);
     m.self = self;
     self.* = .{
-        .l = l,
-        .tty = try vx.Tty.init(),
-        .vaxis = try vx.Vaxis.init(allocator, .{
-            .system_clipboard_allocator = allocator,
-        }),
+        .tty = undefined,
+        .vaxis = undefined,
+        .launched = false,
     };
     @import("tui/color.zig").registerSeamstress(l);
     @import("tui/style.zig").registerSeamstress(l);
     @import("tui/line.zig").registerSeamstress(l, self);
     @import("tui/canvas.zig").registerSeamstress(l, self);
-    lu.registerSeamstress(l, "tui", "redraw", redraw, self);
-    logger.debug("init TUI", .{});
+    lu.registerSeamstress(l, "tui", "renderCommit", redraw, self);
+    lu.registerSeamstress(l, "tui", "setAltScreen", setAlt, self);
+    lu.registerSeamstress(l, "tui", "__resetTerminal", resetTerminal, self);
 }
 
-fn deinit(m: *Module, l: *Lua, allocator: std.mem.Allocator, kind: Cleanup) void {
-    _ = l; // autofix
+fn customDeinit(tui: *Tui, allocator: ?std.mem.Allocator, tty: std.io.AnyWriter, erase: bool) !void {
+    if (erase) {
+        try tty.writeByteNTimes('\r', tui.vaxis.screen.height -| 5);
+        try tty.writeAll(vx.ctlseqs.erase_below_cursor);
+    }
+    if (tui.vaxis.state.kitty_keyboard) {
+        try tty.writeAll(vx.ctlseqs.csi_u_pop);
+        tui.vaxis.state.kitty_keyboard = false;
+    }
+    if (tui.vaxis.state.mouse) {
+        try tui.vaxis.setMouseMode(tty, false);
+    }
+    if (tui.vaxis.state.bracketed_paste) {
+        try tui.vaxis.setBracketedPaste(tty, false);
+    }
+    if (tui.vaxis.state.color_scheme_updates) {
+        try tty.writeAll(vx.ctlseqs.color_scheme_reset);
+        tui.vaxis.state.color_scheme_updates = false;
+    }
+    try tty.writeAll(vx.ctlseqs.show_cursor);
+
+    if (allocator) |a| {
+        tui.vaxis.screen.deinit(a);
+        tui.vaxis.screen_last.deinit(a);
+    }
+    if (tui.vaxis.renders > 0) {
+        const tpr = @divTrunc(tui.vaxis.render_dur, tui.vaxis.renders);
+        log.debug("total renders = {d}\r", .{tui.vaxis.renders});
+        log.debug("microseconds per render = {d}\r", .{tpr});
+    }
+    tui.vaxis.unicode.deinit();
+}
+
+const log = std.log.scoped(.vaxis);
+
+fn deinit(m: *Module, _: *Lua, allocator: std.mem.Allocator, kind: Cleanup) void {
     const self: *Tui = @ptrCast(@alignCast(m.self orelse return));
-    self.vaxis.deinit(allocator, self.tty.anyWriter());
-    self.tty.deinit();
+    if (self.launched) {
+        self.launched = false;
+        if (!self.vaxis.state.alt_screen) {
+            self.customDeinit(if (kind == .full) allocator else null, self.tty.anyWriter(), false) catch {};
+        } else self.vaxis.deinit(if (kind == .full) allocator else null, self.tty.anyWriter());
+        self.tty.deinit();
+        act.?.ctx = null;
+    }
     if (kind != .full) return;
     allocator.destroy(self);
     m.self = null;
 }
 
-fn launch(m: *const Module, _: *Lua, wheel: *Wheel) anyerror!void {
+fn handleKill(_: i32) callconv(.C) void {
+    if (act) |a| if (a.ctx) |self| {
+        if (!self.vaxis.state.alt_screen) {
+            self.customDeinit(null, self.tty.anyWriter(), true) catch {};
+        } else self.vaxis.deinit(null, self.tty.anyWriter());
+        self.tty.deinit();
+    };
+    std.process.exit(1);
+}
+
+var act: ?struct {
+    action: std.posix.Sigaction,
+    ctx: ?*Tui,
+} = null;
+
+fn launch(m: *const Module, l: *Lua, wheel: *Wheel) anyerror!void {
     const self: *Tui = @ptrCast(@alignCast(m.self.?));
     if (self.launched) return;
     self.launched = true;
+    self.tty = try vx.Tty.init();
+    self.vaxis = try vx.Vaxis.init(l.allocator(), .{ .system_clipboard_allocator = l.allocator() });
+    act = .{
+        .action = .{
+            .handler = .{ .handler = handleKill },
+            .mask = switch (builtin.os.tag) {
+                .macos => 0,
+                .linux => std.posix.empty_sigset,
+                else => @compileError("os not supported"),
+            },
+            .flags = 0,
+        },
+        .ctx = self,
+    };
+    std.posix.sigaction(std.posix.SIG.TERM, &act.?.action, null) catch unreachable;
     wheel.render = .{
         .ctx = self,
         .render_fn = render,
@@ -253,14 +315,38 @@ pub fn module() Module {
         .init_fn = init,
         .deinit_fn = deinit,
         .launch_fn = launch,
-        .cancel_fn = cancel,
     } };
 }
 
 fn redraw(l: *Lua) i32 {
     const tui = lu.closureGetContext(l, Tui);
-    const wheel = lu.getWheel(l);
-    render(tui, wheel.timer.lap());
+    if (tui.launched) tui.vaxis.render(tui.tty.anyWriter()) catch panic("unable to draw to the terminal!", .{});
+    return 0;
+}
+
+fn setAlt(l: *Lua) i32 {
+    const tui = lu.closureGetContext(l, Tui);
+    const alt = l.toBoolean(1);
+    if (tui.vaxis.state.alt_screen and !alt) {
+        tui.vaxis.exitAltScreen(tui.tty.anyWriter()) catch unreachable;
+        tui.vaxis.setMouseMode(tui.tty.anyWriter(), false) catch unreachable;
+    } else if (!tui.vaxis.state.alt_screen and alt) {
+        tui.vaxis.enterAltScreen(tui.tty.anyWriter()) catch unreachable;
+        tui.vaxis.setMouseMode(tui.tty.anyWriter(), true) catch unreachable;
+    }
+    return 0;
+}
+
+fn resetTerminal(l: *Lua) i32 {
+    const erase = l.toBoolean(1);
+    const self = lu.closureGetContext(l, Tui);
+    if (!self.launched) return 0;
+    self.launched = false;
+    if (erase) self.vaxis.deinit(l.allocator(), self.tty.anyWriter()) else {
+        if (self.vaxis.state.alt_screen) self.vaxis.exitAltScreen(self.tty.anyWriter()) catch {};
+        self.vaxis.deinit(l.allocator(), std.io.null_writer.any());
+    }
+    self.tty.deinit();
     return 0;
 }
 

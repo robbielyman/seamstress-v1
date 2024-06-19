@@ -1,3 +1,4 @@
+/// @module seamstress.tui
 pub fn registerSeamstress(l: *Lua, tui: *Tui) void {
     const n = l.getTop();
     lu.registerSeamstress(l, "tui", "drawInBox", display, tui);
@@ -6,6 +7,11 @@ pub fn registerSeamstress(l: *Lua, tui: *Tui) void {
     std.debug.assert(n == l.getTop());
 }
 
+/// Displays the cursor at a position relative to a `Box`.
+/// @function showCursorInBox
+/// @tparam integer x
+/// @tparam integer y
+/// @tparam Box box
 fn showCursor(l: *Lua) i32 {
     const tui = lu.closureGetContext(l, Tui);
     const window = tui.vaxis.window();
@@ -147,6 +153,9 @@ fn parseBorder(l: *Lua) vx.Window.BorderOptions {
     return border;
 }
 
+/// Clears a `Box`.
+/// @function clearBox
+/// @tparam Box box
 fn clear(l: *Lua) i32 {
     const tui = lu.closureGetContext(l, Tui);
     const parent = tui.vaxis.window();
@@ -181,12 +190,20 @@ fn clear(l: *Lua) i32 {
     return 0;
 }
 
+/// Displays a line or array of lines in a bounding box.
+/// @function drawInBox
+/// @tparam string|Line|{Line,...} line text to display
+/// @tparam[opt] Box bounding box
+/// @tparam[opt] bool wrap whether to wrap text that exceeds the bounding box
 fn display(l: *Lua) i32 {
     const tui = lu.closureGetContext(l, Tui);
     const parent = tui.vaxis.window();
 
     var spec: WindowSpec = .{};
     var border: vx.Window.BorderOptions = .{};
+
+    const a3 = l.typeOf(3);
+    const wrap = if (a3 == .nil or a3 == .none) false else l.toBoolean(3);
 
     if (l.typeOf(2) == .table) {
         if (l.getField(2, "x") == .table) {
@@ -216,75 +233,90 @@ fn display(l: *Lua) i32 {
 
     const child = childFromSpec(parent, spec, border);
 
-    const t1 = l.typeOf(1);
-    switch (t1) {
-        .userdata => {
-            _ = l.checkUserdata(Line, 1, "seamstress.tui.Line");
-            _ = l.getUserValue(-1, 1) catch unreachable;
-            const text = l.toString(-1) catch unreachable;
-            if (l.getUserValue(-2, 2) catch unreachable == .userdata and text.len > 0) {
-                const segs = l.toUserdataSlice(Line.Segment, -1) catch unreachable;
-                const segments = l.newUserdataSlice(vx.Segment, segs.len, 0);
-                Line.toSegments(text, segs, segments);
-                _ = child.print(segments, .{ .wrap = .none }) catch unreachable;
+    l.pushValue(1);
+    while (true) {
+        const t1 = l.typeOf(-1);
+        switch (t1) {
+            .string => {
+                lu.getMethod(l, "tui", "Line");
+                l.rotate(-2, 1);
+                l.call(1, 1);
+            },
+            .userdata => {
                 l.pop(1);
-            }
-            l.pop(2);
-        },
-        .table => {
-            l.len(1);
-            const n = l.toInteger(-1) catch unreachable;
-            var i: ziglua.Integer = 1;
-            l.pop(1);
-            while (i <= n) : (i += 1) {
-                const t3 = l.getIndex(1, i);
-                switch (t3) {
-                    .userdata => {
-                        _ = l.toUserdata(Line, -1) catch l.argError(1, "line or array of lines expected!");
-                        _ = l.getUserValue(-1, 1) catch unreachable;
-                        const text = l.toString(-1) catch unreachable;
-                        if (l.getUserValue(-2, 2) catch unreachable == .userdata and text.len > 0) {
-                            const segs = l.toUserdataSlice(Line.Segment, -1) catch unreachable;
-
-                            const segments = l.newUserdataSlice(vx.Segment, segs.len, 0);
-                            Line.toSegments(text, segs, segments);
-                            _ = child.print(segments, .{
-                                .row_offset = @intCast(i - 1),
-                                .wrap = .none,
-                            }) catch unreachable;
-                            l.pop(1);
-                        }
-                        l.pop(3);
-                    },
-                    .string => {
-                        lu.getSeamstress(l);
-                        _ = l.getField(-1, "tuiLineNew");
-                        l.remove(-2);
-                        l.insert(-2);
-                        l.call(1, 1);
-                        _ = l.toUserdata(Line, -1) catch l.argError(1, "line or array of lines expected!");
-                        _ = l.getUserValue(-1, 1) catch unreachable;
-                        const text = l.toString(-1) catch unreachable;
-                        if (l.getUserValue(-2, 2) catch unreachable == .userdata and text.len > 0) {
-                            const segs = l.toUserdataSlice(Line.Segment, -1) catch unreachable;
-                            const segments = l.newUserdataSlice(vx.Segment, segs.len, 0);
-                            Line.toSegments(text, segs, segments);
-                            _ = child.print(segments, .{
-                                .row_offset = @intCast(i - 1),
-                                .wrap = .none,
-                            }) catch unreachable;
-                            l.pop(1);
-                        }
-                        l.pop(3);
-                    },
-                    .nil => {
-                        l.pop(1);
-                    },
-                    else => l.typeError(1, "line or array of lines"),
+                _ = l.checkUserdata(Line, 1, "seamstress.tui.Line");
+                _ = l.getUserValue(-1, 1) catch unreachable;
+                const text = l.toString(-1) catch unreachable;
+                if (l.getUserValue(-2, 2) catch unreachable == .userdata and text.len > 0) {
+                    const segs = l.toUserdataSlice(Line.Segment, -1) catch unreachable;
+                    const segments = l.newUserdataSlice(vx.Segment, segs.len, 0);
+                    Line.toSegments(text, segs, segments);
+                    _ = child.print(segments, .{ .wrap = if (wrap) .grapheme else .none }) catch unreachable;
+                    l.pop(1);
                 }
-            }
-        },
-        else => l.typeError(1, "line or array of lines"),
+                l.pop(2);
+                return 0;
+            },
+            .table => {
+                l.len(-1);
+                const n = l.toInteger(-1) catch unreachable;
+                var i: ziglua.Integer = 1;
+                l.pop(1);
+                var row: usize = 0;
+                while (i <= n) : (i += 1) {
+                    const t3 = l.getIndex(-1, i);
+                    switch (t3) {
+                        .userdata => {
+                            _ = l.toUserdata(Line, -1) catch l.argError(1, "line or array of lines expected!");
+                            _ = l.getUserValue(-1, 1) catch unreachable;
+                            const text = l.toString(-1) catch unreachable;
+                            if (l.getUserValue(-2, 2) catch unreachable == .userdata and text.len > 0) {
+                                const segs = l.toUserdataSlice(Line.Segment, -1) catch unreachable;
+
+                                const segments = l.newUserdataSlice(vx.Segment, segs.len, 0);
+                                Line.toSegments(text, segs, segments);
+                                const res = child.print(segments, .{
+                                    .row_offset = row,
+                                    .wrap = if (wrap) .grapheme else .none,
+                                }) catch unreachable;
+                                l.pop(1);
+                                row = res.row + 1;
+                            } else row += 1;
+                            l.pop(3);
+                        },
+                        .string => {
+                            lu.getSeamstress(l);
+                            _ = l.getField(-1, "tuiLineNew");
+                            l.remove(-2);
+                            l.insert(-2);
+                            l.call(1, 1);
+                            _ = l.toUserdata(Line, -1) catch l.argError(1, "line or array of lines expected!");
+                            _ = l.getUserValue(-1, 1) catch unreachable;
+                            const text = l.toString(-1) catch unreachable;
+                            if (l.getUserValue(-2, 2) catch unreachable == .userdata and text.len > 0) {
+                                const segs = l.toUserdataSlice(Line.Segment, -1) catch unreachable;
+                                const segments = l.newUserdataSlice(vx.Segment, segs.len, 0);
+                                Line.toSegments(text, segs, segments);
+                                const res = child.print(segments, .{
+                                    .row_offset = row,
+                                    .wrap = if (wrap) .grapheme else .none,
+                                }) catch unreachable;
+                                l.pop(1);
+                                row = res.row + 1;
+                            } else row += 1;
+                            l.pop(3);
+                        },
+                        .nil => {
+                            row += 1;
+                            l.pop(1);
+                        },
+                        else => l.typeError(1, "line or array of lines"),
+                    }
+                }
+                return 0;
+            },
+            else => l.typeError(1, "line or array of lines"),
+        }
     }
     return 0;
 }

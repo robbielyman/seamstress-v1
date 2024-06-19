@@ -1,5 +1,7 @@
 local busted = require 'busted'
 
+require 'seamstress.tui'
+
 busted.describe(
   "seamstress.tui.Color",
   function()
@@ -76,35 +78,97 @@ busted.describe(
 busted.describe(
   "seamstress.tui",
   function()
+    busted.before_each(function()
+      seamstress.event.clear({ 'tui' })
+    end)
+
+    busted.after_each(function()
+      seamstress.event.clear({ 'tui' })
+    end)
+
     busted.it("can draw beautifully to the terminal",
-      -- 'need to figure out async',
       function()
         local done = false
         local t = 0
         local logo
-        seamstress.tui.update = seamstress.tui.Handler.new(function(dt)
+        seamstress.event.addSubscriber({ 'tui', 'update' }, function(dt)
           t = t + dt
-          fg = seamstress.tui.Color(math.abs(255 * math.cos(t)), math.abs(255 * math.sin(t + math.pi)), math.abs(255 * math.sin(t)))
+          fg = seamstress.tui.Color(math.abs(255 * math.cos(t)), math.abs(255 * math.sin(t + math.pi)),
+            math.abs(255 * math.sin(t)))
           logo = fg(logo, 'fg')
           if t > 1 then
             done = true
           end
+          return true
         end)
-        seamstress.tui.draw = seamstress.tui.Handler.new(function()
-          seamstress.tui.drawInBox(logo, { x = { 1, -1 }, y = { 1, -1 } })
+        local sub = seamstress.event.addSubscriber({ 'tui', 'draw' }, function()
+          local x = seamstress.tui.cols // 2
+          local y = seamstress.tui.rows // 2
+          seamstress.tui.drawInBox(logo, { x = { x - 43, -1 }, y = { y - 3, -1 } })
+          return true
         end)
-          local fg = seamstress.tui.Color('#ff8800')
-          logo = { fg([[
-                                                /**
-  ******  *****   ******   **********   ****** ****** ******  *****   ******  ******
- **////  **///** //////** //**//**//** **//// ///**/ //**//* **///** **////  **////
-//***** /*******  *******  /** /** /**//*****   /**   /** / /*******//***** //*****
- /////**/**////  **////**  /** /** /** /////**  /**   /**   /**////  /////** /////**
- ****** //******//******** *** /** /** ******   //** /***   //****** ******  ******
-//////   //////  //////// ///  //  // //////     //  ///     ////// //////  //////
-]], 'fg') }
+        local fg = seamstress.tui.Color('#ff8800')
+        logo = fg([[
+███████╗███████╗ █████╗ ███╗   ███╗███████╗████████╗██████╗ ███████╗███████╗███████╗
+██╔════╝██╔════╝██╔══██╗████╗ ████║██╔════╝╚══██╔══╝██╔══██╗██╔════╝██╔════╝██╔════╝
+███████╗█████╗  ███████║██╔████╔██║███████╗   ██║   ██████╔╝█████╗  ███████╗███████╗
+╚════██║██╔══╝  ██╔══██║██║╚██╔╝██║╚════██║   ██║   ██╔══██╗██╔══╝  ╚════██║╚════██║
+███████║███████╗██║  ██║██║ ╚═╝ ██║███████║   ██║   ██║  ██║███████╗███████║███████║
+╚══════╝╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝
+]], 'fg')
+        repeat
+          coroutine.yield()
+        until done
+        sub:update({
+          fn = function()
+            seamstress.tui.clearBox({ x = { 1, -1 }, y = { 1, -1 } })
+          end
+        })
+        coroutine.yield()
+      end)
+    busted.it("can respond to key input",
+      function()
+        local done = false
+        local dirty = true
+        seamstress.event.addSubscriber({ 'tui', 'resize' }, function()
+          dirty = true
+          return true
+        end)
+        local sub = seamstress.event.addSubscriber({ 'tui', 'draw' }, function()
+          if not dirty then return true end
+          dirty = false
+          local x = seamstress.tui.cols // 2
+          local y = seamstress.tui.rows // 2
+          seamstress.tui.drawInBox("press any key to continue", { x = { x - 10, -1 }, y = { y, -1 } })
+          return true
+        end)
+        seamstress.event.addSubscriber({ 'tui', 'key_down' }, function()
+          done = true
+          return true
+        end)
+        repeat
+          coroutine.yield()
+        until done
+        sub:update({
+          fn = function()
+            seamstress.tui.clearBox({ x = { 1, -1 }, y = { 1, -1 } })
+            return true
+          end
+        })
+        coroutine.yield()
+      end)
+
+    busted.pending("higher level ui abstractions", function()
+      busted.describe("ui", function()
+        busted.it("has fully-featured buttons", function()
+          local done = false
+          seamstress.tui.ui.Button.new('click to continue',
+            function() done = true end,
+            { 'centered', 'centered' })
           repeat
             coroutine.yield()
           until done
-      end) --)
+        end)
+      end)
+    end)
   end)

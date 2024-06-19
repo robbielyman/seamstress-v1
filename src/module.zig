@@ -6,7 +6,11 @@ const Module = @This();
 self: ?*anyopaque = null,
 vtable: *const Vtable,
 
-pub const Vtable = struct { init_fn: *const fn (*Module, *Lua, std.mem.Allocator) anyerror!void, deinit_fn: *const fn (*Module, *Lua, std.mem.Allocator, Cleanup) void, launch_fn: *const fn (*const Module, *Lua, *Wheel) anyerror!void, cancel_fn: *const fn (*Module, *Lua, *Wheel) anyerror!i32 };
+pub const Vtable = struct {
+    init_fn: *const fn (*Module, *Lua, std.mem.Allocator) anyerror!void,
+    deinit_fn: *const fn (*Module, *Lua, std.mem.Allocator, Cleanup) void,
+    launch_fn: *const fn (*const Module, *Lua, *Wheel) anyerror!void,
+};
 
 /// sets up the module without starting it
 /// should not assume that, for example, the event loop is already running
@@ -23,15 +27,6 @@ pub fn init(m: *Module, l: *Lua, allocator: std.mem.Allocator) anyerror!void {
 /// should set m.self to null when cleanup is .full
 pub fn deinit(m: *Module, l: *Lua, allocator: std.mem.Allocator, cleanup: Cleanup) void {
     m.vtable.deinit_fn(m, l, allocator, cleanup);
-}
-
-/// shuts down the module when seamstress itself is not shutting down
-/// in the event that in-flight event loop items need to be canceled,
-/// the implementing function should create a promise using async.zig's Promise.new function
-/// and resolve it when finished by calling notify on its xev.Async instance
-/// the return value should be the promise's handle
-pub fn cancel(m: *Module, l: *Lua, wheel: *Wheel) anyerror!i32 {
-    return m.vtable.cancel_fn(m, l, wheel);
 }
 
 /// actually puts the module into operation

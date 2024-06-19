@@ -31,8 +31,8 @@ pub fn init(self: *Seamstress, allocator: *const std.mem.Allocator, logger: ?*Bu
     // set up the event loop
     self.loop.init();
     // set up the lua vm
-    self.l = spindle.init(allocator, self, script);
     self.module_list = Module.list(self.allocator) catch std.debug.panic("out of memory!", .{});
+    spindle.init(allocator, self, script);
     // set up the REPL at a minimum
     const term = std.process.getEnvVarOwned(self.allocator, "TERM") catch {
         self.module_list.get("cli").?.init(self.l, self.allocator) catch |err| std.debug.panic("unable to start CLI I/O! {s}", .{@errorName(err)});

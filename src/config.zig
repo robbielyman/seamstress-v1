@@ -47,7 +47,10 @@ const script =
     \\    table.insert(not_new, key)
     \\  end
     \\  local ok, err = pcall(dofile, '{s}')
-    \\  if not ok then error(err) end
+    \\  if not ok then
+    \\    if err:find("No such file or directory") then return end
+    \\    error(err)
+    \\  end
     \\  for key, value in pairs(_G) do
     \\    local found = false
     \\    for _, other in ipairs(not_new) do
