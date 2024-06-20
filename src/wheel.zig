@@ -5,10 +5,6 @@ loop: xev.Loop,
 pool: xev.ThreadPool,
 quit_flag: bool = false,
 awake: xev.Async,
-render: ?struct {
-    ctx: *anyopaque,
-    render_fn: *const fn (*anyopaque, *Wheel, u64) void,
-} = null,
 timer: std.time.Timer,
 kind: Seamstress.Cleanup = switch (builtin.mode) {
     .Debug, .ReleaseSafe => .full,
@@ -44,8 +40,6 @@ pub fn run(self: *Wheel) void {
     timer.run(&self.loop, &c3, 0, Lua, seamstress.l, callInit);
     while (!self.quit_flag) {
         self.loop.run(.once) catch |err| panic("error running event loop! {s}", .{@errorName(err)});
-        const lap_time = self.timer.lap();
-        if (self.render) |r| r.render_fn(r.ctx, self, lap_time) else std.log.debug("whoopsie", .{});
         if (seamstress.logger) |l| l.flush() catch unreachable;
     }
 }

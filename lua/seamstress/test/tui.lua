@@ -84,6 +84,8 @@ busted.describe(
 
     busted.after_each(function()
       seamstress.event.clear({ 'tui' })
+      seamstress.update.running = false
+      seamstress.update.delta = 1 / 60
     end)
 
     busted.it("can draw beautifully to the terminal",
@@ -91,7 +93,8 @@ busted.describe(
         local done = false
         local t = 0
         local logo
-        seamstress.event.addSubscriber({ 'tui', 'update' }, function(dt)
+        seamstress.update.running = true
+        seamstress.event.addSubscriber({ 'update' }, function(dt)
           t = t + dt
           fg = seamstress.tui.Color(math.abs(255 * math.cos(t)), math.abs(255 * math.sin(t + math.pi)),
             math.abs(255 * math.sin(t)))
@@ -99,9 +102,9 @@ busted.describe(
           if t > 1 then
             done = true
           end
-          return true
+          return true, true
         end)
-        local sub = seamstress.event.addSubscriber({ 'tui', 'draw' }, function()
+        local sub = seamstress.event.addSubscriber({ 'draw' }, function()
           local x = seamstress.tui.cols // 2
           local y = seamstress.tui.rows // 2
           seamstress.tui.drawInBox(logo, { x = { x - 43, -1 }, y = { y - 3, -1 } })
@@ -122,6 +125,7 @@ busted.describe(
         sub:update({
           fn = function()
             seamstress.tui.clearBox({ x = { 1, -1 }, y = { 1, -1 } })
+            return true, true
           end
         })
         coroutine.yield()
@@ -130,12 +134,12 @@ busted.describe(
       function()
         local done = false
         local dirty = true
+        seamstress.update.running = true
         seamstress.event.addSubscriber({ 'tui', 'resize' }, function()
           dirty = true
-          return true
+          return true, dirty
         end)
-        local sub = seamstress.event.addSubscriber({ 'tui', 'draw' }, function()
-          if not dirty then return true end
+        local sub = seamstress.event.addSubscriber({ 'draw' }, function()
           dirty = false
           local x = seamstress.tui.cols // 2
           local y = seamstress.tui.rows // 2
@@ -144,7 +148,7 @@ busted.describe(
         end)
         seamstress.event.addSubscriber({ 'tui', 'key_down' }, function()
           done = true
-          return true
+          return true, true
         end)
         repeat
           coroutine.yield()

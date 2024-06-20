@@ -6,8 +6,6 @@
 /// Also provided is an `async` function, which takes in a function as an argument
 /// and returns a function that, when called, creates a `Promise`
 /// of the original function's eventual completion.
-/// @module seamstress.async
-/// @author Rylee Alanza Lyman
 const Promise = @This();
 
 pub fn registerSeamstress(l: *Lua) !void {
@@ -68,27 +66,20 @@ const functions: []const ziglua.FnReg = &.{ .{
 /// Internally `f` is executed on a coroutine,
 /// so calling `coroutine.yield()` and awaiting `Promise` objects
 /// from within `f` is valid.
-/// @function seamstress.async
-/// @tparam function f
-/// @treturn function(...):Promise
-/// The returned function creates a new `Promise`
-/// with `f` and its arguments, schedules its asynchronous execution
-/// and returns the `Promise`.
 fn asyncFn(l: *Lua) i32 {
     lu.checkCallable(l, 2);
     l.pushClosure(ziglua.wrap(call), 1);
     return 1;
 }
 
-/// @type seamstress.async.Promise
 status: enum { waiting, pending, fulfilled, rejected },
 c: xev.Completion = .{},
 handle: i32 = undefined,
 ud: ?*anyopaque = null,
 
-// creates a Promise, returning on success an integer representing a Lua handle to it
-// to fulfill this Promise, push `true` onto its stack after pushing any relevant results
-// to reject it, push `false`
+/// creates a Promise, returning on success an integer representing a Lua handle to it
+/// to fulfill this Promise, push `true` onto its stack after pushing any relevant results
+/// to reject it, push `false`
 pub fn new(l: *Lua) !i32 {
     const p = l.newUserdata(Promise, 2);
     _ = l.getMetatableRegistry("seamstress.async.Promise");
@@ -110,7 +101,7 @@ pub fn new(l: *Lua) !i32 {
     return handle;
 }
 
-// settles a promise whose second UserValue is an xev.Async
+/// settles a promise whose second UserValue is an xev.Async
 fn settle(ud: ?*i32, loop: *xev.Loop, _: *xev.Completion, r: xev.Async.WaitError!void) xev.CallbackAction {
     const handle = ud.?.*;
     const l = Wheel.getLua(loop);
@@ -133,7 +124,7 @@ fn settle(ud: ?*i32, loop: *xev.Loop, _: *xev.Completion, r: xev.Async.WaitError
     return .disarm;
 }
 
-// calls an async function, returning a new Promise
+/// calls an async function, returning a new Promise
 fn call(l: *Lua) i32 {
     const i = Lua.upvalueIndex(1); // the function we passed into `seamstress.async`
     const n = l.getTop(); // the number of arguments to the function
@@ -162,10 +153,6 @@ fn call(l: *Lua) i32 {
 }
 
 /// Executes its function argument asynchronously.
-/// @function seamstress.async.Promise
-/// @tparam function f to be executed asynchronously.
-/// @param[opt] ... will be passed to f
-/// @treturn Promise
 fn newLuaPromise(l: *Lua) i32 {
     l.remove(1); // we don't need the metatable
     const n = l.getTop(); // the function and its arguments
@@ -190,7 +177,7 @@ fn newLuaPromise(l: *Lua) i32 {
     return 1;
 }
 
-// attempts to resolve a promise created with seamstress.async.Promise by resuming its coroutine
+/// attempts to resolve a promise created with seamstress.async.Promise by resuming its coroutine
 fn settleLuaPromise(ev: ?*i32, loop: *xev.Loop, c: *xev.Completion, r: xev.Timer.RunError!void) xev.CallbackAction {
     _ = r catch |err| panic("unexpected timer error! {s}", .{@errorName(err)});
     const l = Wheel.getLua(loop);
@@ -234,10 +221,6 @@ fn settleLuaPromise(ev: ?*i32, loop: *xev.Loop, c: *xev.Completion, r: xev.Timer
 /// which is a reserved word in Lua.
 /// Values (or errors) returned by the `Promise` are passed as arguments
 /// to the appropriate function.
-/// @function seamstress.async.Promise:anon
-/// @tparam function resolve executed if the `Promise` is resolved successfully
-/// @tparam[opt] function reject executed if the `Promise` resolves with errors
-/// @treturn Promise `Promise` objects are immutable, so a new `Promise` is returned.
 fn anon(l: *Lua) i32 {
     const t3 = l.typeOf(3);
     _ = l.checkUserdata(Promise, 1, "seamstress.async.Promise"); // self should be a Promise
@@ -268,7 +251,7 @@ fn anon(l: *Lua) i32 {
     return 1;
 }
 
-// attempt to settle a promise created with anon
+/// attempt to settle a promise created with anon
 fn settleAnonPromise(ev: ?*i32, loop: *xev.Loop, c: *xev.Completion, r: xev.Timer.RunError!void) xev.CallbackAction {
     _ = r catch |err| panic("unexpected timer error! {s}", .{@errorName(err)});
     const l = Wheel.getLua(loop);
@@ -321,22 +304,18 @@ fn settleAnonPromise(ev: ?*i32, loop: *xev.Loop, c: *xev.Completion, r: xev.Time
     return .disarm;
 }
 
-// default promise rejection handler
+/// default promise rejection handler
 fn throw(l: *Lua) i32 {
     l.raiseError(); // throws an error, so there's a potential crash here
     return 0;
 }
 
-// default promise resolution handler
+/// default promise resolution handler
 fn noOp(l: *Lua) i32 {
     return l.getTop();
 }
 
 /// Convenient alias for `self:anon(function(...) return ... end, f)`.
-/// @function seamstress.async.Promise:catch
-/// @tparam function f executed if `self` resolves with errors
-/// The error message raised by the `Promise` is passed as an argument to `f`.
-/// @treturn Promise `Promise` objects are immutable, so a new `Promise` is returned.
 fn catchFn(l: *Lua) i32 {
     _ = l.checkUserdata(Promise, 1, "seamstress.async.Promise"); // self is a Promise
     l.pushFunction(ziglua.wrap(anon)); // we're going to call self:anon
@@ -348,10 +327,6 @@ fn catchFn(l: *Lua) i32 {
 }
 
 /// Convenient alias for `self:anon(f, f)`.
-/// @function seamstress.async.Promise:finally
-/// @tparam function f executed regardless of whether `self` succeeds or fails.
-/// Values (or errors) returned by the `Promise` are passed as arguments to `f`.
-/// @treturn Promise `Promise` objects are immutable, so a new `Promise` is returned.
 fn finally(l: *Lua) i32 {
     _ = l.checkUserdata(Promise, 1, "seamstress.async.Promise"); // self is a Promise
     l.pushFunction(ziglua.wrap(anon)); // we're going to call self:anon
@@ -385,25 +360,13 @@ fn awaitContinues(l: *Lua, _: ziglua.Status, _: ziglua.Context) i32 {
 /// Because awaiting a promise yields execution, `await`
 /// may only be called from within a coroutine or asynchronous context,
 /// like an async function or a `Promise`.
-/// The following code snippets are equivalent; both will print "the number is 25".
-///     local a = seamstress.async(function(x) return x + 12 end)
-///     local b = seamstress.async.Promise(function()
-///       a(13):anon(function(x) print('the number is ' .. x) end)
-///     end)
-///     local c = seamstress.async.Promise(function()
-///       local x = a(13):await()
-///       print('the number is ' .. x)
-///     end)
-/// @see seamstress.async
-/// @function seamstress.async.Promise:await
-/// @return ... the return values of `self`.
 fn awaitFn(l: *Lua) i32 {
     _ = l.checkUserdata(Promise, 1, "seamstress.async.Promise"); // we're awaiting a Promise
     if (!l.isYieldable()) l.raiseErrorStr("cannot await a Promise outside of an async context (i.e. a coroutine or an async function)", .{}); // we'd better be able to yield
     l.yieldCont(0, 0, ziglua.wrap(awaitContinues)); // 'cause we're gonna
 }
 
-// creates a Promise that references all the Promises passed in
+/// creates a Promise that references all the Promises passed in
 fn oneFromMany(l: *Lua) !*Promise {
     const n = l.getTop(); // how many promises?
     var i: i32 = 1;
@@ -435,7 +398,7 @@ fn oneFromMany(l: *Lua) !*Promise {
 
 const Which = enum { any, all, race };
 
-// generic over which Promise method we're calling
+/// generic over which Promise method we're calling
 fn settleFn(comptime which: Which) fn (ev: ?*i32, loop: *xev.Loop, c: *xev.Completion, r: xev.Timer.RunError!void) xev.CallbackAction {
     const inner = struct {
         fn f(ev: ?*i32, loop: *xev.Loop, c: *xev.Completion, r: xev.Timer.RunError!void) xev.CallbackAction {
@@ -568,7 +531,7 @@ fn settleFn(comptime which: Which) fn (ev: ?*i32, loop: *xev.Loop, c: *xev.Compl
     return inner.f;
 }
 
-// generic over which Promise method we're callind
+/// generic over which Promise method we're callind
 fn multiPromise(comptime which: Which) fn (l: *Lua) i32 {
     const inner = struct {
         fn f(l: *Lua) i32 {
@@ -584,22 +547,8 @@ fn multiPromise(comptime which: Which) fn (l: *Lua) i32 {
     return inner.f;
 }
 
-/// Creates a new `Promise` which fulfills when all of its arguments fulfill.
-/// The `Promise` rejects if any of its arguments reject.
-/// @function seamstress.async.Promise.all
-/// @tparam[opt] Promise promises zero or more `Promise` objects
-/// @treturn Promise `Promise` objects are immutable, so a new `Promise` is returned.
 const ziglua = @import("ziglua");
-/// Creates a new `Promise` which fulfills when any of its arguments fulfill.
-/// The `Promise` rejects if all of its arguments reject.
-/// @function seamstress.async.Promise.any
-/// @tparam[opt] Promise promises zero or more `Promise` objects
-/// @treturn Promise `Promise` objects are immutable, so a new `Promise` is returned.
 const Lua = ziglua.Lua;
-/// Creates a new `Promise` which settles when any of its arguments settle.
-/// @function seamstress.async.Promise.race
-/// @tparam[opt] Promise promises zero or more `Promise` objects
-/// @treturn Promise `Promise` objects are immutable, so a new `Promise` is returned.
 const xev = @import("xev");
 const lu = @import("lua_util.zig");
 const std = @import("std");

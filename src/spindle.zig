@@ -106,6 +106,7 @@ fn setUpSeamstress(l: *Lua, seamstress: *Seamstress, script: ?[:0]const u8) !voi
         l.setField(-2, "script_name");
         l.setField(-2, "config");
         l.setGlobal("seamstress");
+        try @import("timer.zig").registerSeamstress(l);
         defer a.free(seamstress_lua);
         try l.doFile(seamstress_lua);
     }
@@ -134,7 +135,7 @@ fn setUpSeamstress(l: *Lua, seamstress: *Seamstress, script: ?[:0]const u8) !voi
         l.setField(-2, "version");
     }
     l.pop(1);
-    try Promise.registerSeamstress(l);
+    try @import("async.zig").registerSeamstress(l);
 }
 
 /// starts the lua VM and sets up the seamstress table
@@ -167,7 +168,6 @@ fn luaPanic(l: *Lua) i32 {
 const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
 const Seamstress = @import("seamstress.zig");
-const Promise = @import("async.zig");
 const std = @import("std");
 const panic = std.debug.panic;
 const lu = @import("lua_util.zig");
