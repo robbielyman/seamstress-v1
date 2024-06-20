@@ -204,14 +204,6 @@ pub fn luaPrint(l: *Lua) void {
     l.call(n, 0);
 }
 
-/// renders to the terminal
-pub fn render(l: *Lua) void {
-    const wheel = getWheel(l);
-    if (wheel.render) |r| {
-        r.render_fn(r.ctx, wheel, wheel.timer.lap());
-    }
-}
-
 /// checks whether the given argument is callable, raises a type error if not
 /// if so, pushes the relevant function onto the stack
 pub fn checkCallable(l: *Lua, arg: i32) void {
@@ -230,4 +222,20 @@ pub fn checkCallable(l: *Lua, arg: i32) void {
         else => {},
     }
     l.typeError(arg, "callable value");
+}
+
+/// checks whether any elements of the table on top of the stack are truthy
+/// does not pop the table
+pub fn anyTruthy(l: *Lua) bool {
+    l.len(-1);
+    const len = l.toInteger(-1) catch unreachable;
+    l.pop(1);
+    var i: ziglua.Integer = 1;
+    while (i <= len) : (i += 1) {
+        _ = l.getIndex(-1, i);
+        const truthy = l.toBoolean(-1);
+        l.pop(1);
+        if (truthy) break;
+    } else return false;
+    return true;
 }

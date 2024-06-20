@@ -97,6 +97,23 @@ else
   modules.tui = false
 end
 
+-- add with lowest priority so that we commit the render at the end
+seamstress.event.addSubscriber({ 'draw' }, function()
+  if seamstress.tui then seamstress.tui.renderCommit() end
+  return true
+end, { priority = 0 })
+
+-- NB: starts disabled! enable with seamstress.update.running = true
+seamstress.update = seamstress.Timer(function(_, dt)
+  local ret = seamstress.event.publish({ 'update' }, dt)
+  for _, v in ipairs(ret) do
+    if v then
+      seamstress.event.publish({ 'draw' })
+      break
+    end
+  end
+end, 1 / 60, -1, 1, false)
+
 ---startup function
 seamstress._start = function()
   local filename = seamstress.config.script_name

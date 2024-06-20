@@ -1,6 +1,7 @@
 ---@meta
 ---@module 'seamstress.tui'
 
+---@class seamstress.tui
 seamstress.tui = require'seamstress.tui'
 
 ---creates a Line or Lines from text
@@ -18,7 +19,7 @@ function Line:width() end
 
 ---like string:sub but for Line objects
 ---@param start integer
----@param finish? integer|-1
+---@param finish integer # defaults to -1, i.e. "the end"
 ---@return Line
 function Line:sub(start, finish) end
 
@@ -91,3 +92,12 @@ function seamstress.tui.showCursorInBox(x, y, box) end
 ---clears the box
 ---@param box Box
 function seamstress.tui.clearBox(box) end
+
+---toggles whether seamstress is in the terminal "alt screen"
+---@param alt_screen boolean
+function seamstress.tui.setAltScreen(alt_screen) end
+
+---tells seamstress to actually update the screen
+---by default, automatically called at the end of a "draw" event
+---unless a handler cancels the render by returning `false`
+function seamstress.tui.renderCommit() end

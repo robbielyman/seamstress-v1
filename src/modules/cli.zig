@@ -10,19 +10,6 @@ c_c: xev.Completion = .{},
 continuing: bool = false,
 dirty: bool = false,
 
-/// flushes stdout and stderr, and re-prompts (usually)
-fn render(ctx: *anyopaque, _: *Wheel, _: u64) void {
-    const self: *Cli = @ptrCast(@alignCast(ctx));
-    if (!self.dirty) return;
-    self.dirty = false;
-    const writer = self.stdout.writer();
-    if (self.continuing)
-        writer.writeAll(">... ") catch panic("unable to print!", .{})
-    else
-        writer.writeAll("> ") catch panic("unable to print!", .{});
-    self.stdout.flush() catch panic("unable to print!", .{});
-}
-
 /// processes a chunk of stdin, renders, rinses and repeats
 fn handleStdin(
     self: ?*Cli,
@@ -132,10 +119,6 @@ fn launch(m: *const Module, _: *Lua, wheel: *Wheel) anyerror!void {
     const self: *Cli = @ptrCast(@alignCast(m.self.?));
     try self.stdin_buf.ensureUnusedCapacity(4096);
     const slice = self.stdin_buf.unusedCapacitySlice();
-    wheel.render = .{
-        .ctx = self,
-        .render_fn = render,
-    };
     self.file.read(&wheel.loop, &self.c, .{ .slice = slice[0..@min(slice.len, 4096)] }, Cli, self, handleStdin);
 }
 

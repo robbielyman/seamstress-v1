@@ -13,7 +13,7 @@ local function Subscriber(fn, options)
   ---@field update fun(self: Subscriber, opt: {predicate: (fun(...): boolean)?}?)
   local sub = {
     options = options or {},
-    fn = fn,
+    fn = fn or function() return true end,
     channel = nil,
     ---updates this subscriber
     ---@param self Subscriber
@@ -62,11 +62,17 @@ local function Channel(name, parent)
       local priority = #self.callbacks + 1
       options = options or {}
 
-      if options.priority and options.priority > 0 and options.priority < priority then
+      if options.priority and options.priority >= 0 and options.priority < priority then
         priority = options.priority
       end
 
-      table.insert(self.callbacks, priority, callback)
+      if priority > 0 then
+        table.insert(self.callbacks, priority, callback)
+      else
+        local old = self.callbacks[0]
+        self.callbacks[0] = callback
+        table.insert(self.callbacks, old)
+      end
       return callback
     end,
     ---gets a subscriber handle from an id
@@ -104,10 +110,18 @@ local function Channel(name, parent)
     setPriority = function(self, id, priority)
       local cb = self:getSubscriber(id)
       local p = #self.callbacks
-      if priority < 1 or priority > p then priority = p end
+      if priority < 0 or priority > p then priority = p end
       if cb and cb.value then
-        table.remove(self.callbacks, cb.index)
-        table.insert(self.callbacks, priority, cb.value)
+        if cb.index == 0 then
+          self.callbacks[0] = nil
+        else
+          table.remove(self.callbacks, cb.index)
+        end
+        if priority ~= 0 then
+          table.insert(self.callbacks, priority, cb.value)
+        else
+          self.callbacks[0] = cb.value
+        end
       end
     end,
     ---adds a Channel
@@ -141,6 +155,13 @@ local function Channel(name, parent)
       for _, cb in ipairs(self.callbacks) do
         if not cb.options.predicate or cb.options.predicate(...) then
           local continue, response = cb.fn(...)
+          table.insert(ret, response)
+          if not continue then return ret end
+        end
+      end
+      if self.callbacks[0] then
+        if not self.callbacks[0].predicate or self.callbacks[0].predicate(...) then
+          local continue, response = self.callbacks[0].fn(...)
           table.insert(ret, response)
           if not continue then return ret end
         end
