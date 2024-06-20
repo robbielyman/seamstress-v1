@@ -285,9 +285,7 @@ fn display(l: *Lua) i32 {
                             l.pop(3);
                         },
                         .string => {
-                            lu.getSeamstress(l);
-                            _ = l.getField(-1, "tuiLineNew");
-                            l.remove(-2);
+                            lu.getMethod(l, "tui", "Line");
                             l.insert(-2);
                             l.call(1, 1);
                             _ = l.toUserdata(Line, -1) catch l.argError(1, "line or array of lines expected!");

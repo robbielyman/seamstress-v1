@@ -13,23 +13,44 @@ local GameState = {
   init = false
 }
 
-local Cell = {}
-Cell.__index = Cell
+local t = 0
+seamstress.event.addSubscriber({ 'update' }, function(dt)
+  t = t + dt
+  local col = math.abs(255 * math.sin(t))
+  palette.clickable = clickable + seamstress.tui.Color(col, col, col)
+  return true, true
+end)
 
 local function register(cell)
-  seamstress.tui.hover:add(function(...)
-    return cell:hover(...)
-  end)
-  seamstress.tui.mouse_down:add(function(...)
-    return cell:mouse_down(...)
-  end)
-  seamstress.tui.draw:add(function(...)
-    cell:draw(...)
-  end)
-  seamstress.tui.update:add(function(...)
-    cell:update(...)
+  seamstress.event.addSubscriber({ 'tui', 'hover' }, function(_, col, row)
+    local hit = seamstress.tui.hitTest(col, row, cell)
+    local old = cell.state
+    cell.state = hit and 'hovered' or 'clickable'
+    return true, cell.state ~= old
+  end, {predicate = function ()
+	return cell.state ~= 'dead'
+end})
+  seamstress.event.addSubscriber({ 'tui', 'mouse_down' }, function(which)
+    if which == 'right' then
+      if cell.text == '   ' then cell.text = ' F ' elseif cell.text == ' F ' then cell.text = '   ' end
+    elseif which == 'left' then
+      GameState:click(cell)
+    end
+    return false, true
+  end, {
+    predicate = function(_, col, row)
+      return seamstress.tui.hitTest(col, row, cell)
+    end
+  })
+  seamstress.event.addSubscriber({ 'cells', 'draw' }, function()
+    seamstress.tui.drawInBox(palette.red(palette[cell.state](cell.text, 'bg'), 'fg'), cell)
+    return true
   end)
 end
+
+
+local Cell = {}
+Cell.__index = Cell
 
 Cell.new = function(x, y)
   local c = {
@@ -40,44 +61,9 @@ Cell.new = function(x, y)
     text = '   ',
     dirty = true,
   }
-  setmetatable(c, Cell)
   register(c)
+  setmetatable(c, Cell)
   return c
-end
-
-local t = 0
-seamstress.tui.update:add(function(dt)
-  t = t + dt
-  local col = math.abs(255 * math.sin(t))
-  palette.clickable = clickable + seamstress.tui.Color(col, col, col)
-end)
-
-function Cell:update()
-  if self.state == 'clickable' then self.dirty = true end
-end
-
-function Cell:draw()
-  if not self.dirty then return end
-  seamstress.tui.drawInBox(palette.red(palette[self.state](self.text, 'bg'), 'fg'), self)
-end
-
-function Cell:mouse_down(which, col, row)
-  if not seamstress.tui.hitTest(col, row, self) then return end
-  if self.state == 'dead' then return end
-  if which == 'right' then
-    if self.text == '   ' then self.text = '️ F ' elseif self.text == ' F ' then self.text = '   ' end
-    self.dirty = true
-  elseif which == 'left' then
-    GameState:click(self)
-  end
-end
-
-function Cell:hover(_, col, row)
-  if self.state == 'dead' then return end
-  local hit = seamstress.tui.hitTest(col, row, self)
-  local old = self.state
-  self.state = hit and 'hovered' or 'clickable'
-  if self.state ~= old then self.dirty = true end
 end
 
 local width = 9
@@ -176,30 +162,33 @@ function GameState.reveal(x, y)
   end
 end
 
+local draw
+---@cast draw Subscriber
+
 function GameState.finish(won)
-  seamstress.tui.hover = seamstress.tui.Handler.new(nil, true)
-  seamstress.tui.mouse_down = seamstress.tui.Handler.new(function()
+  seamstress.event.clear({ 'tui' })
+  seamstress.event.addSubscriber({ 'tui', 'mouse_down' }, function()
     seamstress.quit()
+    return false
   end)
   local dirty = true
-  seamstress.tui.update:add(function(dt)
-    t = t + dt
-    local col = math.abs(255 * math.sin(t))
-    palette.clickable = clickable + seamstress.tui.Color(col, col, col)
-  end)
-  seamstress.tui.draw = seamstress.tui.Handler.new(function()
-    if dirty then
-      seamstress.tui.clearBox({ x = { 1, -1 }, y = { 1, -1 } })
-      dirty = false
+  draw:update({
+    fn = function()
+      if dirty then
+        seamstress.tui.clearBox({ x = { 1, -1 }, y = { 1, -1 } })
+        dirty = false
+      end
+      local x = seamstress.tui.cols // 2
+      local y = seamstress.tui.rows // 2
+      seamstress.tui.drawInBox(
+        palette.clickable({'  YOU ' .. (won and 'WON!!' or 'LOST!  '), '', 'click to exit'} --[=[@as string[]]=], 'fg'),
+        { x = { x - 6, x + 6 }, y = { y - 1, y + 1 } })
+      return true, true
     end
-    local x = seamstress.tui.cols // 2
-    local y = seamstress.tui.rows // 2
-    seamstress.tui.drawInBox(palette.clickable({'  YOU ' .. (won and 'WON!!' or 'LOST!  '), '', 'click to exit'}, 'fg'),
-      { x = { x - 6, x + 6 }, y = { y - 1, y + 1 } })
-  end)
+  })
 end
 
-seamstress.init = function()
+seamstress.event.addSubscriber({ 'init' }, function()
   local x = seamstress.tui.cols // 2
   local y = seamstress.tui.rows // 2
   GameState.cells = {}
@@ -233,4 +222,11 @@ seamstress.init = function()
     end
     GameState.finish(true)
   end
-end
+  draw = seamstress.event.addSubscriber({ 'draw' }, function()
+    seamstress.event.publish({ 'cells', 'draw' })
+    return true
+  end)
+  seamstress.update.delta = 1 / 60
+  seamstress.update.running = true
+  return true
+end)

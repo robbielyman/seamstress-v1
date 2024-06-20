@@ -2,7 +2,7 @@
 ---@module 'seamstress.tui'
 
 ---@class seamstress.tui
-seamstress.tui = require'seamstress.tui'
+seamstress.tui = require 'seamstress.tui'
 
 ---creates a Line or Lines from text
 ---@param str string|string[]
@@ -39,8 +39,15 @@ function Line:find(needle, start) end
 ---@field r integer
 ---@field g integer
 ---@field b integer
----@overload fun(self: Color, line: string|Line|Line[], which: 'fg'|'bg'|'ul'): Line|Line[]
+---@overload fun(self: Color, line: (string|string[]|Line|Line[]), which: 'fg'|'bg'|'ul'): (Line|Line[])
 local Color = {}
+
+---colors a line
+---@param self Color
+---@param line string|string[]|Line|Line[]
+---@param which 'fg' | 'bg' | 'ul'
+---@return Line|Line[]
+Color.__call = function(self, line, which) end
 
 ---@overload fun(r: number,g: number,b: number): Color
 ---@param hex string? should begin with hash and contain six hex characters

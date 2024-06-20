@@ -437,6 +437,7 @@ fn call(l: *Lua) i32 {
             const n = l.toInteger(-1) catch unreachable;
             l.pop(1);
             var i: ziglua.Integer = 1;
+            var idx: ziglua.Integer = 1;
             l.createTable(@intCast(n), 0);
             while (i <= n) : (i += 1) {
                 _ = l.getMetaField(1, "__call") catch unreachable;
@@ -444,7 +445,21 @@ fn call(l: *Lua) i32 {
                 _ = l.getIndex(2, i);
                 l.pushValue(3);
                 l.call(3, 1);
-                l.setIndex(-2, i);
+                if (l.typeOf(-1) == .table) {
+                    l.len(-1);
+                    const m = l.toInteger(-1) catch unreachable;
+                    l.pop(1);
+                    var j: ziglua.Integer = 1;
+                    while (j <= m) : (j += 1) {
+                        _ = l.getIndex(-1, j);
+                        l.setIndex(-3, idx);
+                        idx += 1;
+                    }
+                    l.pop(1);
+                } else {
+                    l.setIndex(-2, idx);
+                    idx += 1;
+                }
             }
             return 1;
         },
