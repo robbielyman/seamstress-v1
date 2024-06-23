@@ -66,6 +66,8 @@ end)
 
 local modules = {
   tui = true,
+  osc = { 'monome' },
+  monome = { 'osc' },
 }
 
 --- the global seamstress object.
@@ -74,12 +76,30 @@ setmetatable(seamstress, {
   __index = function(t, key)
     local found = modules[key]
     if found == true then
-      local val, launch = require('seamstress.' .. key)
-      t[key] = val
-      modules[key] = val
-      if launch == true then
+      local val = require('seamstress.' .. key)
+      t[key] = val[1]
+      modules[key] = val[1]
+      if val[2] == true then
         seamstress._load(key)
         seamstress._launch(key)
+      end
+    elseif found then
+      ---@cast found string[]
+      local launch = {}
+      for _, k in ipairs(found) do
+        local val = require('seamstress.' .. k)
+        t[k] = val[1]
+        if val[2] == true then table.insert(launch, k) end
+      end
+      local val = require('seamstress.' .. key)
+      t[key] = val[1]
+      if val[2] == true then
+        seamstress._load(key)
+        seamstress._launch(key)
+      end
+      for _, k in ipairs(launch) do
+        seamstress._load(k)
+        seamstress._launch(k)
       end
     end
     if found then

@@ -10,7 +10,7 @@ local function Subscriber(fn, options)
   ---@field fn callback # callback
   ---@field channel Channel?
   ---@field id number # the memory address of this table, so guaranteed to be unique
-  ---@field update fun(self: Subscriber, opt: {predicate: (fun(...): boolean)?}?)
+  ---@field update fun(self: Subscriber, opt: {fn: callback?, options: {predicate: (fun(...): boolean)?}?}?)
   local sub = {
     options = options or {},
     fn = fn or function() return true end,

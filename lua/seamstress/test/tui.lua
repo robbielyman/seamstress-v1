@@ -92,39 +92,37 @@ busted.describe(
       function()
         local done = false
         local t = 0
-        local logo
-        seamstress.update.running = true
-        seamstress.event.addSubscriber({ 'update' }, function(dt)
-          t = t + dt
-          fg = seamstress.tui.Color(math.abs(255 * math.cos(t)), math.abs(255 * math.sin(t + math.pi)),
-            math.abs(255 * math.sin(t)))
-          logo = fg(logo, 'fg')
-          if t > 1 then
-            done = true
-          end
-          return true, true
-        end)
-        local sub = seamstress.event.addSubscriber({ 'draw' }, function()
-          local x = seamstress.tui.cols // 2
-          local y = seamstress.tui.rows // 2
-          seamstress.tui.drawInBox(logo, { x = { x - 43, -1 }, y = { y - 3, -1 } })
-          return true
-        end)
         local fg = seamstress.tui.Color('#ff8800')
-        logo = fg([[
+        local logo = [[
 ███████╗███████╗ █████╗ ███╗   ███╗███████╗████████╗██████╗ ███████╗███████╗███████╗
 ██╔════╝██╔════╝██╔══██╗████╗ ████║██╔════╝╚══██╔══╝██╔══██╗██╔════╝██╔════╝██╔════╝
 ███████╗█████╗  ███████║██╔████╔██║███████╗   ██║   ██████╔╝█████╗  ███████╗███████╗
 ╚════██║██╔══╝  ██╔══██║██║╚██╔╝██║╚════██║   ██║   ██╔══██╗██╔══╝  ╚════██║╚════██║
 ███████║███████╗██║  ██║██║ ╚═╝ ██║███████║   ██║   ██║  ██║███████╗███████║███████║
 ╚══════╝╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝
-]], 'fg')
+]]
+        seamstress.update.running = true
+        seamstress.event.addSubscriber({ 'update' }, function(dt)
+          t = t + dt
+          fg = seamstress.tui.Color(math.abs(255 * math.cos(t)), math.abs(255 * math.sin(t + math.pi)),
+            math.abs(255 * math.sin(t)))
+          if t > 2 then
+            done = true
+          end
+          return true, true
+        end)
+        local sub = seamstress.event.addSubscriber({ 'draw' }, function()
+          local x = seamstress.tui.buffer.cols // 2
+          local y = seamstress.tui.buffer.rows // 2
+          seamstress.tui.buffer.write({ x - 43, -1 }, { y - 3, -1 }, logo, { fg = fg, wrap = "word" })
+          return true
+        end)
         repeat
           coroutine.yield()
         until done
         sub:update({
           fn = function()
-            seamstress.tui.clearBox({ x = { 1, -1 }, y = { 1, -1 } })
+            seamstress.tui.buffer.set({ 1, -1 }, { 1, -1 })
             return true, true
           end
         })
@@ -141,9 +139,9 @@ busted.describe(
         end)
         local sub = seamstress.event.addSubscriber({ 'draw' }, function()
           dirty = false
-          local x = seamstress.tui.cols // 2
-          local y = seamstress.tui.rows // 2
-          seamstress.tui.drawInBox("press any key to continue", { x = { x - 10, -1 }, y = { y, -1 } })
+          local x = seamstress.tui.buffer.cols // 2
+          local y = seamstress.tui.buffer.rows // 2
+          seamstress.tui.buffer.write({ x - 10, -1 }, { y, -1 }, "press any key to continue")
           return true
         end)
         seamstress.event.addSubscriber({ 'tui', 'key_down' }, function()
@@ -155,7 +153,7 @@ busted.describe(
         until done
         sub:update({
           fn = function()
-            seamstress.tui.clearBox({ x = { 1, -1 }, y = { 1, -1 } })
+            seamstress.tui.buffer.set({ 1, -1 }, { 1, -1 })
             return true
           end
         })

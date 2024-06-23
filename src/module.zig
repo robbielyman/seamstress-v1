@@ -44,7 +44,7 @@ const Promise = @import("async.zig");
 
 /// the full list of modules available to seamstress
 const module_list = [_]struct { []const u8, Module }{
-    //.{ "osc", @import("modules/osc.zig").module() },
+    .{ "osc", @import("modules/osc.zig").module() },
     //.{ "clock", @import("modules/clock.zig").module() },
     // .{ "metros", @import("modules/metros.zig").module() },
     .{ "cli", @import("modules/cli.zig").module() },

@@ -99,12 +99,18 @@ pub fn setConfig(l: *Lua, field: [:0]const u8, val: anytype) void {
 }
 
 // attempts to get the specified field of the _seamstress.config table
-pub fn getConfig(l: *Lua, field: [:0]const u8, comptime T: type) T {
+pub fn getConfig(l: *Lua, field: [:0]const u8, comptime T: type) ?T {
     getSeamstress(l);
     const t = l.getField(-1, "config");
     // nothing sensible to do other than panic if something goes wrong
     if (t != .table) panic("seamstress corrupted!", .{});
-    _ = l.getField(-1, field);
+    switch (l.getField(-1, field)) {
+        .nil, .none => {
+            l.pop(3);
+            return null;
+        },
+        else => {},
+    }
     const ret = l.toAny(T, -1) catch |err| panic("error getting config: {s}", .{@errorName(err)});
     l.pop(3);
     return ret;
@@ -238,4 +244,50 @@ pub fn anyTruthy(l: *Lua) bool {
         if (truthy) break;
     } else return false;
     return true;
+}
+
+pub const RangeResult = union(enum) {
+    in_range: usize,
+    too_negative,
+    too_positive,
+};
+
+/// designed to map onto Lua's range semantics for, e.g. `string:byte`
+pub fn transformLuaRangeToUsize(i: ziglua.Integer, len: usize) RangeResult {
+    // honestly fine with crashing here if out of bounds lol
+    const as_Integer: ziglua.Integer = @intCast(len);
+    if (i == 0) return .too_negative;
+    if (i > as_Integer) return .too_positive;
+    if (i < -as_Integer) return .too_negative;
+    return .{ .in_range = if (i > 0) @intCast(i - 1) else @intCast(i + as_Integer) };
+}
+
+/// returns the integer at argument i if it is an integer, otherwise floors it
+/// raises an error if the object at that index is not a number
+pub fn checkAndFloorNumber(l: *Lua, arg: i32) ziglua.Integer {
+    const t = l.typeOf(arg);
+    switch (t) {
+        .number => {
+            if (l.isInteger(arg)) return l.checkInteger(arg);
+            const float = l.checkNumber(arg);
+            return @intFromFloat(float);
+        },
+        else => return l.checkInteger(arg),
+    }
+}
+
+/// returns the integer at index  i if it is an integer, otherwise floors it
+/// raises an error if the object at that index is not a number
+/// for use on non-argument indices
+/// does not pop the number
+pub fn toAndFloorNumber(l: *Lua, i: i32) !ziglua.Integer {
+    const t = l.typeOf(i);
+    switch (t) {
+        .number => {
+            if (l.isInteger(i)) return l.toInteger(i);
+            const float = l.toNumber(i) catch unreachable;
+            return @intFromFloat(float);
+        },
+        else => return l.toInteger(i),
+    }
 }

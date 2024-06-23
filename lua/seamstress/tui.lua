@@ -20,7 +20,7 @@ local tui = {
   styles = seamstress.config.styles and seamstress.config.styles or {},
 
   ---@class seamstress.tui.stdout
-  ---@field [integer] string|Line
+  ---@field [integer] string
   ---@field dirty boolean
   ---@field box Box
   stdout = {
@@ -28,6 +28,8 @@ local tui = {
     box = { x = { 1, -1 }, y = { 1, -1 } },
   },
 }
+
+---@alias Box { x: [integer, integer], y: [integer, integer]}
 
 ---Tests whether an x,y coordinate pair lies within a `Box`.
 ---@param x integer
@@ -59,16 +61,10 @@ tui._print = function(...)
       line = line .. '    ' .. v
     end
   end
-  if type(line) ~= 'userdata' then
-    line = line:gsub('\t', '    ')
-    line = seamstress.tui.Line(line)
-  else
-    line = { line }
-  end
-  for _, l in ipairs(line) do
-    seamstress.log(l --[[@as Line]])
-    table.insert(tui.stdout, l)
-  end
+  line = line:gsub('\t', '    ')
+  line = line .. '\n'
+    seamstress.log(line)
+    table.insert(tui.stdout, line)
   tui.stdout.dirty = true
 end
 
@@ -77,4 +73,4 @@ if term ~= 'dumb' and term ~= 'emacs' then
   print = tui._print
 end
 
-return tui, false
+return { tui, false }

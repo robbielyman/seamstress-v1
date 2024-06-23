@@ -49,6 +49,8 @@ fn callback(ud: ?*Tui, loop: *xev.Loop, _: *vx.xev.TtyWatcher(Tui), event: vx.xe
             lu.getSeamstress(l);
             _ = l.getField(-1, "tui");
             l.remove(-2);
+            _ = l.getField(-1, "buffer");
+            l.remove(-2);
             l.pushInteger(@intCast(winsize.cols));
             l.setField(-2, "cols");
             l.pushInteger(@intCast(winsize.rows));
@@ -162,7 +164,6 @@ fn formatMouse(m: vx.Mouse, writer: anytype) !void {
 }
 
 fn mouse(l: *Lua, m: vx.Mouse) void {
-    logger.debug("{any}", .{m});
     switch (m.button) {
         .wheel_up, .wheel_down => {
             lu.preparePublish(l, &.{ "tui", "scroll", if (m.button == .wheel_down) "down" else "up" });
@@ -224,9 +225,7 @@ fn init(m: *Module, l: *Lua, allocator: std.mem.Allocator) anyerror!void {
         .launched = false,
     };
     @import("tui/color.zig").registerSeamstress(l);
-    @import("tui/style.zig").registerSeamstress(l);
-    @import("tui/line.zig").registerSeamstress(l, self);
-    @import("tui/canvas.zig").registerSeamstress(l, self);
+    @import("tui/screen.zig").registerSeamstress(l, self);
     lu.registerSeamstress(l, "tui", "renderCommit", redraw, self);
     lu.registerSeamstress(l, "tui", "setAltScreen", setAlt, self);
 }
@@ -319,7 +318,6 @@ fn launch(m: *const Module, l: *Lua, wheel: *Wheel) anyerror!void {
     try self.vaxis.enterAltScreen(self.tty.anyWriter());
     try self.vaxis.setMouseMode(self.tty.anyWriter(), true);
     try self.vaxis.queryTerminalSend(self.tty.anyWriter());
-    logger.debug("launch TUI", .{});
 }
 
 pub fn module() Module {
@@ -348,19 +346,6 @@ fn setAlt(l: *Lua) i32 {
     }
     return 0;
 }
-
-// fn resetTerminal(l: *Lua) i32 {
-// const erase = l.toBoolean(1);
-// const self = lu.closureGetContext(l, Tui);
-// if (!self.launched) return 0;
-// self.launched = false;
-// if (erase) self.vaxis.deinit(l.allocator(), self.tty.anyWriter()) else {
-// if (self.vaxis.state.alt_screen) self.vaxis.exitAltScreen(self.tty.anyWriter()) catch {};
-// self.vaxis.deinit(l.allocator(), std.io.null_writer.any());
-// }
-// self.tty.deinit();
-// return 0;
-// }
 
 const BufferedWriter = std.io.BufferedWriter(4096, std.io.AnyWriter);
 const Promise = @import("../async.zig");

@@ -34,14 +34,6 @@ fn callbackOSC(
         return .rearm;
     };
     const self = ud.?;
-    for (&self.monome.devices.server, &self.monome.devices.dev_addr) |server, other| {
-        if (addr.eql(other orelse continue)) {
-            server.dispatchData(b.slice[0..size]) catch {
-                logger.err("liblo error!", .{});
-            };
-            return .rearm;
-        }
-    }
     self.last_addr = addr;
     self.server.dispatchData(b.slice[0..size]) catch {
         logger.err("liblo error!", .{});
@@ -49,136 +41,76 @@ fn callbackOSC(
     return .rearm;
 }
 
-// quits
-fn setQuit(_: [:0]const u8, _: []const u8, _: *lo.Message, ctx: ?*anyopaque) bool {
-    const wheel: *Wheel = @ptrCast(@alignCast(ctx.?));
-    wheel.quit();
-    return false;
-}
-
 /// handles OSC events that aren't intercepted by another module
-/// this _includes_ custom functions registered from Lua
-/// ah, whose registry we can manage entirely in Lua actually lol, nice
-fn defaultHandler(path: [:0]const u8, _: []const u8, msg: *lo.Message, ctx: ?*anyopaque) bool {
+fn defaultHandler(path: [:0]const u8, types: []const u8, msg: *lo.Message, ctx: ?*anyopaque) bool {
     const self: *Osc = @ptrCast(@alignCast(ctx orelse return true));
     const l = self.lua;
-    // push _seamstress onto the stack
-    lu.getSeamstress(l);
-    // grab osc.method_list
-    _ = l.getField(-1, "osc");
-    l.remove(-2);
-    _ = l.getField(-1, "method_list");
-    l.remove(-2);
-    // nil, to get the first key
-    l.pushNil();
-    // if one of our lua-defined functions returns something truthy, we stop
-    var keep_going = true;
-    while (l.next(-2) and keep_going) {
-        {
-            const t = l.typeOf(-2);
-            // if the key is not a string, keep going
-            if (t != .string) {
-                logger.err("OSC handler: string expected, got {s}", .{l.typeName(t)});
-                // remove the value, keep the key
-                l.pop(1);
-                continue;
-            }
-        }
-        // if it is, check to see if we match the path of this event
-        if (!lo.patternMatch(path, l.toStringEx(-2))) {
-            l.pop(1);
-            continue;
-        }
-
-        // first of all, the value had better be a function or a table of functions
-        const t = l.typeOf(-1);
-        switch (t) {
-            .function => keep_going = pushArgsAndCall(l, msg, self.last_addr.?, path),
-            .table => {
-                l.len(-1);
-                // if it's a table, how long is it?
-                const len = l.toInteger(-1) catch unreachable;
-                l.pop(1);
-                var index: ziglua.Integer = 1;
-                // while loop because in Zig for loops are limited to `usize`
-                while (index <= len and keep_going) : (index += 1) {
-                    const t2 = l.getIndex(-1, index);
-                    if (t2 != .function) {
-                        logger.err("OSC handler: function expected, got {s}", .{l.typeName(t2)});
-                        l.pop(1);
-                        continue;
-                    }
-                    keep_going = pushArgsAndCall(l, msg, self.last_addr.?, path);
-                }
-            },
-            else => {
-                logger.err("OSC handler: function or list of functions expected, got: {s}", .{l.typeName(t)});
-                l.pop(1);
-                continue;
-            },
-        }
-        // if keep_going is still true, call the default handler
-        if (keep_going) {
-            lu.getSeamstress(l);
-            _ = l.getField(-1, "osc");
-            l.remove(-2);
-            _ = l.getField(-1, "event");
-            l.remove(-2);
-            _ = pushArgsAndCall(l, msg, self.last_addr.?, path);
-        }
-    }
-    return false;
-}
-
-/// pushes the contents of `msg` onto the stack and calls the function at the top of the stack
-/// the function will receive the args as `path`, `args` (which may be an empty table) and `{from_hostname, from_port}`
-fn pushArgsAndCall(l: *Lua, msg: *lo.Message, addr: std.net.Address, path: [:0]const u8) bool {
-    const top = l.getTop();
-    // push path first
-    _ = l.pushString(path);
-    const len = msg.argCount();
-    l.createTable(@intCast(len), 0);
-    // grab the list of types
-    const types: []const u8 = if (len > 0) msg.types().?[0..len] else "";
+    // trim the initial "/seamstress" if present
+    const prefix = "/seamstress";
+    const prefixed = std.mem.startsWith(u8, path, prefix);
+    const un_prefixed = if (prefixed) path[prefix.len..] else path;
+    var list = std.ArrayList([]const u8).init(l.allocator());
+    defer list.deinit();
+    var tokenizer = std.mem.tokenizeScalar(u8, un_prefixed, '/');
+    // if "/seamstress" was not present, we namespace under "osc"
+    if (!prefixed) list.append("osc") catch panic("out of memory!", .{});
+    // split the path at slashes
+    while (tokenizer.next()) |token| list.append(token) catch panic("out of memory!", .{});
+    // the prepared path will be the namespace for our event
+    lu.preparePublish(l, list.items);
+    const top = l.getTop(); // the number of arguments is variable, so we need to know how big we're making the stack.
+    // the first argument to our event will be info about the message
+    l.createTable(1, 2); // t
+    _ = l.pushStringZ(path);
+    l.setIndex(-2, 1); // t[1] = path
+    var counter = std.io.countingWriter(std.io.null_writer);
+    self.last_addr.?.format("", .{}, counter.writer()) catch unreachable;
+    const count = counter.bytes_written;
+    const slice = l.allocator().alloc(u8, count) catch panic("out of memory!", .{});
+    defer l.allocator().free(slice);
+    var stream = std.io.fixedBufferStream(slice);
+    self.last_addr.?.format("", .{}, stream.writer()) catch unreachable;
+    const idx = std.mem.lastIndexOfScalar(u8, slice, ':').?;
+    l.newTable(); // s = {}
+    _ = l.pushString(slice[idx + 1 ..]); // push the port
+    _ = l.pushString(slice[0..idx]);
+    l.setIndex(-3, 1); // s[1] = host
+    l.setIndex(-2, 2); // s[2] = port
+    l.setField(-2, "from"); // t.from = s
+    _ = l.pushString(types);
+    l.setField(-2, "types"); // t.types = types
     // cheeky way to handle the errors only once
     _ = err: {
-        // loop over the types, adding them to our table
+        // loop over the types, pushing onto the stack
         for (types, 0..) |t, i| {
             switch (t) {
                 'i', 'h' => {
                     const arg = msg.getArg(i64, i) catch |err| break :err err;
                     l.pushInteger(@intCast(arg));
-                    l.setIndex(-2, @intCast(i + 1));
                 },
                 'f', 'd' => {
                     const arg = msg.getArg(f64, i) catch |err| break :err err;
                     l.pushNumber(arg);
-                    l.setIndex(-2, @intCast(i + 1));
                 },
                 's', 'S' => {
                     const arg = msg.getArg([:0]const u8, i) catch |err| break :err err;
                     _ = l.pushStringZ(arg);
-                    l.setIndex(-2, @intCast(i + 1));
                 },
                 'm' => {
                     const arg = msg.getArg([4]u8, i) catch |err| break :err err;
                     _ = l.pushString(&arg);
-                    l.setIndex(-2, @intCast(i + 1));
                 },
                 'b' => {
                     const arg = msg.getArg([]const u8, i) catch |err| break :err err;
                     _ = l.pushString(arg);
-                    l.setIndex(-2, @intCast(i + 1));
                 },
                 'c' => {
                     const arg = msg.getArg(u8, i) catch |err| break :err err;
                     _ = l.pushString(&.{arg});
-                    l.setIndex(-2, @intCast(i + 1));
                 },
                 'T', 'F' => {
                     const arg = msg.getArg(bool, i) catch |err| break :err err;
                     l.pushBoolean(arg);
-                    l.setIndex(-2, @intCast(i + 1));
                 },
                 'I', 'N' => {
                     const arg = msg.getArg(lo.LoType, i) catch |err| break :err err;
@@ -186,56 +118,33 @@ fn pushArgsAndCall(l: *Lua, msg: *lo.Message, addr: std.net.Address, path: [:0]c
                         .infinity => l.pushInteger(ziglua.max_integer),
                         .nil => l.pushNil(),
                     }
-                    l.setIndex(-2, @intCast(i + 1));
                 },
                 else => unreachable,
             }
         }
     } catch |err| {
         logger.err("error getting argument: {s}", .{@errorName(err)});
-        l.pop(l.getTop() - top);
+        l.pop(2 + l.getTop() - top);
         return true;
     };
-    pushAddress(l, addr);
     // call the function
-    lu.doCall(l, 3, 1);
-    defer l.pop(1);
-    // if we got something truthy, that means we're done so should return false
-    return !l.toBoolean(-1);
+    l.call(1 + l.getTop() - top, 0);
+    return false;
 }
 
-fn pushAddress(l: *Lua, addr: std.net.Address) void {
-    l.createTable(2, 0);
-    var counter = std.io.countingWriter(std.io.null_writer);
-    addr.format("", .{}, counter.writer()) catch unreachable;
-    const count = counter.bytes_written;
-    var buf: ziglua.Buffer = .{};
-    const slice = buf.initSize(l, @intCast(count));
-    var stream = std.io.fixedBufferStream(slice);
-    addr.format("", .{}, stream.writer()) catch unreachable;
-    const idx = std.mem.lastIndexOfScalar(u8, slice, ':').?;
-    _ = l.pushString(slice[idx + 1 ..]);
-    l.setIndex(-2, 2);
-    buf.addSize(idx);
-    buf.pushResult();
-    l.setIndex(-2, 1);
+/// matches an OSC path against a pattern
+fn match(l: *Lua) i32 {
+    const pattern = l.checkString(1);
+    const path = l.checkString(2);
+    l.pushBoolean(lo.patternMatch(path.ptr, pattern.ptr));
+    return 1;
 }
 
 /// sends an OSC message
-// users should use `osc.send` instead.
-// @tparam table|string address either a table of the form {host,port}
-// where `host` and `port` are both strings,
-// or a string, in which case `host` is taken to be "localhost" and the string is the port
-// @tparam string path an OSC path `/like/this`
-// @tparam table args a list whose data is passed over OSC as arguments
-// @see osc.send
-// @usage osc.send({"localhost", "777"}, "/send/stuff", {"a", 0, 0.5, nil, true})
-// @function osc_send
-pub fn oscSend(l: *Lua) i32 {
+fn oscSend(l: *Lua) i32 {
     const num_args = l.getTop();
     const osc = lu.closureGetContext(l, Osc);
     if (num_args < 2) return 0;
-    if (num_args > 3) l.raiseErrorStr("expected 3 args, got %d", .{num_args});
     // grab the address
     const hostname, const port = address: {
         switch (l.typeOf(1)) {
@@ -245,10 +154,10 @@ pub fn oscSend(l: *Lua) i32 {
             .number => break :address .{ "127.0.0.1", l.toString(1) catch unreachable },
             // if passed a table, it must specify both host and port
             .table => {
-                if (l.rawLen(1) != 2) l.argError(1, "address should be a table in the form {host, port}");
+                if (l.rawLen(1) != 2) l.argError(1, "address should be a table in the form [host, port]");
                 const t1 = l.getIndex(1, 1);
                 // hostname must be a string
-                if (t1 != .string) l.argError(1, "address should be a table in the form {host, port}");
+                if (t1 != .string) l.argError(1, "address should be a table in the form [host, port]");
                 const hostname = l.toString(-1) catch unreachable;
                 l.pop(1);
 
@@ -260,11 +169,28 @@ pub fn oscSend(l: *Lua) i32 {
                 break :address .{ hostname, port };
             },
             // bad argument
-            inline else => |t| l.raiseErrorStr("bad argument #1: table or string expected, got %s", .{l.typeName(t).ptr}),
+            else => l.typeError(1, "table, integer or string"),
         }
     };
     // grab the path
-    const path = l.checkString(2);
+    const t2 = l.typeOf(2);
+    const path, const types: ?[]const u8 = switch (t2) {
+        .string => .{ l.checkString(2), null },
+        .table => blk: {
+            if (l.rawLen(2) < 1) l.argError(2, "path is required!");
+            if (l.getIndex(2, 1) != .string) l.argError(2, "path must be a string!");
+            const path = l.toString(-1) catch unreachable;
+            l.pop(1);
+
+            const types: ?[]const u8 = switch (l.getIndex(2, 2)) {
+                .string => l.toString(-1) catch unreachable,
+                else => null,
+            };
+            l.pop(1);
+            break :blk .{ path, types };
+        },
+        else => l.typeError(2, "string or [string, string] expected"),
+    };
     // create a lo.Address
     const address = lo.Address.new(hostname.ptr, port.ptr) orelse {
         logger.err("osc.send: unable to create address!", .{});
@@ -277,44 +203,53 @@ pub fn oscSend(l: *Lua) i32 {
         return 0;
     };
     defer msg.free();
-    // if we have args, let's pack them into our message
-    if (num_args == 3) {
-        l.checkType(3, .table);
-        l.len(3);
-        const n = l.toInteger(-1) catch unreachable;
-        l.pop(1);
-        var index: ziglua.Integer = 1;
-        // tricksy trick to `catch` only once
-        _ = err: {
-            while (index <= n) : (index += 1) {
-                switch (l.getIndex(3, index)) {
-                    .nil => msg.add(.{.nil}) catch |err| break :err err,
-                    .boolean => {
-                        msg.add(.{l.toBoolean(-1)}) catch |err| break :err err;
-                        l.pop(1);
-                    },
-                    .string => {
-                        msg.add(.{l.toString(-1) catch unreachable}) catch |err| break :err err;
-                        l.pop(1);
-                    },
-                    .number => {
-                        if (l.isInteger(-1)) {
-                            msg.add(.{@as(i32, @intCast(l.toInteger(-1) catch unreachable))}) catch |err| break :err err;
-                            l.pop(1);
-                        } else {
-                            msg.add(.{@as(f32, @floatCast(l.toNumber(-1) catch unreachable))}) catch |err| break :err err;
-                            l.pop(1);
+    _ = err: {
+        if (types) |spec| {
+            // trust the spec
+            for (spec, 3..) |char, index|
+                switch (char) {
+                    'i' => msg.add(.{@as(i32, @intCast(l.checkInteger(@intCast(index))))}) catch |err| break :err err,
+                    'h' => msg.add(.{@as(i64, @intCast(l.checkInteger(@intCast(index))))}) catch |err| break :err err,
+                    'f' => msg.add(.{@as(f32, @floatCast(l.checkNumber(@intCast(index))))}) catch |err| break :err err,
+                    'd' => msg.add(.{l.checkNumber(@intCast(index))}) catch |err| break :err err,
+                    's', 'S' => msg.add(.{l.checkString(@intCast(index))}) catch |err| break :err err,
+                    'm' => {
+                        var midi: [4]u8 = .{ 0, 0, 0, 0 };
+                        const str = l.checkString(@intCast(index));
+                        for (0..4) |i| {
+                            if (i >= str.len) break;
+                            midi[i] = str[i];
                         }
+                        msg.add(.{midi}) catch |err| break :err err;
                     },
+                    'b' => msg.add(.{l.toStringEx(@intCast(index))}) catch |err| break :err err,
+                    'c' => msg.add(.{l.toStringEx(@intCast(index))[0]}) catch |err| break :err err,
+                    'T', 'F' => msg.add(.{l.toBoolean(@intCast(index))}) catch |err| break :err err,
+                    'I' => msg.add(.{lo.LoType.infinity}) catch |err| break :err err,
+                    'N' => msg.add(.{lo.LoType.nil}) catch |err| break :err err,
+                    else => l.raiseErrorStr("bad type tag %c", .{char}),
+                };
+        } else {
+            var index: i32 = 3;
+            // tricksy trick to `catch` only once
+            while (index <= num_args) : (index += 1)
+                switch (l.typeOf(index)) {
+                    .nil => msg.add(.{.nil}) catch |err| break :err err,
+                    .boolean => msg.add(.{l.toBoolean(index)}) catch |err| break :err err,
+                    .string => msg.add(.{l.toString(index) catch unreachable}) catch |err| break :err err,
+                    .number => if (l.isInteger(index))
+                        msg.add(.{@as(i32, @intCast(l.toInteger(index) catch unreachable))}) catch |err| break :err err
+                    else
+                        msg.add(.{@as(f32, @floatCast(l.toNumber(index) catch unreachable))}) catch |err| break :err err,
                     // other types don't make sense to send via OSC
-                    inline else => |t| l.raiseErrorStr("unsupported argument type: %s", .{l.typeName(t).ptr}),
-                }
-            }
-        } catch {
-            logger.err("osc.send: unable to add arguments to message!", .{});
-            return 0;
-        };
-    }
+                    else => l.typeError(index, "unsupported OSC argument type!"),
+                };
+        }
+    } catch {
+        logger.err("osc.send: unable to add arguments to message!", .{});
+        return 0;
+    };
+
     // send the message
     osc.server.send(address, path.ptr, msg) catch {
         logger.err("osc.send: error sending message!", .{});
@@ -336,45 +271,45 @@ buffer: []u8,
 fn init(m: *Module, l: *Lua, allocator: std.mem.Allocator) anyerror!void {
     const self = try allocator.create(Osc);
     errdefer allocator.destroy(self);
-    const port = lu.getConfig(l, "local_port", ?[*:0]const u8);
+    var port = std.math.cast(u16, lu.getConfig(l, "local_port", ziglua.Integer) orelse 7777) orelse 7777;
     var addr = std.net.Address.initIp4(.{ 127, 0, 0, 1 }, 0);
     self.* = .{
         .watcher = xev.UDP.init(addr) catch panic("unable to init UDP listener!", .{}),
         .server = lo.Server.new(null, lo.wrap(Osc.errHandler)) orelse return error.OutOfMemory,
         .lua = l,
         .s = .{ .userdata = null },
-        .buffer = try allocator.alloc(u8, 65535),
+        .buffer = try allocator.alloc(u8, 65535), // magic number recommended by liblo
         .last_addr = null,
         .monome = undefined,
     };
-    var port_num: u16 = std.fmt.parseUnsigned(u16, std.mem.sliceTo(port orelse "7777", 0), 10) catch 7777;
     var try_again = true;
     var rand = std.rand.DefaultPrng.init(7777);
     const r = rand.random();
     while (try_again) {
-        addr.setPort(port_num);
+        addr.setPort(port);
         self.watcher.bind(addr) catch {
-            port_num = r.int(u16);
+            port = r.int(u16);
             continue;
         };
         try_again = false;
     }
-    var buf: std.BoundedArray(u8, 256) = .{};
-    try std.fmt.format(buf.writer(), "{d}\x00", .{port_num});
-    const slice: [:0]const u8 = buf.slice()[0 .. buf.len - 1 :0];
-    lu.setConfig(l, "local_port", slice);
+    const top = l.getTop();
+    defer std.debug.assert(l.getTop() == top);
+    lu.getSeamstress(l);
+    _ = l.getField(-1, "osc");
+    l.pushInteger(port);
+    l.setField(-2, "local_port");
+    l.pop(2);
 
     const local_address = lo.Message.new() orelse return error.OutOfMemroy;
-    try local_address.add(.{ "127.0.0.1", @as(i32, @intCast(port_num)) });
+    try local_address.add(.{ "127.0.0.1", @as(i32, @intCast(port)) });
     self.monome.init(local_address);
-    logger.info("local port: {s}", .{slice});
-
-    _ = self.server.addMethod("/seamstress/quit", null, lo.wrap(setQuit), lu.getWheel(l));
-    self.monome.addMethods();
+    logger.info("local port: {d}", .{port});
+    try self.monome.registerSeamstress(l);
     _ = self.server.addMethod(null, null, lo.wrap(defaultHandler), self);
 
-    lu.registerSeamstress(l, "osc_send", oscSend, self);
-    self.monome.registerLua(l);
+    lu.registerSeamstress(l, "osc", "send", oscSend, self);
+    lu.registerSeamstress(l, "osc", "match", match, self);
 
     m.self = self;
 }

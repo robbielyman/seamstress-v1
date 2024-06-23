@@ -27,9 +27,11 @@ local function register(cell)
     local old = cell.state
     cell.state = hit and 'hovered' or 'clickable'
     return true, cell.state ~= old
-  end, {predicate = function ()
-	return cell.state ~= 'dead'
-end})
+  end, {
+    predicate = function()
+      return cell.state ~= 'dead'
+    end
+  })
   seamstress.event.addSubscriber({ 'tui', 'mouse_down' }, function(which)
     if which == 'right' then
       if cell.text == '   ' then cell.text = ' F ' elseif cell.text == ' F ' then cell.text = '   ' end
@@ -43,7 +45,14 @@ end})
     end
   })
   seamstress.event.addSubscriber({ 'cells', 'draw' }, function()
-    seamstress.tui.drawInBox(palette.red(palette[cell.state](cell.text, 'bg'), 'fg'), cell)
+    seamstress.tui.buffer.write(cell.x, cell.y, cell.text,
+      {
+        fg = palette.red,
+        bg = palette[cell.state],
+        border = cell.border,
+        modifiers = { italic = true },
+        wrap = 'none'
+      })
     return true
   end)
 end
@@ -175,22 +184,23 @@ function GameState.finish(won)
   draw:update({
     fn = function()
       if dirty then
-        seamstress.tui.clearBox({ x = { 1, -1 }, y = { 1, -1 } })
+        seamstress.tui.buffer.set({1, -1}, {1, -1})
         dirty = false
       end
-      local x = seamstress.tui.cols // 2
-      local y = seamstress.tui.rows // 2
-      seamstress.tui.drawInBox(
-        palette.clickable({'  YOU ' .. (won and 'WON!!' or 'LOST!  '), '', 'click to exit'} --[=[@as string[]]=], 'fg'),
-        { x = { x - 6, x + 6 }, y = { y - 1, y + 1 } })
+      local x = seamstress.tui.buffer.cols // 2
+      local y = seamstress.tui.buffer.rows // 2
+      seamstress.tui.buffer.write({ x - 6, x + 6 }, { y - 1, y + 1 },
+        '  YOU ' .. (won and "WON!!" or "LOST!") .. "  \n\nclick to exit",
+        { fg = palette.clickable }
+      )
       return true, true
     end
   })
 end
 
 seamstress.event.addSubscriber({ 'init' }, function()
-  local x = seamstress.tui.cols // 2
-  local y = seamstress.tui.rows // 2
+  local x = seamstress.tui.buffer.cols // 2
+  local y = seamstress.tui.buffer.rows // 2
   GameState.cells = {}
   for i = 1, width do
     GameState.cells[i] = {}

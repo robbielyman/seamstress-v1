@@ -99,11 +99,10 @@ fn bang(ud: ?*anyopaque, loop: *xev.Loop, c: *xev.Completion, r: xev.Timer.RunEr
     l.pushInteger(@bitCast(now));
     l.setUserValue(-2, 6) catch unreachable; // current time (in ns): 6
     const dt: f64 = @as(f64, @floatFromInt(now - then)) / std.time.ns_per_s;
-    logger.debug("{d}", .{dt});
     _ = l.getUserValue(-1, 1) catch unreachable; // function
     l.pushValue(-2); // self
     l.pushNumber(dt); // dt
-    lu.doCall(l, 2, 0); // call function
+    l.call(2, 0); // call function
 
     _ = l.getUserValue(-1, 4) catch unreachable; // stage: 4
     const new_stage = (l.toNumber(-1) catch unreachable) + 1;

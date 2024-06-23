@@ -8,8 +8,8 @@
             .hash = "1220affeb3fe37ef09411b5a213b5fdf9bb6568e9913bade204694648983a8b2776d",
         },
         .ziglo = .{
-            .url = "git+https://github.com/ryleelyman/ziglo#76fd1efaba187e4ba8ceceac686a9644f33fc91c",
-            .hash = "1220fbf622d309fc3584addd62351ec9bac60581621fe580ee5ad3f10f4d73055630",
+            .url = "git+https://github.com/ryleelyman/ziglo?ref=main#9171c30857429585e3a6c0ff2f5e7308c6b17102",
+            .hash = "12205cc26d739b645d0cec805c9c59cd8d616d5731f130aaac0617d81cbfbd6e5ad4",
         },
         .@"zig-abl_link" = .{
             .url = "git+https://github.com/ryleelyman/zig-abl_link#bca725468f88ef073cabc6da03696ceaa0af19c7",
@@ -20,8 +20,9 @@
             .hash = "1220fd302a49120bbbd197448825c4254a8471e74cdd7c136870ff696361c96c7124",
         },
         .vaxis = .{
-            .url = "git+https://github.com/rockorager/libvaxis#975dd01a7701d3e431261061f174855d082a3417",
-            .hash = "12208c10eaffa613dbbf28e680b2027eb82c4ae492b0159f33cf30988ce6887c6f3a",
+            // .path = "../libvaxis",
+            .url = "git+https://github.com/rockorager/libvaxis?ref=main#b2151349ad8e0f2ba074524c58a3c20ce069a33e",
+            .hash = "122003a751aaf7e9b106146993b8a6b237fc2964526ab05dd66c7f97f6d14865c39d",
         },
     },
 }
