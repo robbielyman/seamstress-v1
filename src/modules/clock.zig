@@ -1,142 +1,34 @@
-/// clocks module; musically relevant coroutines
-// @module _seamstress.clock
-pub fn module() Module {
-    return .{ .vtable = &.{
-        .init_fn = init,
-        .deinit_fn = deinit,
-        .launch_fn = launch,
-    } };
-}
+const Clock = @This();
 
-fn init(m: *Module, vm: *Spindle, _: *Wheel, allocator: std.mem.Allocator) Error!void {
-    const self = try allocator.create(Clock);
-    self.* = .{
-        .lua = vm.l,
-        .timer = std.time.Timer.start() catch return error.LaunchFailed,
-        .xev_timer = xev.Timer.init() catch return error.LaunchFailed,
-        .link = lk.Link.create(120) orelse return error.LaunchFailed,
-        .state = lk.SessionState.create() orelse return error.LaunchFailed,
-    };
-    for (&self.threads, 0..) |*thread, i| {
-        thread.* = .{ .id = @intCast(i) };
-    }
-    m.self = self;
-}
+c: xev.Completion = .{},
+t: xev.Timer,
+threads: std.ArrayList(Thread),
+link: *lk.Link,
+state: *lk.SessionState,
+link_quantum: f64 = 4,
+midi: struct {
+    last: u64,
+    durations: [8]u64 = .{0} ** 8,
+    head: u3 = 0,
+},
+source: Source = .internal,
+beat: f64 = 0,
+tempo: f64 = 120,
+now: u64 = 0,
+last: u64 = 0,
+is_playing: bool = true,
 
-fn deinit(m: *const Module, _: *Lua, allocator: std.mem.Allocator, cleanup: Cleanup) void {
-    const self: *Clock = @ptrCast(@alignCast(m.self orelse return));
-    self.link.destroy();
-    if (cleanup != .full) return;
-    self.xev_timer.deinit();
-    self.state.destroy();
-    allocator.destroy(self);
-}
-
-fn launch(m: *const Module, _: *Lua, wheel: *Wheel) Error!void {
-    const self: *Clock = @ptrCast(@alignCast(m.self orelse return error.LaunchFailed));
-    self.xev_timer.run(&wheel.loop, &self.c, 1, Clock, self, tick);
-}
-
-fn tick(clock: ?*Clock, loop: *xev.Loop, c: *xev.Completion, r: xev.Timer.RunError!void) xev.CallbackAction {
-    _ = r catch {
-        logger.err("error running clock timer!", .{});
-        return .rearm;
-    };
-    const cl = clock orelse return .disarm;
-    cl.updateTime();
-    cl.updateBeats();
-    for (&cl.threads) |*t| {
-        if (!t.active) continue;
-        t.active = false;
-        switch (t.data) {
-            .sleep => |s| if (cl.now >= s) t.bang(),
-            .sync => |s| if (cl.beat >= s.beat) t.bang(),
-        }
-    }
-    cl.xev_timer.run(loop, c, 1, Clock, cl, tick);
-    return .disarm;
-}
-
-const Clock = struct {
-    lua: *Lua,
-    timer: std.time.Timer,
-    xev_timer: xev.Timer,
-    c: xev.Completion = .{},
-    threads: [256]Thread = undefined,
-    link: *lk.Link,
-    state: *lk.SessionState,
-    link_quantum: f64 = 4,
-    midi: struct {
-        last: u64,
-        durations: [8]u64 = .{0} ** 8,
-        head: u3 = 0,
-    },
-    source: Source = .internal,
-    beat: f64 = 0,
-    tempo: f64 = 120,
-    now: u64 = 0,
-    last: u64 = 0,
-    is_playing: bool = true,
-    const Source = enum { internal, link, midi };
-
-    const Thread = struct {
-        id: u8,
-        active: bool = false,
-        data: union(enum) {
-            sleep: u64,
-            sync: struct {
-                beat: f64,
-                sync_beat: f64,
-                offset: f64,
-            },
-        } = .{ .sleep = 0 },
-
-        fn bang(self: *Thread, clock: *Clock) void {
-            lu.getMethod(clock.lua, "clock", "resume");
-            clock.lua.pushInteger(self.id);
-            lu.doCall(clock.lua, 1, 0);
-        }
-    };
-
-    fn updateTime(self: *Clock) void {
-        self.last = self.now;
-        self.now = self.timer.read();
-    }
-
-    fn updateBeats(self: *Clock) void {
-        switch (self.source) {
-            .internal => {
-                if (!self.is_playing) return;
-                const delta_ns = self.now - self.last;
-                const beat_time = 1.0 / self.tempo;
-                const ns_per_beat = beat_time * std.time.ns_per_min;
-                self.beat += @as(f64, @floatFromInt(delta_ns)) / ns_per_beat;
-            },
-            .link => {
-                const last = self.beat;
-                {
-                    self.state.captureFromApplicationThread(self.link);
-                    defer self.state.commitFromApplicationThread(self.link);
-                    const time = self.link.clockMicros();
-                    self.tempo = self.state.tempo();
-                    self.beat = self.state.beatAtTime(time, self.link_quantum);
-                    self.is_playing = self.state.isPlaying();
-                }
-                if (last > self.beat) self.rescheduleSyncEvents();
-            },
-            .midi => {},
-        }
-    }
-
-    fn rescheduleSyncEvents(self: *Clock) void {
-        for (&self.threads) |*thread| {
-            if (!thread.active) continue;
-            switch (thread.data) {
-                .sleep => continue,
-                .sync => |*d| d.beat = getSyncBeat(self.beat, d.sync, d.offset),
-            }
-        }
-    }
+const Source = enum { internal, link, midi };
+const Thread = struct {
+    handle: ?i32 = null,
+    data: union(enum) {
+        sleep: u64,
+        sync: struct {
+            beat: f64,
+            sync_beat: f64,
+            offset: f64,
+        },
+    } = .{ .sleep = 0 },
 };
 
 fn getSyncBeat(beat: f64, sync_beat: f64, offset: f64) f64 {
@@ -144,6 +36,125 @@ fn getSyncBeat(beat: f64, sync_beat: f64, offset: f64) f64 {
     next += offset;
     while (next < (beat + std.math.floatEps(f64))) next += sync_beat;
     return next;
+}
+
+fn rescheduleSyncEvents(self: *Clock) void {
+    for (self.threads.items) |*thread| {
+        if (thread.handle == null) continue;
+        switch (thread.data) {
+            .sleep => continue,
+            .sync => |*d| d.beat = getSyncBeat(self.beat, d.sync, d.offset),
+        }
+    }
+}
+
+fn updateBeats(self: *Clock) void {
+    switch (self.source) {
+        .internal => {
+            if (!self.is_playing) return;
+            const delta_ns = self.now - self.last;
+            const minutes_per_beat = 1.0 / self.tempo;
+            const ns_per_beat = minutes_per_beat * std.time.ns_per_min;
+            self.beat += @as(f64, @floatFromInt(delta_ns)) / ns_per_beat;
+        },
+        .link => {
+            const last = self.beat;
+            {
+                self.state.captureFromApplicationThread(self.link);
+                defer self.state.commitFromApplicationThread(self.link);
+                const time = self.link.clockMicros();
+                self.tempo = self.state.tempo();
+                self.beat = self.state.beatAtTime(time, self.link_quantum);
+                self.is_playing = self.state.isPlaying();
+            }
+            if (last > self.beat) self.rescheduleSyncEvents();
+        },
+        // happens via Lua instead
+        .midi => {},
+    }
+}
+
+fn tick(clock: ?*Clock, loop: *xev.Loop, c: *xev.Completion, r: xev.Timer.RunError!void) xev.CallbackAction {
+    _ = r catch {
+        logger.err("error running clock timer!", .{});
+        return .rearm;
+    };
+    const wheel: *Wheel = @fieldParentPtr("loop", loop);
+    const l = Wheel.getLua(loop);
+    const self = clock.?;
+    self.last = self.now;
+    self.now = wheel.timer.read();
+    self.updateBeats();
+    for (self.threads.items) |*thread| {
+        if (thread.handle == null) continue;
+        switch (thread.data) {
+            .sleep => |s| if (self.now >= s) thread.bang(l),
+            .sync => |s| if (self.beat >= s.beat) thread.bang(l),
+        }
+    }
+    self.t.run(loop, c, 1, Clock, self, tick);
+    return .disarm;
+}
+
+fn init(m: *Module, l: *Lua, allocator: std.mem.Allocator) anyerror!void {
+    const self = try allocator.create(Clock);
+    self.* = .{
+        .threads = try std.ArrayList(Thread).initCapacity(allocator, 256),
+        .link = try lk.Link.create(120) orelse return error.LinkCreationFailed,
+        .state = try lk.SessionState.create() orelse return error.LinkCreationFailed,
+        .t = try xev.Timer.init(),
+    };
+    @memset(self.threads.items, .{});
+    m.self = self;
+    registerSeamstress(l, self);
+}
+
+fn launch(m: *const Module, _: *Lua, wheel: *Wheel) anyerror!void {
+    const self: *Clock = @ptrCast(@alignCast(m.self.?));
+    self.t.run(&wheel.loop, &self.c, 1, Clock, self, tick);
+}
+
+fn deinit(m: *Module, _: *Lua, allocator: std.mem.Allocator, cleanup: Cleanup) void {
+    const self: *Clock = @ptrCast(@alignCast(m.self orelse return));
+    self.link.destroy();
+    if (cleanup != .full) return;
+    self.state.destroy();
+    self.threads.deinit();
+    allocator.destroy(self);
+    m.self = null;
+}
+
+pub fn module() Module {
+    return .{ .vtable = &.{
+        .init_fn = init,
+        .deinit_fn = deinit,
+        .launch_fn = launch,
+    } };
+}
+/////////
+fn updateBeats(self: *Clock) void {
+    switch (self.source) {
+        .internal => {
+            if (!self.is_playing) return;
+            const delta_ns = self.now - self.last;
+            const beat_time = 1.0 / self.tempo;
+            const ns_per_beat = beat_time * std.time.ns_per_min;
+            self.beat += @as(f64, @floatFromInt(delta_ns)) / ns_per_beat;
+        },
+        .link => {
+            const last = self.beat;
+            {
+                self.state.captureFromApplicationThread(self.link);
+                defer self.state.commitFromApplicationThread(self.link);
+                const time = self.link.clockMicros();
+                self.tempo = self.state.tempo();
+                self.beat = self.state.beatAtTime(time, self.link_quantum);
+                self.is_playing = self.state.isPlaying();
+            }
+            if (last > self.beat) self.rescheduleSyncEvents();
+        },
+        .midi => {},
+    }
 }
 
 /// responds to clock-related midi messages
@@ -338,7 +349,6 @@ const Module = @import("../module.zig");
 const Wheel = @import("../wheel.zig");
 const Spindle = @import("../spindle.zig");
 const Seamstress = @import("../seamstress.zig");
-const Error = Seamstress.Error;
 const Cleanup = Seamstress.Cleanup;
 const Lua = @import("ziglua").Lua;
 const std = @import("std");

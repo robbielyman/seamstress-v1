@@ -55,7 +55,7 @@ pub fn main() void {
             .panic_fn = Seamstress.panicCleanup,
         };
         // gooooooooo
-        seamstress.run();
+        seamstress.run() catch |err| std.debug.panic("{s}", .{@errorName(err)});
         // should we go again?
         go_again = seamstress.go_again;
         seamstress.go_again = false;

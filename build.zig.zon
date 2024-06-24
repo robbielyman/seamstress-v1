@@ -16,13 +16,17 @@
             .hash = "12205b92ab3c432ed67f84896ad0c4f89e1a3c3934bc9a34c16e98952eee717761ac",
         },
         .rtmidi_z = .{
-            .url = "git+https://github.com/ryleelyman/rtmidi_z#856a560e3f0744ab1ac08711fb63ad0f9684e445",
-            .hash = "1220fd302a49120bbbd197448825c4254a8471e74cdd7c136870ff696361c96c7124",
+            .url = "git+https://github.com/ryleelyman/rtmidi_z#2064e2169b2f2eec5dc345c2215dba044dadeea3",
+            .hash = "122000df3ab11de1cb4b01c211d3d42282128d88faf075e27e3f475e03f199feb992",
         },
         .vaxis = .{
             // .path = "../libvaxis",
             .url = "git+https://github.com/rockorager/libvaxis?ref=main#b2151349ad8e0f2ba074524c58a3c20ce069a33e",
             .hash = "122003a751aaf7e9b106146993b8a6b237fc2964526ab05dd66c7f97f6d14865c39d",
+        },
+        .libxev = .{
+            .url = "git+https://github.com/mitchellh/libxev#a42b74ae8139738a14148f94543c659ec2d5b92b",
+            .hash = "1220ff99305b4072365c5b1dfada4ba2fa3dc51b38118f39365cdc63469953840365",
         },
     },
 }

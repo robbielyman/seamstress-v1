@@ -44,12 +44,6 @@ fn addImports(b: *std.Build, m: *std.Build.Module, target: std.Build.ResolvedTar
     });
     m.addImport("ziglua", ziglua.module("ziglua"));
 
-    // const xev = b.dependency("libxev", .{
-    // .target = target,
-    // .optimize = optimize,
-    // });
-    // m.addImport("libxev", xev.module("xev"));
-
     const lo = b.dependency("ziglo", .{
         .target = target,
         .optimize = optimize,
@@ -77,4 +71,16 @@ fn addImports(b: *std.Build, m: *std.Build.Module, target: std.Build.ResolvedTar
         .optimize = optimize,
     });
     m.addImport("grapheme", zg.module("grapheme"));
+
+    const link = b.dependency("zig-abl_link", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    m.addImport("link", link.module("zig-abl_link"));
+
+    const midi = b.dependency("rtmidi_z", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    m.addImport("midi", midi.module("rtmidi_z"));
 }

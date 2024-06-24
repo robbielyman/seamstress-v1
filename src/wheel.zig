@@ -24,49 +24,44 @@ pub fn init(self: *Wheel) void {
 }
 
 /// the main event loop; blocks until self.quit becomes true
-pub fn run(self: *Wheel) void {
+pub fn run(self: *Wheel) !void {
     defer {
         self.loop.deinit();
     }
-    var c1: xev.Completion = .{};
-    var render_timer = xev.Timer.init() catch unreachable;
-    render_timer.run(&self.loop, &c1, 17, xev.Timer, &render_timer, render);
     _ = self.timer.lap();
+    const seamstress: *Seamstress = @fieldParentPtr("loop", self);
+    var c1: xev.Completion = .{};
+    const flush_timer = try xev.Timer.init();
+    flush_timer.run(&self.loop, &c1, 5000, Seamstress, seamstress, flush);
+
     var c2: xev.Completion = .{};
     self.awake.wait(&self.loop, &c2, Wheel, self, callback);
+
     var c3: xev.Completion = .{};
-    const timer = xev.Timer.init() catch unreachable;
-    const seamstress: *Seamstress = @fieldParentPtr("loop", self);
+    const timer = try xev.Timer.init();
     timer.run(&self.loop, &c3, 0, Lua, seamstress.l, callInit);
-    while (!self.quit_flag) {
-        self.loop.run(.once) catch |err| panic("error running event loop! {s}", .{@errorName(err)});
-        if (seamstress.logger) |l| l.flush() catch unreachable;
-    }
+
+    try self.loop.run(.until_done);
+}
+
+fn flush(s: ?*Seamstress, l: *xev.Loop, c: *xev.Completion, r: xev.Timer.RunError!void) xev.CallbackAction {
+    _ = r catch |err| panic("timer error: {s}", .{@errorName(err)});
+    const seamstress = s.?;
+    if (seamstress.logger) |log| log.flush() catch |err| panic("error writing logs! {s}", .{@errorName(err)});
+    const timer = xev.Timer.init() catch unreachable;
+    timer.run(l, c, 5000, Seamstress, seamstress, flush);
+    return .disarm;
 }
 
 // just wakes up the event loop
-fn callback(w: ?*Wheel, l: *xev.Loop, c: *xev.Completion, r: xev.Async.WaitError!void) xev.CallbackAction {
-    const wheel = w.?;
+fn callback(_: ?*Wheel, l: *xev.Loop, _: *xev.Completion, r: xev.Async.WaitError!void) xev.CallbackAction {
     _ = r catch unreachable;
-    wheel.awake.wait(l, c, Wheel, w, callback);
+    l.stop();
     return .disarm;
 }
 
-// just wakes up the event loop
-fn render(w: ?*xev.Timer, l: *xev.Loop, c: *xev.Completion, r: xev.Timer.RunError!void) xev.CallbackAction {
-    const render_timer = w.?;
-    _ = r catch return .disarm;
-    render_timer.run(l, c, 17, xev.Timer, render_timer, render);
-    return .disarm;
-}
-
-pub fn awaken(self: *Wheel) void {
-    self.awake.notify() catch |err| panic("error while waking! {s}", .{@errorName(err)});
-}
-
-// sets the quit flag and attempts to wake up the event loop
+/// pushes a quit event onto the event loop
 pub fn quit(self: *Wheel) void {
-    self.quit_flag = true;
     self.awake.notify() catch |err| panic("error while quitting! {s}", .{@errorName(err)});
 }
 

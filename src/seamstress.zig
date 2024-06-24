@@ -13,14 +13,14 @@ pub const version: std.SemanticVersion = .{
 };
 
 /// the seamstress loop
-pub fn run(self: *Seamstress) void {
+pub fn run(self: *Seamstress) !void {
     const io: []const []const u8 = &.{ "cli", "tui" };
     for (io) |str| {
         const m = self.module_list.get(str).?;
-        if (m.self) |_| m.launch(self.l, &self.loop) catch |err| std.debug.panic("unable to start terminal I/O {s}", .{@errorName(err)});
+        if (m.self) |_| try m.launch(self.l, &self.loop);
     }
     // run the event loop; blocks until we exit
-    self.loop.run();
+    try self.loop.run();
     self.deinit(self.loop.kind);
 }
 

@@ -314,8 +314,7 @@ fn init(m: *Module, l: *Lua, allocator: std.mem.Allocator) anyerror!void {
     m.self = self;
 }
 
-fn deinit(m: *const Module, l: *Lua, allocator: std.mem.Allocator, cleanup: Cleanup) void {
-    _ = l; // autofix
+fn deinit(m: *Module, _: *Lua, allocator: std.mem.Allocator, cleanup: Cleanup) void {
     if (cleanup != .full) return;
     const self: *Osc = @ptrCast(@alignCast(m.self orelse return));
     std.posix.close(self.watcher.fd);
@@ -324,6 +323,7 @@ fn deinit(m: *const Module, l: *Lua, allocator: std.mem.Allocator, cleanup: Clea
     self.server.free();
     allocator.free(self.buffer);
     allocator.destroy(self);
+    m.self = null;
 }
 
 fn launch(m: *const Module, _: *Lua, wheel: *Wheel) anyerror!void {

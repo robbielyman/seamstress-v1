@@ -6,9 +6,19 @@ stdout: BufferedWriter,
 stdin_buf: std.ArrayList(u8),
 file: xev.File,
 c: xev.Completion = .{},
-c_c: xev.Completion = .{},
+o_c: xev.Completion = .{},
+a: xev.Async,
 continuing: bool = false,
-dirty: bool = false,
+
+fn flush(s: ?*Cli, loop: *xev.Loop, c: *xev.Completion, r: xev.Async.WaitError!void) xev.CallbackAction {
+    const self = s.?;
+    _ = r catch |err| panic("error while writing! {s}", .{@errorName(err)});
+    const stdout = self.stdout.writer();
+    stdout.writeAll(if (self.continuing) ">... " else "> ") catch {};
+    self.stdout.flush() catch |err| panic("error while writing! {s}", .{@errorName(err)});
+    self.a.wait(loop, c, Cli, self, flush);
+    return .disarm;
+}
 
 /// processes a chunk of stdin, renders, rinses and repeats
 fn handleStdin(
@@ -32,7 +42,7 @@ fn handleStdin(
     self.?.continuing = lu.processChunk(l, self.?.stdin_buf.items);
     if (!self.?.continuing) self.?.stdin_buf.clearRetainingCapacity();
     lu.luaPrint(l);
-    self.?.dirty = true;
+    self.?.a.notify() catch {};
     f.read(loop, c, .{ .slice = self.?.stdin_buf.unusedCapacitySlice() }, Cli, self, handleStdin);
     return .disarm;
 }
@@ -82,8 +92,7 @@ pub fn printFn(l: *Lua) i32 {
     }
     // finish with a newline
     ctx.writeAll("\n") catch {};
-    const wheel = lu.getWheel(l);
-    wheel.awaken();
+    self.a.notify() catch {};
     return 0;
 }
 
@@ -97,7 +106,8 @@ fn init(m: *Module, l: *Lua, allocator: std.mem.Allocator) anyerror!void {
     self.* = .{
         .stdout = std.io.bufferedWriter(stdout_backing.any()),
         .stdin_buf = std.ArrayList(u8).init(allocator),
-        .file = xev.File.init(std.io.getStdIn()) catch panic("unable to open stdin!", .{}),
+        .file = try xev.File.init(std.io.getStdIn()),
+        .a = try xev.Async.init(),
     };
     l.pushLightUserdata(self);
     l.pushClosure(ziglua.wrap(printFn), 1);
@@ -120,6 +130,7 @@ fn launch(m: *const Module, _: *Lua, wheel: *Wheel) anyerror!void {
     try self.stdin_buf.ensureUnusedCapacity(4096);
     const slice = self.stdin_buf.unusedCapacitySlice();
     self.file.read(&wheel.loop, &self.c, .{ .slice = slice[0..@min(slice.len, 4096)] }, Cli, self, handleStdin);
+    self.a.wait(&wheel.loop, &self.o_c, Cli, self, flush);
 }
 
 pub fn module() Module {
