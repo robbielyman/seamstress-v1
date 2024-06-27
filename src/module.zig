@@ -45,10 +45,10 @@ const Promise = @import("async.zig");
 /// the full list of modules available to seamstress
 const module_list = [_]struct { []const u8, Module }{
     .{ "osc", @import("modules/osc.zig").module() },
-    //.{ "clock", @import("modules/clock.zig").module() },
-    // .{ "metros", @import("modules/metros.zig").module() },
+    .{ "clock", @import("modules/clock.zig").module() },
     .{ "cli", @import("modules/cli.zig").module() },
     .{ "tui", @import("modules/tui.zig").module() },
+    .{ "midi", @import("modules/midi.zig").module() },
 };
 
 pub fn list(allocator: std.mem.Allocator) !std.StaticStringMap(*Module) {
