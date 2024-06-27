@@ -35,16 +35,18 @@ function Promise:await() end
 ---Values (or errors) returned by the Promise's body are passed as arguments
 ---to the appropriate function.
 ---@param resolve fun(...): any? called if self is fulfilled
----@param reject fun(err: string, ...): any? called if self is rejected
----@return Promise a new promise which is fulfilled upon sucessful completion of either handler
+---@param reject (fun(err: string, ...): any?)? called if self is rejected
+---@return Promise # a new promise which is fulfilled upon sucessful completion of either handler
 function Promise:anon(resolve, reject) end
 
 ---equivalent to Promise:anon(function(...) return ... end, reject)
 ---@param reject fun(err: string, ...): any? called if self is rejected
+---@return Promise
 function Promise:catch(reject) end
 
 ---equivalent to Promise:anon(anyhow, anyhow)
 ---@param anyhow fun(...): any? called when self is settled
+---@return Promise
 function Promise:finally(anyhow) end
 
 ---creates a new Promise which fulfills when all of its arguments fulfill.

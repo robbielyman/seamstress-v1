@@ -102,7 +102,8 @@ busted.describe(
 ╚══════╝╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚══════╝╚══════╝╚══════╝
 ]]
         seamstress.update.running = true
-        seamstress.event.addSubscriber({ 'update' }, function(dt)
+        seamstress.update.delta = 1 / 60
+        seamstress.event.addSubscriber({ 'update' }, function(_, dt)
           t = t + dt
           fg = seamstress.tui.Color(math.abs(255 * math.cos(t)), math.abs(255 * math.sin(t + math.pi)),
             math.abs(255 * math.sin(t)))
@@ -120,19 +121,20 @@ busted.describe(
         repeat
           coroutine.yield()
         until done
+        done = false
         sub:update({
           fn = function()
             seamstress.tui.buffer.set({ 1, -1 }, { 1, -1 })
+            done = true
             return true, true
           end
         })
-        coroutine.yield()
+        repeat coroutine.yield() until done
       end)
     busted.it("can respond to key input",
       function()
         local done = false
         local dirty = true
-        seamstress.update.running = true
         seamstress.event.addSubscriber({ 'tui', 'resize' }, function()
           dirty = true
           return true, dirty
@@ -144,20 +146,20 @@ busted.describe(
           seamstress.tui.buffer.write({ x - 10, -1 }, { y, -1 }, "press any key to continue")
           return true
         end)
+        seamstress.event.publish { 'draw' }
         seamstress.event.addSubscriber({ 'tui', 'key_down' }, function()
           done = true
+          sub:update({
+            fn = function()
+              seamstress.tui.buffer.set({ 1, -1 }, { 1, -1 })
+              return true
+            end
+          })
           return true, true
         end)
         repeat
           coroutine.yield()
         until done
-        sub:update({
-          fn = function()
-            seamstress.tui.buffer.set({ 1, -1 }, { 1, -1 })
-            return true
-          end
-        })
-        coroutine.yield()
       end)
 
     busted.pending("higher level ui abstractions", function()

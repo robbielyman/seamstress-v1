@@ -5,9 +5,9 @@ _ = seamstress.osc
 busted.describe('seamstress.osc', function()
   busted.it('can receive messages', function()
     local done = false
-    seamstress.event.addSubscriber({ 'osc', 'paths', 'are', 'chunked' }, function(info, ...)
+    seamstress.event.addSubscriber({ 'osc', 'paths', 'are', 'chunked' }, function(event, info, ...)
       local arg = { ... }
-      busted.assert.same('/paths/are/chunked', info[1])
+      busted.assert.same({ 'osc', 'paths', 'are', 'chunked' }, event)
       busted.assert.same('ihfdsS', info.types)
       busted.assert.same(1, arg[1])
       busted.assert.same(2000, arg[2])
@@ -30,7 +30,7 @@ busted.describe('seamstress.osc', function()
 
   busted.it('can send messages', function()
     local done = false
-    seamstress.osc.patternedHandler('/this/*/osc', function(info, ...)
+    seamstress.osc.patternedHandler('/this/*/osc', function(_, info, ...)
       local arg = { ... }
       busted.assert.same('/this/is/some/osc', info[1])
       busted.assert.same('sih', info.types)

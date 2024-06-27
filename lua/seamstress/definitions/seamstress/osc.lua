@@ -2,6 +2,7 @@
 
 ---@module 'seamstress.osc'
 
+---@class seamstress.osc
 seamstress.osc = require 'seamstress.osc'[1]
 
 ---sends an OSC message

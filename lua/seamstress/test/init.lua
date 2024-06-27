@@ -3,12 +3,14 @@ local tests = {
     local ok, runner = pcall(require, 'busted.runner')
     if ok then
       seamstress.async.Promise(function()
-         runner({ output = seamstress._prefix .. '/seamstress/test/seamstress_output.lua'})
-         if seamstress.tui then require('seamstress.test.tui') end
-         require('seamstress.test.osc')
-         require('seamstress.test.async')
-         require('seamstress.test.timer')
-         require('seamstress.test.monome')
+        runner({ output = seamstress._prefix .. '/seamstress/test/seamstress_output.lua' })
+        require('seamstress.test.osc')
+        require('seamstress.test.async')
+        require('seamstress.test.timer')
+        require('seamstress.test.monome')
+        require('seamstress.test.clock')
+        require('seamstress.test.midi')
+        if seamstress.tui then require('seamstress.test.tui') end
         os.exit = seamstress.quit
       end)
       return

@@ -1,4 +1,4 @@
----@alias callback (fun(...): boolean, any?)
+---@alias callback (fun(event: string[], ...): boolean, any?)
 
 ---creates a subscriber
 ---@param fn callback
@@ -10,14 +10,14 @@ local function Subscriber(fn, options)
   ---@field fn callback # callback
   ---@field channel Channel?
   ---@field id number # the memory address of this table, so guaranteed to be unique
-  ---@field update fun(self: Subscriber, opt: {fn: callback?, options: {predicate: (fun(...): boolean)?}?}?)
+  ---@field update fun(self: Subscriber, opt: {fn: callback?, options: {predicate: (fun(event: string[], ...): boolean)?}?}?)
   local sub = {
     options = options or {},
     fn = fn or function() return true end,
     channel = nil,
     ---updates this subscriber
     ---@param self Subscriber
-    ---@param opt {fn: callback?, options: {predicate: (fun(...): boolean)?}}?
+    ---@param opt {fn: callback?, options: {predicate: (fun(event: string[], ...): boolean)?}}?
     update = function(self, opt)
       if opt then
         self.fn = opt.fn or self.fn
@@ -149,25 +149,26 @@ local function Channel(name, parent)
     ---responds to event by sequentially firing callbacks according to their priority
     ---@param self Channel
     ---@param ret any[] # the array of responses
+    ---@param event string[] # the namespace originally published to
     ---@param ... unknown # arguments passed to callbacks
     ---@return any[] # ret plus any responses from callbacks
-    publish = function(self, ret, ...)
+    publish = function(self, ret, event, ...)
       for _, cb in ipairs(self.callbacks) do
-        if not cb.options.predicate or cb.options.predicate(...) then
-          local continue, response = cb.fn(...)
+        if not cb.options.predicate or cb.options.predicate(event, ...) then
+          local continue, response = cb.fn(event, ...)
           table.insert(ret, response)
           if not continue then return ret end
         end
       end
       if self.callbacks[0] then
-        if not self.callbacks[0].predicate or self.callbacks[0].predicate(...) then
-          local continue, response = self.callbacks[0].fn(...)
+        if not self.callbacks[0].predicate or self.callbacks[0].predicate(event, ...) then
+          local continue, response = self.callbacks[0].fn(event, ...)
           table.insert(ret, response)
           if not continue then return ret end
         end
       end
       if parent then
-        return parent:publish(ret, ...)
+        return parent:publish(ret, event, ...)
       end
       return ret
     end,
@@ -224,7 +225,7 @@ end
 ---@return any[] the aggregate responses of responders
 function event.publish(namespace, ...)
   local ret = {}
-  event.get(namespace):publish(ret, ...)
+  event.get(namespace):publish(ret, namespace, ...)
   return ret
 end
 

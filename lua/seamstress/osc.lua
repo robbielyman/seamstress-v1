@@ -10,7 +10,7 @@ local osc = {}
 ---@return Subscriber
 function osc.patternedHandler(pattern, f)
   return seamstress.event.addSubscriber({ 'osc' }, f, {
-    predicate = function(path)
+    predicate = function(_, path)
       return seamstress.osc.match(pattern, path[1])
     end,
   })

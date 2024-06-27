@@ -14,7 +14,7 @@ busted.describe('seamstress.monome.Arc', function()
     seamstress.update.delta = 1 / 60
     seamstress.update.running = true
     local acc = 0
-    local update = seamstress.event.addSubscriber({ 'update' }, function(dt)
+    local update = seamstress.event.addSubscriber({ 'update' }, function(_, dt)
       acc = acc + dt
       if acc > 1 / 60 then
         t = t + acc
@@ -62,7 +62,7 @@ busted.describe('seamstress.monome.Arc', function()
     local acc = 0
     local up = true
     local n = 1
-    local update = seamstress.event.addSubscriber({ 'update' }, function(dt)
+    local update = seamstress.event.addSubscriber({ 'update' }, function(_, dt)
       acc = acc + dt
       if acc < 1 / 60 then return true end
       n = n + acc * (up and 4 or -4)
@@ -83,7 +83,7 @@ busted.describe('seamstress.monome.Arc', function()
       return true
     end)
     local done = false
-    seamstress.event.addSubscriber({ 'monome', 'arc', 'delta' }, function(m, d)
+    seamstress.event.addSubscriber({ 'monome', 'arc', 'delta' }, function(_, m, d)
       if m == 1 and d > 0 then done = true end
       return true
     end)
@@ -130,7 +130,7 @@ busted.describe('seamstress.monome.Grid', function()
     seamstress.update.delta = 1 / 60
     seamstress.update.running = true
     local acc = 0
-    local update = seamstress.event.addSubscriber({ 'update' }, function(dt)
+    local update = seamstress.event.addSubscriber({ 'update' }, function(_, dt)
       acc = acc + dt
       if acc > 1 / 60 then
         t = t + acc
@@ -174,7 +174,7 @@ busted.describe('seamstress.monome.Grid', function()
     seamstress.update.running = true
     local on = true
     local acc = 0
-    local update = seamstress.event.addSubscriber({ 'update' }, function(dt)
+    local update = seamstress.event.addSubscriber({ 'update' }, function(_, dt)
       acc = acc + dt
       if acc < 0.5 then return true end
       acc = 0
@@ -187,7 +187,7 @@ busted.describe('seamstress.monome.Grid', function()
       return true
     end)
     local done = false
-    seamstress.event.addSubscriber({ 'monome', 'grid', 'key' }, function(x, y, z)
+    seamstress.event.addSubscriber({ 'monome', 'grid', 'key' }, function(_, x, y, z)
       if x == 1 and y == 1 and z == 0 then done = true end
       return true
     end)
@@ -214,7 +214,7 @@ busted.describe('seamstress.monome.Grid', function()
     seamstress.update.running = true
     local on = true
     local acc = 0
-    local update = seamstress.event.addSubscriber({ 'update' }, function(dt)
+    local update = seamstress.event.addSubscriber({ 'update' }, function(_, dt)
       acc = acc + dt
       if acc < 0.5 then return true end
       acc = 0

@@ -68,6 +68,8 @@ local modules = {
   tui = true,
   osc = { 'monome' },
   monome = { 'osc' },
+  clock = true,
+  midi = true,
 }
 
 --- the global seamstress object.
@@ -102,11 +104,7 @@ setmetatable(seamstress, {
         seamstress._launch(k)
       end
     end
-    if found then
-      return modules[key]
-    else
-      return rawget(t, key)
-    end
+    return rawget(t, key)
   end
 })
 

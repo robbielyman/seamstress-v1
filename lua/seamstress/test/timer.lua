@@ -16,7 +16,8 @@ busted.describe('seamstress.Timer', function()
   busted.it('number go up', function()
     local done = 0
     local t = seamstress.Timer(function(self) done = self.stage end, 0.001, 5)
-    repeat coroutine.yield() until done >= 5
+    repeat coroutine.yield() until done == 5
+    coroutine.yield()
     busted.assert.same(false, t.running)
   end)
   busted.it('can start dead', function()
