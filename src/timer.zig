@@ -120,7 +120,7 @@ fn bang(ud: ?*anyopaque, loop: *xev.Loop, c: *xev.Completion, r: xev.Timer.RunEr
     _ = l.getUserValue(-1, 2) catch unreachable; // delta: 2
     const delta = l.toNumber(-1) catch unreachable;
     const delta_ms: u64 = @intFromFloat(delta * std.time.ms_per_s);
-    const next = (then + old_delta_ms + delta_ms) -| now; // keep time with our intentions
+    const next = (@divFloor(then, std.time.ns_per_ms) + old_delta_ms + delta_ms) -| @divFloor(now, std.time.ns_per_ms); // keep time with our intentions
     l.pop(2);
     self.run(loop, c, next, anyopaque, ud, bang);
     return .disarm;
