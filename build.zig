@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub fn build(b: *std.Build) void {
+pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
@@ -27,7 +27,7 @@ pub fn build(b: *std.Build) void {
     });
     addImports(b, &tests.root_module, target, optimize);
     const tests_run = b.addRunArtifact(tests);
-    const tests_step = b.step("test", "run the tests");
+    const tests_step = b.step("test", "run the zig tests");
     tests_step.dependOn(&tests_run.step);
 
     const run = b.addRunArtifact(exe);
@@ -35,6 +35,16 @@ pub fn build(b: *std.Build) void {
     if (b.args) |args| run.addArgs(args);
     const run_step = b.step("run", "run seamstress");
     run_step.dependOn(&run.step);
+
+    const comp_check = b.addExecutable(.{
+        .name = "seamstress",
+        .root_source_file = b.path("src/main.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    addImports(b, &comp_check.root_module, target, optimize);
+    const check = b.step("check", "check for compile errors");
+    check.dependOn(&comp_check.step);
 }
 
 fn addImports(b: *std.Build, m: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) void {
@@ -44,43 +54,9 @@ fn addImports(b: *std.Build, m: *std.Build.Module, target: std.Build.ResolvedTar
     });
     m.addImport("ziglua", ziglua.module("ziglua"));
 
-    const lo = b.dependency("ziglo", .{
-        .target = target,
-        .optimize = optimize,
-        .static = false,
-    });
-    m.addImport("ziglo", lo.module("ziglo"));
-
-    const vaxis = b.dependency("vaxis", .{
-        .target = target,
-        .optimize = optimize,
-        .libxev = true,
-    });
-    m.addImport("vaxis", vaxis.module("vaxis"));
-
-    const vx = vaxis.module("vaxis");
-    if (vx.owner.lazyDependency("libxev", .{
-        .target = target,
-        .optimize = optimize,
-    })) |xev| {
-        m.addImport("xev", xev.module("xev"));
-    }
-
-    const zg = vx.owner.dependency("zg", .{
+    const xev = b.dependency("libxev", .{
         .target = target,
         .optimize = optimize,
     });
-    m.addImport("grapheme", zg.module("grapheme"));
-
-    const link = b.dependency("zig-abl_link", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    m.addImport("link", link.module("zig-abl_link"));
-
-    const midi = b.dependency("rtmidi_z", .{
-        .target = target,
-        .optimize = optimize,
-    });
-    m.addImport("midi", midi.module("rtmidi_z"));
+    m.addImport("xev", xev.module("xev"));
 }

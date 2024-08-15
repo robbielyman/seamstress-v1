@@ -1,27 +1,11 @@
 .{
     .name = "seamstress",
-    .version = "2.0.0-prealpha-2",
-    .paths = .{ "build.zig.zon", "build.zig", "src" },
+    .version = "2.0.0-prealpha-3",
+    .paths = .{ "build.zig.zon", "build.zig", "src", "lua" },
     .dependencies = .{
         .ziglua = .{
-            .url = "git+https://github.com/natecraddock/ziglua#d853aa9450ae568a39ea02d7082e85bafc33f735",
-            .hash = "1220affeb3fe37ef09411b5a213b5fdf9bb6568e9913bade204694648983a8b2776d",
-        },
-        .ziglo = .{
-            .url = "git+https://github.com/ryleelyman/ziglo?ref=main#9171c30857429585e3a6c0ff2f5e7308c6b17102",
-            .hash = "12205cc26d739b645d0cec805c9c59cd8d616d5731f130aaac0617d81cbfbd6e5ad4",
-        },
-        .@"zig-abl_link" = .{
-            .url = "git+https://github.com/ryleelyman/zig-abl_link#bca725468f88ef073cabc6da03696ceaa0af19c7",
-            .hash = "12205b92ab3c432ed67f84896ad0c4f89e1a3c3934bc9a34c16e98952eee717761ac",
-        },
-        .rtmidi_z = .{
-            .url = "git+https://github.com/ryleelyman/rtmidi_z?ref=main#74a1eaac4a679a7c71916b2ff2ec6881e5548124",
-            .hash = "12200ec3965148ae065d4c0f8547700d5a7f0494e2c7a59c09a951878ffb14f2d2d3",
-        },
-        .vaxis = .{
-            .url = "git+https://github.com/rockorager/libvaxis#7c03077177c19988afb298e3514d809e4ba0946c",
-            .hash = "1220fbc6d3748e14fbb1afc15be5ea657c5ced1c510be484e881b4e988b2e1d52747",
+            .url = "git+https://github.com/natecraddock/ziglua?ref=main#5479e28d675c55e1e189bca99f71f0acbb3cc875",
+            .hash = "1220b53725744decfb2aba1269ae830b34ae30655154ba1144a8e722f9220cbbf0b0",
         },
         .libxev = .{
             .url = "git+https://github.com/mitchellh/libxev#a42b74ae8139738a14148f94543c659ec2d5b92b",
