@@ -1,6 +1,0 @@
-[submodule "doc"]
-	path = doc
-	url = https://github.com/ryleelyman/seamstress-docs
-[submodule "lib/link"]
-	path = lib/link
-	url = https://github.com/ryleelyman/link
