@@ -1,0 +1,76 @@
+* seamstress
+seamstress is an art engine.
+it provides a [[https://lua.org][Lua]] environment for users to create
+sequencers, music, games, visuals, etc.
+it is inspired by [[https://monome.org/docs/norns][norns]], [[https://love2d.org][Love2D]], [[https://hydra.ojack.xyz][Hydra]] and [[https://nodejs.org][Node.js]].
+seamstress version 2 is alpha software.
+
+* installation
+seamstress version 2 may be built from source or installed via [[https://brew.sh][Homebrew]].
+to install via Homebrew,
+run the following commands.
+
+#+begin_src sh
+  brew tap ryleelyman/seamstress
+  brew install seamstress --HEAD
+#+end_src
+
+** building from source
+to build from source, you'll need the [[https://ziglang.org][Zig]] compiler, version 0.13.0.
+you can download it from the linked website,
+or install via a package manager like Homebrew.
+to compile seamstress, clone this repository
+(make sure you're on the correct branch)
+and run =zig build= in the repository root.
+
+doing so will place the compiled executable in =./zig-out/bin=.
+you can add this folder to your =$PATH=,
+or copy the files installed into =zig-out= somewhere in your =$PATH=.
+now by default,
+seamstress will expect the file structure present within =zig-out=
+to be reflected wherever it is copied,
+so if you copy =seamstress= into =/usr/local/bin=,
+you should copy =share/seamstress= into =/usr/local/share/seamstress=,
+but see the section on environment variables.
+
+** dependencies
+aside from the Zig compiler,
+seamstress depends on a number of Zig projects,
+as well as some C libraries.
+
+*** Zig dependencies
+this section is informational;
+these dependencies are fetched by the Zig compiler
+when building seamstress from source and do not need to be installed separately.
+- [[https://github.com/mitchellh/libxev][libxev]], a cross-platform event loop inspired by =io_uring=.
+- [[https://github.com/natecraddock/ziglua][ziglua]], Zig bindings for the Lua C API.
+  additionally, ziglua fetches and statically links against the C library =liblua=.
+
+*** C dependencies
+these dependencies must be present on your system in order to use seamstress
+and must be installed separately.
+the Homebrew formula automates this step,
+but building from source does not.
+
+*** optional dependencies
+although not necessary for all operations of seamstress,
+certain functionality may not work as expected if a dependency listed here is not present.
+- [[https://luarocks.org][LuaRocks]] (in particular [[https://luarocks.org/modules/lunarmodules/busted][busted]]) is required for running the Lua unit tests. additionally, the seamstress Lua environment can require LuaRocks modules.
+- [[https://github.com/LuaLS/lua-language-server][lua-language-server]] in a text editor that supports the language server protocol,
+  is not necessary for writing seamstress programs,
+  but will provide documentation, completion, etc.
+* documentation
+although this README will aim to be reasonably in-depth,
+it by itself does not aim to be complete documentation for seamstress.
+** environment variables
+seamstress pays attention to the state of the following environment variables at startup
+- =$SEAMSTRESS_LUA_PATH=, which defaults to expanding out the relative path =../share/seamstress/lua= is used to find (or override) the Lua code that seamstress ships with.
+- =$SEAMSTRESS_HOME=, which defaults to =$HOME/seamstress=, is used to find user-provided files, like the startup configuration script
+- =$SEAMSTRESS_CONFIG_FILENAME=, which defaults to =config.lua=, is the filename used to configure seamstress at startup.
+
+  additionally, when =luarocks= is available,
+  seamstress alters the value of the following environment variables,
+  replacing them with the output of =luarocks path=.
+  - =$LUA_PATH=
+  - =$LUA_CPATH=
+  - =$PATH=
