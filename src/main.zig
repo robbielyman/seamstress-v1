@@ -18,25 +18,14 @@ pub fn main() !void {
     maybePrintSweetNothingsAndExit(args);
     const filename: ?[:0]const u8 = if (args.len > 1) args[1] else null;
 
-    // lua files prefix
-    const lua_files_path = lua_files_path: {
-        const location = try std.fs.selfExeDirPathAlloc(allocator);
-        defer allocator.free(location);
-        const path = std.process.getEnvVarOwned(allocator, "SEAMSTRESS_LUA_PATH") catch
-            try std.fs.path.joinZ(allocator, &.{ location, "..", "share", "seamstress", "lua" });
-        defer allocator.free(path);
-        break :lua_files_path std.fs.realpathAlloc(allocator, path) catch |err| {
-            if (err == error.FileNotFound) {
-                std.debug.print(
-                    \\unable to normalize given path: "{s}"
-                    \\define $SEAMSTRESS_LUA_PATH to overwrite and try again
-                    \\
-                , .{path});
-                std.process.exit(1);
-            } else return err;
-        };
-    };
-    defer allocator.free(lua_files_path);
+    // environment variables
+    const environ = try setEnvironmentVariables(allocator);
+    const old_environ = std.c.environ;
+    std.c.environ = environ.ptr;
+    defer {
+        freeEnviron(allocator, environ);
+        std.c.environ = old_environ;
+    }
 
     // handle SIGABRT (called by lua in Debug mode)
     const act: if (builtin.mode == .Debug) std.posix.Sigaction = if (builtin.mode == .Debug) .{
@@ -52,7 +41,7 @@ pub fn main() !void {
     };
     if (builtin.mode == .Debug) try std.posix.sigaction(std.posix.SIG.ABRT, &act, null);
 
-    var seamstress = try Seamstress.init(&allocator, &bw, lua_files_path);
+    var seamstress = try Seamstress.init(&allocator, &bw);
 
     panic_closure = .{
         .ctx = &seamstress,
@@ -60,6 +49,77 @@ pub fn main() !void {
     };
 
     try seamstress.run(filename);
+}
+
+/// normalizes environment variables that seamstress uses
+fn setEnvironmentVariables(allocator: std.mem.Allocator) ![:null]?[*:0]u8 {
+    var map = try std.process.getEnvMap(allocator);
+    defer map.deinit();
+    luarocks: {
+        const result = std.process.Child.run(.{
+            .allocator = allocator,
+            .argv = &.{ "luarocks", "path" },
+        }) catch |err| {
+            if (err == error.FileNotFound) break :luarocks;
+            return err;
+        };
+        defer allocator.free(result.stderr);
+        defer allocator.free(result.stdout);
+        // `luarocks path` returns a series of commands of the form `export VARIABLE="value"`.
+        // for each one, we set VARIABLE to value (without quotes) in our map
+        var iter = std.mem.tokenizeScalar(u8, result.stdout, '\n');
+        while (iter.next()) |token| {
+            const inner = std.mem.trimLeft(u8, token, "export ");
+            const equals = std.mem.indexOfScalar(u8, inner, '=') orelse continue;
+            const key = inner[0..equals];
+            const value = inner[equals + 1 .. inner.len - 1];
+            try map.put(key, value);
+        }
+    }
+    if (map.get("SEAMSTRESS_LUA_PATH") == null) {
+        const location = try std.fs.selfExeDirPathAlloc(allocator);
+        defer allocator.free(location);
+        const path = try std.fs.path.join(allocator, &.{ location, "..", "share", "seamstress", "lua" });
+        defer allocator.free(path);
+        const real_path = std.fs.realpathAlloc(allocator, path) catch |err| {
+            if (err == error.FileNotFound) {
+                std.debug.print(
+                    \\unable to normalize given path: "{s}"
+                    \\define $SEAMSTRESS_LUA_PATH to overwrite and try again
+                    \\
+                , .{path});
+                std.process.exit(1);
+            } else return err;
+        };
+        defer allocator.free(real_path);
+        try map.put("SEAMSTRESS_LUA_PATH", real_path);
+    }
+    if (map.get("SEAMSTRESS_HOME") == null) {
+        const home = map.get("HOME") orelse {
+            std.debug.print(
+                \\$HOME and $SEAMSTRESS_HOME undefined!
+                \\define $SEAMSTRESS_HOME and try again
+                \\
+            , .{});
+            std.process.exit(1);
+        };
+        const seamstress_home = try std.fs.path.join(allocator, &.{ home, "seamstress" });
+        defer allocator.free(seamstress_home);
+        try map.put("SEAMSTRESS_HOME", seamstress_home);
+    }
+    if (map.get("SEAMSTRESS_CONFIG_FILENAME") == null) {
+        try map.put("SEAMSTRESS_CONFIG_FILENAME", "config.lua");
+    }
+    return try std.process.createEnvironFromMap(allocator, &map, .{});
+}
+
+/// frees memory
+fn freeEnviron(allocator: std.mem.Allocator, environ: [:null]?[*:0]u8) void {
+    for (environ) |variable| {
+        const slice = std.mem.sliceTo(variable orelse continue, 0);
+        allocator.free(slice);
+    }
+    allocator.free(environ);
 }
 
 /// if we get an agrument starting with -h, --h, -v or --v, print usage and exit
