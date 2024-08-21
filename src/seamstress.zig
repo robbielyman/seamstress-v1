@@ -4,15 +4,13 @@ const Seamstress = @This();
 loop: xev.Loop,
 pool: xev.ThreadPool,
 lua: *Lua,
-buffered_writer: *BufferedWriter,
 
 /// creates lua environment and event loop
-pub fn init(alloc_ptr: *const std.mem.Allocator, buffered_writer: *BufferedWriter) !Seamstress {
+pub fn init(alloc_ptr: *const std.mem.Allocator) !Seamstress {
     var seamstress: Seamstress = .{
         .loop = undefined,
         .pool = xev.ThreadPool.init(.{ .max_threads = 16 }),
         .lua = try Lua.init(alloc_ptr),
-        .buffered_writer = buffered_writer,
     };
     seamstress.loop = try xev.Loop.init(.{ .thread_pool = &seamstress.pool });
     return seamstress;
@@ -35,24 +33,17 @@ pub fn run(self: *Seamstress, filename: ?[:0]const u8) !void {
     }.panic));
     // prepare the lua environment
     try self.setup(filename);
-    defer {
-        // prints to the terminal
-        sayGoodbye();
-        switch (builtin.mode) {
-            .Debug, .ReleaseSafe => {
-                self.loop.deinit();
-                self.lua.close();
-            },
-            .ReleaseFast, .ReleaseSmall => std.process.cleanExit(),
-        }
-    }
     try self.loop.run(.until_done);
 }
 
+pub fn deinit(self: *Seamstress) void {
+    self.loop.deinit();
+    self.lua.close();
+}
+
 // pub because it is referenced in main
-pub fn panicCleanup(self: *Seamstress) void {
+pub fn panicCleanup(_: *Seamstress) void {
     @setCold(true);
-    defer self.buffered_writer.flush() catch {};
 }
 
 /// single source of truth about seamstress version
@@ -100,15 +91,6 @@ fn addPackageSearcher(lua: *Lua) !void {
     }.searcher));
     lua.rawSetIndex(-2, @intCast(lua.rawLen(-2) + 1)); // add our searcher to the end
     lua.pop(2); // pop `package` and `package.searchers`
-}
-
-/// prints "goodbye" to stdout unless called from a test
-fn sayGoodbye() void {
-    if (builtin.is_test) return;
-    var bw = std.io.bufferedWriter(std.io.getStdOut().writer());
-    const stdout = bw.writer();
-    stdout.print("goodbye\n", .{}) catch return;
-    bw.flush() catch return;
 }
 
 const builtin = @import("builtin");
