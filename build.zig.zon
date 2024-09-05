@@ -4,8 +4,8 @@
     .paths = .{ "build.zig.zon", "build.zig", "src" },
     .dependencies = .{
         .ziglua = .{
-            .url = "git+https://github.com/natecraddock/ziglua#d853aa9450ae568a39ea02d7082e85bafc33f735",
-            .hash = "1220affeb3fe37ef09411b5a213b5fdf9bb6568e9913bade204694648983a8b2776d",
+            .url = "git+https://github.com/natecraddock/ziglua#74796808b5bf7c81bf6f1e1b48d97ad01f87ec45",
+			.hash = "122094a86e7171946ec9dc47ea22c4782511c26ae555a7e79e315ae857ccce15cfa5",
         },
         .ziglo = .{
             .url = "git+https://github.com/ryleelyman/ziglo?ref=main#9171c30857429585e3a6c0ff2f5e7308c6b17102",
