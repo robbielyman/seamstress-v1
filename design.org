@@ -2,7 +2,7 @@
 a “game engine” is the common name for a wide variety of software platforms used in creating games.
 seamstress is like a game engine, but with an additional focus on music, visuals and creative coding.
 like a game engine, seamstress itself is not a game, nor is it music or visuals.
-rather, its intention is to be a useful tool in helping a user marshall code to create their own.
+rather, its intention is to be a useful tool in helping a user marshal code to create their own.
 
 seamstress is written in [[https://ziglang.org][Zig]], a systems programming language in the vein of C.
 it embeds the [[https://lua.org][Lua]] programming language.
@@ -66,7 +66,7 @@ so should typically be =1=.
 many Lua modules need to store some program state,
 which should under correct operation be cleaned up when the program exits.
 for this purpose, seamstress makes use of the Lua concept of (full) userdata.
-from Zig’s perspective, userdata is memory allocated and garbage-collected by Lua.
+from Zig’s perspective, userdata is memory which is allocated and garbage-collected by Lua.
 the Lua API provides a userdata objects with the ability to write a =__gc= metamethod
 which is run when the garbage collector marks an object for destruction.
 for tables and objects whose lifetime is potentially shorter than the life of seamstress,
