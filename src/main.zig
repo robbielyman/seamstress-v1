@@ -32,7 +32,11 @@ pub fn main() !void {
         .handler = .{
             .handler = struct {
                 fn handleAbrt(_: c_int) callconv(.C) noreturn {
-                    @call(.always_inline, std.debug.panic, .{ "abort called!", .{} });
+                    if (panic_closure) |p| {
+                        panic_closure = null;
+                        p.panic_fn(p.ctx);
+                    }
+                    std.process.exit(1);
                 }
             }.handleAbrt,
         },
@@ -41,7 +45,8 @@ pub fn main() !void {
     };
     if (builtin.mode == .Debug) try std.posix.sigaction(std.posix.SIG.ABRT, &act, null);
 
-    var seamstress = try Seamstress.init(&allocator);
+    var seamstress: Seamstress = undefined;
+    try seamstress.init(&allocator);
     defer seamstress.deinit();
 
     panic_closure = .{
@@ -50,19 +55,10 @@ pub fn main() !void {
     };
 
     try seamstress.run(filename);
-    sayGoodbye();
     // flush any accumulated logs
     try bw.flush();
     // in release modes, this calls `exit(0)`, saving us from having to wait for memory to be freed
     std.process.cleanExit();
-}
-
-/// prints "goodbye" to stdout
-fn sayGoodbye() void {
-    var bw = std.io.bufferedWriter(std.io.getStdOut().writer());
-    const stdout = bw.writer();
-    stdout.print("goodbye\n", .{}) catch return;
-    bw.flush() catch return;
 }
 
 /// normalizes environment variables that seamstress uses
