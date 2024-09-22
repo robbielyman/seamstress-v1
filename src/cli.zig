@@ -4,13 +4,13 @@ const max_input_len = 2 * 1024;
 buffer: std.ArrayList(u8),
 c: xev.Completion = .{},
 c_c: xev.Completion = .{},
-file: xev.File,
+stdin: Stdin,
 
 /// creates the input buffer and xev.File associated to this struct
 pub fn init(allocator: std.mem.Allocator) !Cli {
     return .{
         .buffer = std.ArrayList(u8).init(allocator),
-        .file = try xev.File.init(std.io.getStdIn()),
+        .stdin = Stdin.init(),
     };
 }
 
@@ -18,21 +18,21 @@ pub fn init(allocator: std.mem.Allocator) !Cli {
 pub fn setup(self: *Cli) !void {
     try self.buffer.ensureUnusedCapacity(max_input_len);
     const seamstress: *Seamstress = @fieldParentPtr("cli", self);
-    self.file.read(&seamstress.loop, &self.c, .{
+    self.stdin.read(&seamstress.loop, &self.c, .{
         .slice = self.buffer.unusedCapacitySlice(),
     }, Cli, self, struct {
         fn stdinCallback(
             m_cli: ?*Cli,
             loop: *xev.Loop,
             c: *xev.Completion,
-            file: xev.File,
+            file: Stdin,
             _: xev.ReadBuffer,
             r: xev.ReadError!usize,
         ) xev.CallbackAction {
             const cli = m_cli.?;
             const s: *Seamstress = @fieldParentPtr("cli", cli);
             const length = r catch |err| {
-                if (err != error.Canceled or err != error.EOF)
+                if (err != error.Canceled and err != error.EOF)
                     logger.err("error reading from stdin! {s}", .{@errorName(err)});
                 if (err == error.EOF)
                     lu.quit(s.lua);
@@ -146,3 +146,4 @@ const xev = @import("xev");
 const lu = @import("lua_util.zig");
 const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
+const Stdin = @import("cli/stdin.zig");
