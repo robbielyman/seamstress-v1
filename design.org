@@ -1,101 +1,102 @@
-* seamstress is an art engine
-a “game engine” is the common name for a wide variety of software platforms used in creating games.
-seamstress is like a game engine, but with an additional focus on music, visuals and creative coding.
-like a game engine, seamstress itself is not a game, nor is it music or visuals.
-rather, its intention is to be a useful tool in helping a user marshal code to create their own.
+* Seamstress is an art engine
+A “game engine” is the common name for a wide variety of software platforms used in creating games.
+Seamstress is like a game engine, but with an additional focus on music, visuals and creative coding.
+Like a game engine, seamstress itself is not a game, nor is it music or visuals.
+Rather, its intention is to be a useful tool in helping a user marshal code to create their own.
 
-seamstress is written in [[https://ziglang.org][Zig]], a systems programming language in the vein of C.
-it embeds the [[https://lua.org][Lua]] programming language.
-creators of software using seamstress write Lua code to create their software.
-seamstress enhances the standard offerings of Lua by providing access to, for example,
+Seamstress is written in [[https://ziglang.org][Zig]], a systems programming language in the vein of C.
+It embeds the [[https://lua.org][Lua]] programming language.
+Creators of software using seamstress write Lua code to create their software.
+Seamstress enhances the standard offerings of Lua by providing access to, for example,
 methods for musically relevant timing.
-this functionality is provided by a mixture of Lua and Zig code.
-this document is intended to describe the design of seamstress,
+This functionality is provided by a mixture of Lua and Zig code.
+This document is intended to describe the design of seamstress,
 partly so that the author can hold it outside of his head,
 and partly so that a reader interested in contributing to the project can bring it into hers.
 
-in some ways, seamstress may be productively thought of as a batteries-included Lua runtime,
+In some ways, seamstress may be productively thought of as a batteries-included Lua runtime,
 in the way that [[https://nodejs.org][Node.js]] is a batteries-included runtime for JavaScript.
-that is, its core functionality is to execute Lua code.
-all of its core behavior should be accessible to Lua code in some way,
+That is, its core functionality is to execute Lua code.
+All of its core behavior should be accessible to Lua code in some way,
 and its behavior is dramatically influenced by the Lua code that it runs,
 without attempting to assert a “core identity” that shines through.
 
-* event loop
-at the core of seamstress is an event loop,
+* Event loop
+At the core of seamstress is an event loop,
 an instance of [[https://github.com/mitchellh/libxev][libxev]], a cross-platform general-purpose Zig event loop modeled on =io_uring=.
-in libxev, an event on the event loop asks the kernel (or another thread) to perform some task,
+In libxev, an event on the event loop asks the kernel (or another thread) to perform some task,
 like reading OSC data from a UDP socket or waiting for a timer to run down,
 and executes a callback function when the task is completed.
-in seamstress, successful program execution is terminated only when the event loop has nothing “in flight” to wait for.
-for this reason, it is important that Zig code which places events onto the loop
+In seamstress, successful program execution is terminated only when the event loop has nothing “in flight” to wait for.
+For this reason, it is important that Zig code which places events onto the loop
 is also able to take events off the loop in the event that the user signals that they want the program to exit.
 
-since Lua is itself more or less fundamentally single-threaded
+Since Lua is itself more or less fundamentally single-threaded
 (despite internally using the term “thread” to refer to its coroutines),
 so too is seamstress a concurrent program without being particularly /parallel./
-on macOS, the libxev event loop is in fact /implemented/ by using a thread pool rather than =io_uring=
+On macOS, the libxev event loop is in fact /implemented/ by using a thread pool rather than =io_uring=
 to handle I/O asynchronously.
-additionally, some I/O processes like MIDI require code that is executed off of the main thread.
-however, for the most part, it is a design goal of the event loop code to allow contributors to seamstress
+Additionally, some I/O processes like MIDI require code that is executed off of the main thread.
+However, for the most part, it is a design goal of the event loop code to allow contributors to seamstress
 to write code as if it were executing asynchronously on a single thread.
 
-* module structure
-seamstress’s functionality is broken up as a number of Lua modules,
+* Module structure
+Seamstress’s functionality is broken up as a number of Lua modules,
 which can be loaded from Lua code by calling =require=.
-each module should be namespaced as =seamstress.module_name=.
-under normal operation, seamstress also creates a single global table named =seamstress=.
-it is /not/ expected that executing =require "seamstress.module_name"=
+Each module should be namespaced as =seamstress.module_name=.
+Under normal operation, seamstress also creates a single global table named =seamstress=.
+It is /not/ expected that executing =require "seamstress.module_name"=
 will store whatever is returned as a field in this table.
-calling =require= should perform the loading of the module’s core functionality,
+Calling =require= should perform the loading of the module’s core functionality,
 which should otherwise not be present.
-so for example, a user wanting to use MIDI in her program should call =require "seamstress.midi"=,
+So for example, a user wanting to use MIDI in her program should call =require "seamstress.midi"=,
 while another user who does not require MIDI may omit this call,
 so that that instance of seamstress will not use MIDI resources.
-the Lua C (and hence Zig) API provides several useful features for accomplishing this purpose.
-one is the concept of a loader function,
+The Lua C (and hence Zig) API provides several useful features for accomplishing this purpose.
+One is the concept of a loader function,
 which provides the code that is run when =require "seamstress.module_name"= is called.
-generally, a Zig implementation of a Lua module should comprise one or more Zig source files
-which together export this function, (naming it =register= is good practice)
-which is then referenced in =src/modules.zig=, which contains the canonical list of all modules available to seamstress.
-for most modules, this function =register= should be the only function referenced outside of the module itself.
+Generally, a Zig implementation of a Lua module should comprise one or more Zig source files
+which together export this function (naming it =register= is good practice).
+This function is then referenced in =src/modules.zig=,
+which contains the canonical list of all modules available to seamstress.
+For most modules, this function =register= should be the only function referenced outside of the module itself.
 
-the =register= function is a Lua function implemented in Zig, so has signature =fn (*Lua) i32=.
-it should exit by leaving one item (typically a table) on the stack;
+The =register= function is a Lua function implemented in Zig, so has signature =fn (*Lua) i32=.
+It should exit by leaving one item (typically a table) on the stack;
 this is what will be returned to the user by the =require= call.
-like all Lua functions implemented in Zig,
+Like all Lua functions implemented in Zig,
 the return value (an =i32=) of this function indicates the number of items left on the stack,
 so should typically be =1=.
 
-many Lua modules need to store some program state,
+Many Lua modules need to store some program state,
 which should under correct operation be cleaned up when the program exits.
-for this purpose, seamstress makes use of the Lua concept of (full) userdata.
-from Zig’s perspective, userdata is memory which is allocated and garbage-collected by Lua.
-the Lua API provides a userdata objects with the ability to write a =__gc= metamethod
+For this purpose, seamstress makes use of the Lua concept of (full) userdata.
+From Zig’s perspective, userdata is memory which is allocated and garbage-collected by Lua.
+The Lua API provides a userdata objects with the ability to write a =__gc= metamethod
 which is run when the garbage collector marks an object for destruction.
-for tables and objects whose lifetime is potentially shorter than the life of seamstress,
+For tables and objects whose lifetime is potentially shorter than the life of seamstress,
 the =__gc= metamethod is ideal for cleanup code.
-however, for modules themselves, which expect to be available to Lua for the entire lifetime of a seamstress program,
-the =__gc= metamethod is not appropriate for cleanup code,
+However, for modules themselves, which expect to be available to Lua for the entire lifetime of a seamstress program,
+The =__gc= metamethod is not appropriate for cleanup code,
 for the reason that when compiled with optimizations for speed,
 the seamstress program does not “close” the Lua instance,
 opting instead to exit the program early and save a user of a seamstress program from having to wait while memory is freed.
-to ensure correct operations in all compilation modes,
+To ensure correct operations in all compilation modes,
 it is sometimes still correct to provide a =__gc= metamethod which simply frees memory.
 
-** exit handlers
-instead, seamstress provides (under =lua_util.zig=)
+** Exit handlers
+Instead, seamstress provides (under =lua_util.zig=)
 a Zig API for registering a function to be called at program exit.
-this API is important for two reasons.
-first, for many modules which interact with the “outside world”, for example the user’s terminal,
+This API is important for two reasons.
+First, for many modules which interact with the “outside world”, for example the user’s terminal,
 this is the appropriate place to leave things in a good state no matter how the program exits.
-and second, this API is also how modules which add recurring events to the event loop should take them off
+And second, this API is also how modules which add recurring events to the event loop should take them off
 so that seamstress does shut down correctly.
 
-the function, =addExitHandler= has signature =fn (*Lua, enum { panic, quit }) void=.
-to use it, start by pushing the function you wish to register as an exit handler onto the stack.
-then call =addExitHandler=.
-here is an example from =cli.zig=:
+The function, =addExitHandler= has signature =fn (*Lua, enum { panic, quit }) void=.
+To use it, start by pushing the function you wish to register as an exit handler onto the stack.
+Then call =addExitHandler=.
+Here is an example from =cli.zig=:
 
 #+begin_src zig
   // l is the seamstress Lua environment.
@@ -112,8 +113,8 @@ here is an example from =cli.zig=:
   l.addExitHandler(l, .quit);
 #+end_src
 
-notice that this Lua function /closes over/ the CLI struct rather than accepting it as an argument.
-this is important: although they are implemented in Zig code (in =seamstress.zig=),
+Notice that this Lua function /closes over/ the CLI struct rather than accepting it as an argument.
+This is important: although they are implemented in Zig code (in =seamstress.zig=),
 both the quit and panic functions could be implemented in Lua code roughly as follows
 
 #+begin_src lua
@@ -125,28 +126,174 @@ both the quit and panic functions could be implemented in Lua code roughly as fo
   end
 #+end_src
 
-that is, each handler =f= is called with zero arguments.
+That is, each handler =f= is called with zero arguments.
 
-*** quit vs. panic
-here are some general rules of thumb about providing quit or panic handlers.
-a module that places recurring events onto the event loop
+*** Quit vs. panic
+Here are some general rules of thumb about providing quit or panic handlers.
+A module that places recurring events onto the event loop
 should provide a quit handler to take those events off the event loop.
-for example, =cli.zig= places a recurring call to read a line of input from stdin onto the event loop,
+For example, =cli.zig= places a recurring call to read a line of input from stdin onto the event loop,
 and therefore its =register= function finishes by registering the above quit handler.
-remember that without removing events from the event loop, seamstress will not exit properly.
+Remember that without removing events from the event loop, seamstress will not exit properly.
 
-a panic handler should be registered when seamstress
+A panic handler should be registered when seamstress
 modifies some external state that should be restored even in the event of a crash.
-=cli.zig= does /not/ provide a panic handler,
+The module =cli.zig= does /not/ provide a panic handler,
 because it does not modify external state,
 and because panicking does not require the event loop to be shut down smoothly.
 
-* multiple layers of access
-it is a design goal of seamstress that a user should be able to productively engage with their ideas on many levels,
+** Events
+Seamstress modules often make available to the script author the option to respond
+when some state changes.
+For example, the OSC module allows the user to respond to receiving an OSC message.
+In many situations, the preferred response should be to use seamstress’s event system.
+This is a “pub/sub” style system;
+a user registers callbacks using =seamstress.event.addSubscriber=,
+and events are posted by calling =seamstress.event.publish=.
+Convenient access to this system from Zig code is implemented in =lua_util.zig=
+by the =preparePublish= function,
+which has signature =fn(*Lua, []const []const u8) !void=.
+The namespace to publish the event under is passed as a slice of strings =[]const []const u8=
+(caller owns the memory; often a collection of static string literals works fine).
+Calling this function pushes the =seamstress.event.publish= function onto the stack,
+followed by a Lua array holding the strings making up the namespace.
+Assuming the function returns without errors,
+to complete the call, push any arguments to the function onto the stack,
+and then use =doCall= from =lua_util.zig=.
+
+* Error handling
+Both Zig and Lua provide facilities for handling errors.
+These facilities are convenient but serve somewhat different purposes.
+The purpose of this section is to establish useful conventions
+for contributors of Zig code to seamstress to follow with regard to error handling.
+
+*** Error unions in Zig
+Many functions in idiomatic Zig code return an error union
+to indicate the possibility of failure.
+Zig provides two keywords for unwrapping error unions, =try= and =catch=.
+Now, =try f();= is semantically equivalent to =f() catch |err| return err;=.
+That is, if =f()= fails, =try= immediately returns the error to the caller.
+The =catch= keyword, on the other hand, branches to execute the block that follows it
+in case of an error.
+If =f= has signature =fn () !T=,
+one can unwrap the error by writing =const x = try f();=.
+The value =x= will have type =T=.
+When writing a longer =catch= block in the same situation,
+note that the Zig compiler will require that both the “happy” and “error” branches
+of code coerce to the same type.
+Functionally this means that the block after =catch= must either have a result type
+compatible with =T= or be of type =noreturn=
+(e.g. because it finishes with a =return= statement
+or calls a function with return type =noreturn= like =std.debug.panic=).
+
+Although =try= is extremely useful,
+programming for seamstress presents an interesting pair of challenges:
+Lua functions implemented in Zig and libxev callbacks.
+Both of these functions have constrained return types that do not allow for error unions.
+Therefore, if these functions call code that can return an error,
+that error must be handled, otherwise Zig will not compile seamstress.
+
+*** Lua error handling and =longjmp=
+Lua also has a concept of an error.
+Reporting an error is implemented by calling =error= from Lua code.
+The default implementation of =error= in C
+makes use of the standard library functions =setjmp= and =longjmp=.
+These functions act somewhat like a superpowered =goto=
+that can break out of function scopes.
+In other words, by using =longjmp=,
+the C implementation of Lua can abandon execution of a failed bit of code
+and return to “safety” somewhere else in the program.
+It is my (limited) understanding that many languages
+implement exception handling with this mechanism.
+Although powerful,
+=longjmp= has the drawback that it can clobber the program’s stack,
+meaning that running control flow of seamstress is interrupted when =error= is called.
+A poorly handled error could, then,
+cause execution of seamstress to break out of the event loop,
+potentially resulting in unexpected behavior.
+In practice, of course,
+uncaught errors in Lua code will simply crash seamstress with an error message.
+This is facilitated in =seamstress.zig= by setting an “atpanic” function,
+and in =main.zig= by handling =SIGABRT=
+(which is raised by the Lua C library’s assertions in debug mode in the (unlikely) event of,
+say, a stack overflow).
+
+*** Best practices for errors in seamstress
+Error unions are a powerful tool in Zig code.
+Functions which are not constrained in their return type
+(like Lua functions implemented in Zig, or libxev callbacks)
+are encouraged to make use of error unions.
+Code in =lua_util.zig= follows this paradigm:
+for example, =preparePublish=, =luaPrint= and =doCall= return error unions
+to represent their failure modes.
+
+There are some exceptions in =lua_util.zig= as well:
+=quit=, =addExitHandler= and =reportError= and =checkCallable= do not return errors,
+and for good reason:
+=quit= is called to trigger seamstress exiting;
+if it fails, we should still exit, so triggering a crash with =std.debug.panic= makes sense.
+=reportError= indicates a failure mode that is hard to break out of—since
+the purpose of =reportError= is to /handle errors/ it risks circularity for it to be
+fallible, so it triggers a crash when it fails.
+In a similar vein, an error with =addExitHandler= indicates a programming error,
+either from Zig or Lua code,
+and also indicates a possible disruption in the ability for seamstress to exit normally.
+Finally =checkCallable= is designed as a convenience function for creating Lua errors,
+so it already raises an error (hence clobbers the stack) when its conditions are not met.
+
+For Zig code which is contrained in its return type from returning an error union;
+that is, code which must handle all errors it receives,
+here is some advice:
+
+**** Interface with user code with =doCall=
+The Lua error system /protects/ against errors by making use of the function =pcall=;
+if via =longjmp= the Lua =error= function “throws” an exception,
+=pcall= makes use of =setjmp= to “catch” it.
+In seamstress Zig code,
+the idiomatic interface to =pcall= is =doCall= in =lua_util.zig=.
+In the Lua C (and Zig) interface,
+you first push the function to call onto the stack,
+then any arguments to it,
+and finally trigger a call, passing the number of arguments and
+the number of expected return values.
+=doCall= augments this by adding a “message handler”
+that takes any error message returned in case of failure
+and adding a stack trace to it, and returning a Zig error value to indicate the failure.
+By using =doCall= instead of =Lua.call=,
+seamstress Zig code can be resilient against failures in user code,
+decreasing the likelihood of crashes.
+
+Be aware of the potential for and results of failure however.
+When a call to =doCall= returns a Zig error,
+it /also/ leaves an error message string on top of the Lua stack.
+If care is not taken, it is easy for Zig code to treat this error message
+as a desired ingredient for further processing,
+leading to further (and more confusing) errors.
+Even if this string is correctly handled,
+it may be necessary to provide a default value to the Lua stack
+for code execution to continue correctly.
+
+**** The =reportError= function
+Seamstress provides the =reportError= function in =lua_util.zig=
+as a means of allowing user code to notify the user of failure.
+This function should be called only in response to errors,
+since it expects the presence of an error message on the stack.
+This function uses the seamstress event system,
+publishing an event under the ={ "error" }= namespace
+with the error message as an additional argument.
+If at any point in this process a /further/ failure is encountered,
+=reportError= triggers a crash with =std.debug.panic=.
+By default, a callback is subscribed to =reportError=
+that will print the error message to stderr;
+this callback is removed if TUI operation is enabled,
+but other behavior is possible by registering new subscribers to the ={ "error" }= namespace.
+
+* Multiple layers of access
+It is a design goal of seamstress that a user should be able to productively engage with their ideas on many levels,
 and the software should therefore provide multiple layers of abstraction.
-for example, it should be possible to access and process mouse information directly
+For example, it should be possible to access and process mouse information directly
 whether using a terminal which supports mouse usage or an OS window.
-however, since it likely isn’t always inspiring to code the hitbox calculation, hover responsiveness and so on
+However, since it likely isn’t always inspiring to code the hitbox calculation, hover responsiveness and so on
 for creating a push button,
 seamstress should provide a push button abstraction with an appropriate level of customizability.
 
