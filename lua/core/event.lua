@@ -196,7 +196,7 @@ end
 ---adds a handler function to the given namespace
 ---@param namespace string[]
 ---@param fn callback
----@param options {predicate: (fun(...): boolean)?}?
+---@param options {predicate: (fun(event: string[], ...): boolean)?}?
 ---@return Subscriber
 function event.addSubscriber(namespace, fn, options)
   return event.get(namespace):addSubscriber(fn, options)

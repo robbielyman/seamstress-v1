@@ -1,76 +1,241 @@
-* seamstress
-seamstress is an art engine.
-it provides a [[https://lua.org][Lua]] environment for users to create
+* Seamstress
+Seamstress is an art engine.
+It provides a [[https://lua.org][Lua]] environment for users to create
 sequencers, music, games, visuals, etc.
-it is inspired by [[https://monome.org/docs/norns][norns]], [[https://love2d.org][Love2D]], [[https://hydra.ojack.xyz][Hydra]] and [[https://nodejs.org][Node.js]].
-seamstress version 2 is alpha software.
+It is inspired by [[https://monome.org/docs/norns][norns]], [[https://love2d.org][Love2D]], [[https://hydra.ojack.xyz][Hydra]] and [[https://nodejs.org][Node.js]].
+Seamstress version 2 is alpha software.
 
-* installation
-seamstress version 2 may be built from source or installed via [[https://brew.sh][Homebrew]].
-to install via Homebrew,
+* Installation
+Seamstress version 2 may be built from source or installed via [[https://brew.sh][Homebrew]].
+tT install via Homebrew,
 run the following commands.
 
 #+begin_src sh
-  brew tap ryleelyman/seamstress
+  brew tap robbielyman/seamstress
   brew install seamstress --HEAD
 #+end_src
 
-** building from source
-to build from source, you'll need the [[https://ziglang.org][Zig]] compiler, version 0.13.0.
-you can download it from the linked website,
+** Building from source
+To build from source, you'll need the [[https://ziglang.org][Zig]] compiler, version 0.13.0.
+You can download it from the linked website,
 or install via a package manager like Homebrew.
-to compile seamstress, clone this repository
+To compile seamstress, clone this repository
 (make sure you're on the correct branch)
 and run =zig build= in the repository root.
 
-doing so will place the compiled executable in =./zig-out/bin=.
-you can add this folder to your =$PATH=,
+Doing so will place the compiled executable in =./zig-out/bin=.
+You can add this folder to your =$PATH=,
 or copy the files installed into =zig-out= somewhere in your =$PATH=.
-now by default,
+Now by default,
 seamstress will expect the file structure present within =zig-out=
 to be reflected wherever it is copied,
 so if you copy =seamstress= into =/usr/local/bin=,
 you should copy =share/seamstress= into =/usr/local/share/seamstress=,
 but see the section on environment variables.
 
-** dependencies
-aside from the Zig compiler,
+** Dependencies
+Aside from the Zig compiler,
 seamstress depends on a number of Zig projects,
 as well as some C libraries.
 
 *** Zig dependencies
-this section is informational;
+This section is informational;
 these dependencies are fetched by the Zig compiler
 when building seamstress from source and do not need to be installed separately.
 - [[https://github.com/mitchellh/libxev][libxev]], a cross-platform event loop inspired by =io_uring=.
 - [[https://github.com/natecraddock/ziglua][ziglua]], Zig bindings for the Lua C API.
-  additionally, ziglua fetches and statically links against the C library =liblua=.
+  Additionally, ziglua compiles and statically links against the C library =liblua=.
 
 *** C dependencies
-these dependencies must be present on your system in order to use seamstress
+These dependencies must be present on your system in order to use seamstress
 and must be installed separately.
-the Homebrew formula automates this step,
+The Homebrew formula automates this step,
 but building from source does not.
 
-*** optional dependencies
-although not necessary for all operations of seamstress,
+*** Optional dependencies
+Although not necessary for all operations of seamstress,
 certain functionality may not work as expected if a dependency listed here is not present.
-- [[https://luarocks.org][LuaRocks]] (in particular [[https://luarocks.org/modules/lunarmodules/busted][busted]]) is required for running the Lua unit tests. additionally, the seamstress Lua environment can require LuaRocks modules.
+- [[https://luarocks.org][LuaRocks]] (in particular [[https://luarocks.org/modules/lunarmodules/busted][busted]]) is required for running the Lua unit tests.
+  Additionally, the seamstress Lua environment can require LuaRocks modules.
 - [[https://github.com/LuaLS/lua-language-server][lua-language-server]] in a text editor that supports the language server protocol,
   is not necessary for writing seamstress programs,
   but will provide documentation, completion, etc.
-* documentation
-although this README will aim to be reasonably in-depth,
+* Documentation
+Although this README will aim to be reasonably in-depth,
 it by itself does not aim to be complete documentation for seamstress.
-** environment variables
-seamstress pays attention to the state of the following environment variables at startup
+** Environment variables
+Seamstress pays attention to the state of the following environment variables at startup
 - =$SEAMSTRESS_LUA_PATH=, which defaults to expanding out the relative path =../share/seamstress/lua= is used to find (or override) the Lua code that seamstress ships with.
 - =$SEAMSTRESS_HOME=, which defaults to =$HOME/seamstress=, is used to find user-provided files, like the startup configuration script
 - =$SEAMSTRESS_CONFIG_FILENAME=, which defaults to =config.lua=, is the filename used to configure seamstress at startup.
 
-  additionally, when =luarocks= is available,
-  seamstress alters the value of the following environment variables,
+  Additionally, when =luarocks= is available,
+  seamstress alters for iteslf the value of the following environment variables,
   replacing them with the output of =luarocks path=.
   - =$LUA_PATH=
   - =$LUA_CPATH=
   - =$PATH=
+** Starting seamstress
+Seamstress may be invoked from the command line as =seamstress [filename]=,
+where =[filename]= is an optional argument naming the “root” Lua file of the desired script.
+
+At startup, seamstress opens a Lua environment and executes the (equivalent of the)
+following Lua code.
+#+begin_src lua
+  function loadConfig()
+    local not_new = {}
+    for key, _ in pairs(_G) do
+      table.insert(not_new, key)
+    end
+    local ok, err = pcall(dofile, os.getenv("SEAMSTRESS_HOME") ..
+                          package.config:sub(1,1) ..
+                          os.getenv("SEAMSTRESS_CONFIG_FILENAME"))
+    if not ok then
+      if err:find("No such file or directory") then return end
+      error(err)
+    end
+    for key, value in pairs(_G) do
+      local found = false
+      for _, other in ipairs(not_new) do
+        if key == other then
+          found = true
+          break
+        end
+      end
+      if found == false then
+        seamstress.config[key] = value
+        _G[key] = nil
+      end
+    end
+  end
+  
+  seamstress = require "seamstress"
+  loadConfig()
+  seamstress.event = require "seamstress.event"
+  pcall(dofile, seamstress.config.script_name)
+  seamstress.event.publish({ "init" })
+#+end_src
+The function =loadConfig()=, in words, scans the global table,
+storing keys it finds in the array =not_new=.
+Then it loads the seamstress config file,
+which on Unix-like systems is found at (in Bash notation)
+=$SEAMSTRESS_HOME/$SEAMSTRESS_CONFIG_FILENAME=
+and then scans the global table again.
+This time, any new keys are placed under =seamstress.config= and removed from the global table.
+this frees up the syntax of the config file,
+using global variables instead of worrying about namespacing under =seamstress=.
+Naturally all entries under =seamstress.config= are made available to user scripts.
+Some seamstress modules may alter their behavior depending on configuration;
+refer to the module’s documentation for information on what is available.
+
+It’s worth noting: the call to =dofile= means that code in =config.lua= is /evaluated./
+This makes configuring seamstress a powerful opportunity in and of itself,
+akin to configuring [[https://github.com/neovim/neovim][neovim]].
+
+After the configuration step, the seamstress script is also evaluated.
+As with the configuration file (indeed, the evaluation of any Lua file),
+any top-level code statements are executed.
+As a reminder, the nature of Lua is that files are executed from top to bottom.
+In particular, functions must be declared before they are used.
+Consider the following example code.
+#+begin_src lua
+  f() -- error: attempt to call a nil value (global 'f')
+
+  function g()
+    f() -- this won't function correctly if f below is made local
+  end
+
+  function f()
+    print "f is defined!"
+  end
+
+  f() -- prints "f is defined!"
+  g() -- prints "f is defined!"
+
+  local function h()
+    print "h is a local function!"
+  end
+
+  function k()
+    h() -- this will work because k "closes over" h, which is already defined.
+  end
+
+  k() -- prints "h is a local function!"
+#+end_src
+
+Finally, after all of these events, an “init” event is posted;
+see more about the seamstress event system below.
+
+** Events
+Not to be confused with the event loop,
+seamstress includes a “pub/sub” event system,
+similar in design to the LuaRocks project [[https://github.com/Olivine-Labs/mediator_lua][mediator]].
+This system is available under =seamstress.event=
+(and as =require "seamstress.event"=).
+
+This system is thoroughly integrated into seamstress’s module system;
+many modules default to posting an event when they wish to make changes
+to the running script.
+
+There are a few concepts to explain: “Channels”, “Subscribers”, “namespaces” and “callbacks”.
+
+*** Channels
+A =Channel= is a Lua table which holds a table of sub-channels and callbacks
+(really =Subscriber= objects).
+Channels can be retrieved by calling =seamstress.event.get(namespace)=,
+where =namespace= is an array of strings representing the namespace of the channel.
+
+*** Namespaces and callbacks
+Channels and their callbacks are “namespaced” by using an array of strings,
+={ "like", "this" }=,
+with handlers for more general namespaces being called after more qualified handlers.
+In =lua-ls= notation,
+each handler callback is a Lua function that should have “signature”
+=fun(event: string[], …): boolean, any?=.
+That is, an event handler callback takes as arguments the (fully qualified)
+namespace for the event,
+followed by any arguments passed after the event to =seamstress.event.publish=.
+The function should always return either =true= or =false=
+and may optionally return another value.
+These optional values are collected into an array
+which is returned by the =seamstress.event.publish= call.
+The boolean indicates whether other handlers should be called after this one;
+=true= for yes and =false= for no.
+
+*** Subscribers
+A =Subscriber= is a Lua table holding a callback function and some options.
+Subscribers are created (and registered to a namespace)
+with the =seamstress.event.addSubscriber(namespace, fn, options)= function.
+Here, =namespace= is an array of strings,
+and =options= is an optional table,
+with two meaningful entries: =priority= and =predicate=.
+If =priority= is a non-nil positive integer,
+it represents the order in which the callback should be called;
+=1= for first, =2= for second, and so on.
+A priority of =0= will be evaluated last.
+If =predicate= is a non-nil function,
+it will be evaluated with the arguments to =seamstress.event.publish=
+and the callback will be skipped if =predicate= does not return a truthy value.
+As mentioned above, =fn= should be a Lua function of “signature”
+=fun(event: string[], …): boolean, any?=.
+
+Calls to =seamstress.event.addSubscriber= will return the created =Subscriber= table;
+they can also be retrieved by calling =seamstress.event.getSubscriber=
+with the value of =subscriber.id=,
+and can be removed with =seamstress.event.removeSubscriber=.
+
+*** Publishing an event
+When calling =seamstress.event.publish(namespace, …)=,
+each of the callback functions registered at the given namespace
+is called in order of priority.
+As mentioned above, each function should be a Lua function of “signature”
+=fun(event: string[], …): boolean, any?=.
+If the first return value is falsey,
+subsequent callbacks are not called and =seamstress.event.publish= returns.
+Any subsequent return values are coalesced into a list, which is returned
+when =seamstress.event.publish= finishes.
+
+Consider a call to =seamstress.event.publish({ "nested", "namespace" })=.
+If all of the callbacks registered at ={ "nested", "namespace" }= return truthy values,
+the call to =publish= continues by calling callbacks registered at ={ "nested" }=
+(and finally at the “root” namespace ={}=).
