@@ -9,6 +9,7 @@ fn openFn(comptime filename: []const u8) fn (*Lua) i32 {
     return struct {
         fn f(l: *Lua) i32 {
             const prefix = std.process.getEnvVarOwned(l.allocator(), "SEAMSTRESS_LUA_PATH") catch return 0;
+            defer l.allocator().free(prefix);
             var buf: ziglua.Buffer = undefined;
             buf.init(l); // local buf = ""
             buf.addString(prefix); // buf = buf .. os.getenv("SEAMSTRESS_LUA_PATH")

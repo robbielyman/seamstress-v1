@@ -45,12 +45,16 @@ seamstress’s functionality is broken up as a number of Lua modules,
 which can be loaded from Lua code by calling =require=.
 each module should be namespaced as =seamstress.module_name=.
 under normal operation, seamstress also creates a single global table named =seamstress=.
-it is /not/ expected that executing =require "seamstress.module_name"= will store whatever is returned as a field in this table.
-calling =require= should perform the loading of the module’s core functionality, which should otherwise not be present.
+it is /not/ expected that executing =require "seamstress.module_name"=
+will store whatever is returned as a field in this table.
+calling =require= should perform the loading of the module’s core functionality,
+which should otherwise not be present.
 so for example, a user wanting to use MIDI in her program should call =require "seamstress.midi"=,
-while another user who does not require MIDI may omit this call, so that that instance of seamstress will not use MIDI resources.
+while another user who does not require MIDI may omit this call,
+so that that instance of seamstress will not use MIDI resources.
 the Lua C (and hence Zig) API provides several useful features for accomplishing this purpose.
-one is the concept of a loader function, which provides the code that is run when =require "seamstress.module_name"= is called.
+one is the concept of a loader function,
+which provides the code that is run when =require "seamstress.module_name"= is called.
 generally, a Zig implementation of a Lua module should comprise one or more Zig source files
 which together export this function, (naming it =register= is good practice)
 which is then referenced in =src/modules.zig=, which contains the canonical list of all modules available to seamstress.
@@ -79,12 +83,63 @@ opting instead to exit the program early and save a user of a seamstress program
 to ensure correct operations in all compilation modes,
 it is sometimes still correct to provide a =__gc= metamethod which simply frees memory.
 
-instead, seamstress provides (under =lua_util.zig=) a Zig API for registering a function to be called at program exit.
+** exit handlers
+instead, seamstress provides (under =lua_util.zig=)
+a Zig API for registering a function to be called at program exit.
 this API is important for two reasons.
 first, for many modules which interact with the “outside world”, for example the user’s terminal,
 this is the appropriate place to leave things in a good state no matter how the program exits.
 and second, this API is also how modules which add recurring events to the event loop should take them off
 so that seamstress does shut down correctly.
+
+the function, =addExitHandler= has signature =fn (*Lua, enum { panic, quit }) void=.
+to use it, start by pushing the function you wish to register as an exit handler onto the stack.
+then call =addExitHandler=.
+here is an example from =cli.zig=:
+
+#+begin_src zig
+  // l is the seamstress Lua environment.
+  // self is a pointer to the CLI struct
+  l.pushLightUserdata(self);
+  l.pushClosure(ziglua.wrap(struct {
+      fn f(l: *Lua) i32 {
+          const i = Lua.upvalueIndex(1);
+          const cli = l.toUserdata(Cli, i) catch unreachable;
+          cli.cancel();
+          return 0;
+      }
+  }.f), 1);
+  l.addExitHandler(l, .quit);
+#+end_src
+
+notice that this Lua function /closes over/ the CLI struct rather than accepting it as an argument.
+this is important: although they are implemented in Zig code (in =seamstress.zig=),
+both the quit and panic functions could be implemented in Lua code roughly as follows
+
+#+begin_src lua
+  local handler_tbl = {}
+  function handler()
+    for _, f in pairs(handler_tbl) do
+      pcall(f)
+    end
+  end
+#+end_src
+
+that is, each handler =f= is called with zero arguments.
+
+*** quit vs. panic
+here are some general rules of thumb about providing quit or panic handlers.
+a module that places recurring events onto the event loop
+should provide a quit handler to take those events off the event loop.
+for example, =cli.zig= places a recurring call to read a line of input from stdin onto the event loop,
+and therefore its =register= function finishes by registering the above quit handler.
+remember that without removing events from the event loop, seamstress will not exit properly.
+
+a panic handler should be registered when seamstress
+modifies some external state that should be restored even in the event of a crash.
+=cli.zig= does /not/ provide a panic handler,
+because it does not modify external state,
+and because panicking does not require the event loop to be shut down smoothly.
 
 * multiple layers of access
 it is a design goal of seamstress that a user should be able to productively engage with their ideas on many levels,
