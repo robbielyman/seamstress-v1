@@ -21,6 +21,19 @@ All of its core behavior should be accessible to Lua code in some way,
 and its behavior is dramatically influenced by the Lua code that it runs,
 without attempting to assert a “core identity” that shines through.
 
+* Core modules
+By default, seamstress loads very few modules aside from the Lua standard libaries,
+opting to leave the global table relatively unaltered.
+Here is the list of modules which are loaded by default:
+- =seamstress=, i.e. =require "seamstress"= which is also available as the global =seamstress=.
+- =seamstress.event=, which is also avaiable as the =event= field of the global =seamstress=.
+- =seamstress.async=, which is also available as the =async= field of the global =seamstress=.
+  This also includes the =seamstress.async.Promise= type, which may also be loaded with
+  =require "seamstress.async.Promise"=.
+- =seamstress.Timer=, which is also available as the =Timer= field of the global =seamstress=.
+  Additionally, =seamstress= provides a =Timer= object at =seamstress.update=,
+  which, when running, publishes an ={ "update" }= event when it fires.
+  
 * Event loop
 At the core of seamstress is an event loop,
 an instance of [[https://github.com/mitchellh/libxev][libxev]], a cross-platform general-purpose Zig event loop modeled on =io_uring=.
@@ -39,6 +52,141 @@ to handle I/O asynchronously.
 Additionally, some I/O processes like MIDI require code that is executed off of the main thread.
 However, for the most part, it is a design goal of the event loop code to allow contributors to seamstress
 to write code as if it were executing asynchronously on a single thread.
+
+** Async code
+The primary model of concurrency in Lua is the coroutine.
+The [[https://lua.org][Lua website]] has a good introduction to coroutines in Lua,
+but let me rehearse what is important to know.
+A typical function operates from start to finish before /returning/ control to its caller.
+Concurrency that operates only with functions is often /preemptive:/
+one chain of execution (say a thread)
+preventing another from operating while it does its thing.
+Coroutines differ from typical functions in that they may be /suspended,/
+at which point they are said to /yield/ control to another chain of execution,
+and may later be /resumed./
+In Lua, there is a kind of “parent–child” relationship between a coroutine
+and the context in which it was created.
+That is, it is usually clear who is doing the yielding vs. the resuming.
+In Lua, coroutines, like Lua functions and other constructs, are “stateful”,
+closing over their environment.
+
+This model is elegant and extremely useful,
+but the parent–child relationship means that coroutines managed in Lua
+must be “driven” (i.e. repeatedly resumed) explicitly in order to progress.
+Since seamstress provides an event loop,
+it makes sense to hook together the event loop and coroutines to free the user
+from having to explicitly drive through code she wants to happen when it can.
+Modeled on the JavaScript concept of =Promises= and =async= functions,
+seamstress provides opportunities for running code through the event loop.
+Since this code makes use of the Lua =coroutine= library,
+functions within it may use =coroutine.yield()= to pause execution,
+allowing seamstress to respond to accumulated events, for instance,
+before being automatically resumed.
+
+*** The =seamstress.async= function
+In seamstress Lua, =seamstress.async= may be called with a function argument,
+as in =local f = seamstress.async(func)=.
+In this situation, =f= is a (synchronous) function
+which, when called, as in =f(x, y)=, places the execution of =func(x, y)= onto the seamstress event loop.
+This done, =f= returns a /Promise,/ which acts as a kind of handle to the execution of =func=,
+as we now explain.
+
+*** The =seamstress.async.Promise= type
+A /Promise/ in seamstress is a userdata holding a bit of data for the event loop.
+Some seamstress modules may return Promise objects,
+(recall that =seamstress.async= and =seamstress.async.Promise= are loaded by default),
+but =seamstress.async.Promise= may be called as a function in order to create one as well,
+as in =local promise = seamstress.async.Promise(func, …)=.
+Here =func= is a function (which may call yield)
+and any subsequent arguments in =…= are passed as arguments to =func=.
+A Promise’s function always executes;
+as in JavaScript, there is no easy mechanism for cancelling one.
+A Promise is either /pending/ (in case it has not finished execution) or /settled./
+A settled Promise may either be /resolved/ in case it executed without errors,
+or /rejected/ if it encountered errors.
+
+**** Sequencing code after a Promise settles
+To sequence code for execution after a Promise in JavaScript,
+the =promise.then= function is provided.
+In Lua, =then= is a reserved word; seamstress uses “anon” for the same purpose
+(as in archaic English “I come anon”).
+If =promise= is a =seamstress.async.Promise=,
+calling =promise:anon(resolve, reject)= will call the function =resolve=
+in case =promise= resolves, and =reject= if it rejects.
+The arguments to =resolve= are specified by the Promise;
+if the promise was created by calling =seamstress.async.Promise(func, …)=,
+they are the return values of =func=.
+The argument to =reject= is the error message.
+Calling =promse:anon= returns another Promise.
+This Promise resolves if the provided handler executes successfully,
+and rejects only if the /handler/ passed to =anon= has an error.
+Note that the second argument to =anon= is optional;
+it defaults to =function(err) error(err) end=.
+
+Similar functionality is provided by =promise:catch(func)=,
+which is equivalent to =promise:anon(function(…) return … end, func)=,
+and =promise:finally(func)=, which is equivalent to =promise:anon(func, func)=.
+
+**** “Unwrapping” Promises with =await=
+When in an asynchonous context (i.e. in the body of a Promise or a coroutine),
+seamstress, like JavaScript, provides “await” syntax
+for grabbing the values returned by an asynchronous function
+as if they were achieved synchronously.
+In JavaScript, =await= is a keyword,
+while in seamstress Lua, it is a member function.
+The following code snippets are semantically equivalent;
+both =b= and =c= represent Promises which, when executed,
+print “the number is 25”.
+#+begin_src lua
+  local a = seamstress.async(function(x) return x + 12 end)
+  -- Promise-chaining with `anon`
+  local b = seamstress.async.Promise(function()
+      a(13):anon(function(x) print("the number is " .. x) end)
+  end)
+  -- unwrapping with `await`
+  local c = seamstress.async.Promise(function()
+      local x = a(13):await()
+      print("the number is " .. x)
+  end)
+#+end_src
+One advantage provided by =await= is that it allows for writing code that “looks”
+a little more like synchronous code.
+However, one disadvantage is that when the Promise being awaited rejects,
+=await= throws a Lua error.
+
+** Timers
+Aside from asynchronous code,
+perhaps the main means of interacting with the seamstress event loop
+is the =seamstress.Timer= type.
+Like =seamstress.async= and =seamstress.async.Promise=,
+Timer objects may be created by calling
+=seamstress.Timer(action, delta, stage_end, stage, running)=.
+Here =action= is a function with Lua “signature”
+=fun(self: Timer, dt: number)=.
+That is, =action= is passed the Timer as an argument,
+as well as a time delta (measured in seconds)
+representing the amount of time that has elapsed since the last call to =action=.
+This =dt= may differ from =delta=,
+but =delta= is the intended interval between calls to =action=.
+Both =stage_end= and =stage= are integers;
+=stage_end= represents the stage at which to end if positive;
+negative numbers mean infinite execution (and the default is =-1=),
+while =stage= represents the stage at which to start (defaulting to =1=).
+Finally =running= is a boolean representing whether the Timer should run.
+
+The call to =seamstress.Timer= returns a Timer object,
+which is a userdata value,
+but which has fields =action=, =delta=, =stage_end=, =stage= and =running=.
+Altering these fields alters the behavior of the Timer object,
+which is “awake” to these changes when its =action= is called.
+In particular, if =action= alters, for instance, =delta=,
+that value for =delta= takes effect immediately,
+determining the next amount to sleep for.
+
+Unlike =seamstress.async=,
+functions provided to the =action= field of a =seamstress.Timer=
+are /not/ executed as coroutines,
+and so cannot yield.
 
 * Module structure
 Seamstress’s functionality is broken up as a number of Lua modules,
@@ -297,3 +445,26 @@ However, since it likely isn’t always inspiring to code the hitbox calculation
 for creating a push button,
 seamstress should provide a push button abstraction with an appropriate level of customizability.
 
+* Modules
+** =seamstress.clock=
+In contrast to =seamstress.async= functions,
+which utilize coroutines but attempts to drive its coroutine quickly,
+and to =seamstress.Timer= objects,
+which operate over time, but do not use coroutines,
+=seamstress.clock= drives coroutines over time,
+with options for resuming according to a notion of musical tempo,
+which may be provided internally, or via MIDI or [[https://www.ableton.com/en/link/][Ableton Link]].
+
+The function =seamstress.clock.run(f, …)= runs the function =f=
+as a coroutine, passing it the remainder of the arguments,
+and returns a =Clock= object,
+which is a table with fields =id= (an integer) and =coro= (a coroutine).
+Inside the body of =f=, calls to =seamstress.clock.sleep(seconds)=
+or =seamstress.clock.sync(beat, offset)=
+will cause execution of =f= to pause for time measured either in seconds
+or in beats.
+
+** =seamstress.midi=
+** =seamstress.osc=
+** =seamstress.monome=
+** =seamstress.tui=
