@@ -97,7 +97,7 @@ fn setup(self: *Seamstress, filename: ?[:0]const u8) !void {
     self.lua.requireF("seamstress", ziglua.wrap(register), true);
     if (is_test) {
         // adds an `init` handler that runs the seamstress tests
-        try lu.load(self.lua, "test");
+        try lu.load(self.lua, "seamstress.test");
     } else {
         self.lua.rotate(-2, 1);
         // seamstress.config = the table returned by config
