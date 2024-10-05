@@ -1,4 +1,4 @@
-/// A `Promise` is an opaque handler to an operation
+/// A `Promise` is an opaque handle to an operation
 /// which will be executed on the vent loop.
 /// `Promise` objects always execute and cannot be canceled or altered once created.
 const Promise = @This();
@@ -94,9 +94,14 @@ fn multi(comptime how: How) fn (*Lua) i32 {
                     c: *xev.Completion,
                     r: xev.Timer.RunError!void,
                 ) xev.CallbackAction {
-                    _ = r catch |err| panic("unexpected timer error! {s}", .{@errorName(err)});
-                    const lua = lu.getLua(loop);
                     const handle = handleFromPtr(ptr);
+                    const lua = lu.getLua(loop);
+                    _ = r catch |err| {
+                        lua.unref(ziglua.registry_index, handle);
+                        lua.pushFString("unexpected timer error! {s}", .{@errorName(err)});
+                        lu.reportError(lua);
+                        return .disarm;
+                    };
                     _ = lua.rawGetIndex(ziglua.registry_index, handle); // push the Promise onto the stack
                     const promise = lua.toUserdata(Promise, -1) catch unreachable;
                     _ = lua.getUserValue(-1, 1) catch unreachable; // get the thread
@@ -299,11 +304,15 @@ fn @"async"(lua: *Lua) i32 {
 }
 
 /// attempts to resolve a Promise by resuming its coroutine
-/// panics on timer errors
 fn settle(ptr: ?*anyopaque, loop: *xev.Loop, c: *xev.Completion, r: xev.Timer.RunError!void) xev.CallbackAction {
-    _ = r catch |err| panic("unexpected timer error! {s}", .{@errorName(err)});
     const l = lu.getLua(loop);
     const handle = handleFromPtr(ptr);
+    _ = r catch |err| {
+        l.unref(ziglua.registry_index, handle);
+        _ = l.pushFString("unexpected timer error! {s}", .{@errorName(err).ptr});
+        lu.reportError(l);
+        return .disarm;
+    };
     _ = l.rawGetIndex(ziglua.registry_index, handle); // push the Promise onto the stack
     const promise = l.toUserdata(Promise, -1) catch unreachable;
     _ = l.getUserValue(-1, 1) catch unreachable; // get the thread
@@ -374,16 +383,20 @@ fn anon(l: *Lua) i32 {
     const s = lu.getSeamstress(l);
     promise.data.timer.run(&s.loop, &promise.c, 2, anyopaque, ptrFromHandle(handle), struct {
         /// attempt to sttle a promise created with anon
-        /// panics on timer error
         fn callback(
             ptr: ?*anyopaque,
             loop: *xev.Loop,
             c: *xev.Completion,
             r: xev.Timer.RunError!void,
         ) xev.CallbackAction {
-            _ = r catch |err| panic("unexpected timer error! {s}", .{@errorName(err)});
             const lua = lu.getLua(loop);
             const inner_handle = handleFromPtr(ptr);
+            _ = r catch |err| {
+                lua.unref(ziglua.registry_index, inner_handle);
+                _ = lua.pushFString("unexpected timer error! {s}", .{@errorName(err).ptr});
+                lu.reportError(lua);
+                return .disarm;
+            };
             _ = lua.rawGetIndex(ziglua.registry_index, inner_handle); // push the Promise
             const inner_promise = lua.toUserdata(Promise, -1) catch unreachable;
             _ = lua.getUserValue(-1, 2) catch unreachable; // push the other Promise
@@ -488,7 +501,6 @@ fn @"await"(l: *Lua) i32 {
 }
 
 const std = @import("std");
-const panic = std.debug.panic;
 const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
 const lu = @import("lua_util.zig");

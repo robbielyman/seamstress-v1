@@ -204,6 +204,8 @@ pub fn register(l: *Lua) i32 {
     // TODO: fill this out more
     lu.load(l, "seamstress.event") catch unreachable;
     l.setField(-2, "event");
+    lu.load(l, "seamstress.async") catch unreachable;
+    l.setField(-2, "async");
     return 1;
 }
 
