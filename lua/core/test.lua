@@ -9,7 +9,7 @@ local function runner()
   local busted = require 'busted.core' ()
   require 'busted' (busted)
   local directory = os.getenv("SEAMSTRESS_LUA_PATH") .. package.config:sub(1, 1) .. "test"
-  
+  error('TODO')
 end
 
 event.addSubscriber({ 'init' }, function()
