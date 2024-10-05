@@ -1,4 +1,4 @@
-* Seamstress
+* Seamsrtess
 Seamstress is an art engine.
 It provides a [[https://lua.org][Lua]] environment for users to create
 sequencers, music, games, visuals, etc.
@@ -7,7 +7,7 @@ Seamstress version 2 is alpha software.
 
 * Installation
 Seamstress version 2 may be built from source or installed via [[https://brew.sh][Homebrew]].
-tT install via Homebrew,
+To install via Homebrew,
 run the following commands.
 
 #+begin_src sh
@@ -174,7 +174,8 @@ This system is available under =seamstress.event=
 (and as =require "seamstress.event"=).
 
 This system is thoroughly integrated into seamstress’s module system;
-many modules default to posting an event when they wish to make changes
+many modules default to posting an event when they wish
+to make changes in the environment available
 to the running script.
 
 There are a few concepts to explain: “Channels”, “Subscribers”, “namespaces” and “callbacks”.
