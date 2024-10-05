@@ -3,6 +3,8 @@
 pub const list = std.StaticStringMap(*const fn (?*ziglua.LuaState) callconv(.C) i32).initComptime(.{
     .{ "seamstress", ziglua.wrap(@import("seamstress.zig").register) },
     .{ "seamstress.event", ziglua.wrap(openFn("event.lua")) },
+    .{ "seamstress.async", ziglua.wrap(@import("async.zig").register(.@"async")) },
+    .{ "seamstress.async.Promise", ziglua.wrap(@import("async.zig").register(.promise)) },
 });
 
 fn openFn(comptime filename: []const u8) fn (*Lua) i32 {
@@ -13,7 +15,7 @@ fn openFn(comptime filename: []const u8) fn (*Lua) i32 {
             var buf: ziglua.Buffer = undefined;
             buf.init(l); // local buf = ""
             buf.addString(prefix); // buf = buf .. os.getenv("SEAMSTRESS_LUA_PATH")
-            buf.addString("/core/"); // buf = buf .. "/core/"
+            buf.addString(if (builtin.os.tag == .windows) "\\core\\" else "/core/"); // buf = buf .. "/core/"
             buf.addString(filename); // buf = buf .. filename
             buf.pushResult();
             l.doFile(l.toString(-1) catch unreachable) catch l.raiseError(); // local res = dofile(buf) -- (not pcalled!)
@@ -30,5 +32,6 @@ pub fn load(l: *Lua, module_name: [:0]const u8) !void {
 }
 
 const std = @import("std");
+const builtin = @import("builtin");
 const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;

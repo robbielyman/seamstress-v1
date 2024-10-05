@@ -7,6 +7,23 @@ pub fn quit(l: *Lua) void {
     };
 }
 
+/// grabs the main Lua instance from the event loop
+pub fn getLua(loop: *xev.Loop) *Lua {
+    const s: *Seamstress = @fieldParentPtr("loop", loop);
+    return s.lua;
+}
+
+/// grabs the core seamstress object
+/// panics on failure
+/// stack effect: 0
+pub fn getSeamstress(l: *Lua) *Seamstress {
+    _ = l.getMetatableRegistry("seamstress");
+    _ = l.getField(-1, "__seamstress");
+    const seamstress = l.toUserdata(Seamstress, -1) catch panic("unable to get handle to seamstress object!", .{});
+    l.pop(2);
+    return seamstress;
+}
+
 /// adds the closure on top of the stack to the array of exit handlers
 /// panics if unable to get the upvalue
 /// stack effect: -1 (removes the handler)
@@ -183,3 +200,5 @@ const builtin = @import("builtin");
 const std = @import("std");
 const assert = std.debug.assert;
 const panic = std.debug.panic;
+const Seamstress = @import("seamstress.zig");
+const xev = @import("xev");
