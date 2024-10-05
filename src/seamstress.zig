@@ -79,22 +79,72 @@ pub const version: std.SemanticVersion = .{
     .minor = 0,
     .patch = 0,
     .pre = "prealpha",
-    .build = "240917",
+    .build = "241005",
 };
 
 fn setup(self: *Seamstress, filename: ?[:0]const u8) !void {
-    _ = filename; // autofix
+    const is_test = if (filename) |f| if (std.mem.eql(u8, f, "test")) true else false else false;
     // open standard lua libraries
     self.lua.openLibs();
+    // load the config file---unless we're running tests
+    // the config file leaves a table on the stack
+    if (!is_test) try self.configure();
     // create the seamstress metatable
     try self.createMetatable();
     // add our package searcher
     try addPackageSearcher(self.lua);
     // populates "seamstress" as a lua global and leaves it on the stack
     self.lua.requireF("seamstress", ziglua.wrap(register), true);
+    if (is_test) {
+        // adds an `init` handler that runs the seamstress tests
+        try lu.load(self.lua, "test");
+    } else {
+        self.lua.rotate(-2, 1);
+        // seamstress.config = the table returned by config
+        self.lua.setField(-2, "config");
+    }
     self.lua.pop(1); // pop seamstress from the stack
     // set up CLI interaction
     try self.cli.setup();
+}
+
+/// attempts to call `dofile` on $SEAMSTRESS_HOME/$SEAMSTRESS_CONFIG_FILENAME
+/// and then scrapes any new globals added into a table, which is left on the stack
+fn configure(seamstress: *Seamstress) !void {
+    const script =
+        \\return function()
+        \\  local not_new = {}
+        \\  for key, _ in pairs(_G) do
+        \\    table.insert(not_new, key)
+        \\  end
+        \\  local config_file = os.getenv("SEAMSTRESS_HOME") ..
+        \\    package.config:sub(1, 1) ..
+        \\    os.getenv("SEAMSTRESS_CONFIG_FILENAME")
+        \\  local ok, err = pcall(dofile, config_file)
+        \\  if not ok then
+        \\    if err:find("No such file or directory") then return {} end
+        \\    error(err)
+        \\  end
+        \\  local ret = {}
+        \\  for key, value in pairs(_G) do
+        \\    local found = false
+        \\    for _, other in ipairs(not_new) do
+        \\      if key == other then
+        \\        found = true
+        \\        break
+        \\      end
+        \\    end
+        \\    if found == false then
+        \\      ret[key] = value
+        \\      _G[key] = nil
+        \\    end
+        \\  end
+        \\  return ret
+        \\end
+    ;
+    try seamstress.lua.loadString(script);
+    try lu.doCall(seamstress.lua, 0, 1);
+    try lu.doCall(seamstress.lua, 0, 1);
 }
 
 fn createMetatable(seamstress: *Seamstress) !void {
