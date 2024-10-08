@@ -468,3 +468,17 @@ or in beats.
 ** =seamstress.osc=
 ** =seamstress.monome=
 ** =seamstress.tui=
+
+* Style guide
+For the most part, seamstress code will strive to follow the following conventions.
+- Functions and methods are =camelCase=, in both Zig and Lua code.
+  For example, =seamstress.event.addSubscriber=.
+- Variables, fields and constants (which therefore includes some Lua functions)
+  are =snake_case=.
+- Types are =PascalCase=. For example, =seamstress.async.Promise=.
+- Lua constructors for seamstress types
+  should generally be =__call= metamethods
+  on the type name.
+  For example, to create a Promise, invoke =seamstress.async.Promise=
+  as a function, as in
+  =local p = seamstress.async.Promise(function() return "hi" end)=.
