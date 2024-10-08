@@ -1,4 +1,4 @@
-* Seamsrtess
+* Seamstress
 Seamstress is an art engine.
 It provides a [[https://lua.org][Lua]] environment for users to create
 sequencers, music, games, visuals, etc.
@@ -78,6 +78,11 @@ Seamstress pays attention to the state of the following environment variables at
 ** Starting seamstress
 Seamstress may be invoked from the command line as =seamstress [filename]=,
 where =[filename]= is an optional argument naming the “root” Lua file of the desired script.
+If =filename= is “test”, seamstress will attempt to run a suite of unit tests
+using the =luarocks= framework [[https://github.com/lunarmodules/busted][busted]] and exit.
+Notice that although if busted (or luarocks) is not installed,
+these tests will not be run,
+it is not necessary to install =luarocks= or busted to run seamstress.
 
 At startup, seamstress opens a Lua environment and executes the (equivalent of the)
 following Lua code.
@@ -240,3 +245,130 @@ Consider a call to =seamstress.event.publish({ "nested", "namespace" })=.
 If all of the callbacks registered at ={ "nested", "namespace" }= return truthy values,
 the call to =publish= continues by calling callbacks registered at ={ "nested" }=
 (and finally at the “root” namespace ={}=).
+
+** Asynchronous code
+Seamstress provides JavaScript-style asynchronous code execution
+via =require 'seamstress.async'= and =require 'seamstress.async.Promise'=.
+Like the pub/sub event system,
+these modules are also automatically available as
+=seamstress.async= and =seamstress.async.Promise=.
+
+*** Promises
+A =Promise= is an opaque handle to a unit of code execution
+which is driven by the seamstress event loop.
+Like many seamstress object types,
+one creates =Promise= objects by calling =seamstress.async.Promise=
+as a function.
+This function takes at least one argument,
+which should be a function.
+Any further arguments are passed to this function as its arguments.
+Under the hood,
+this function is executed on a separate Lua [[https://www.lua.org/manual/5.4/manual.html#2.6][coroutine]],
+and so can call =coroutine.yield= and other yielding functions.
+
+As in JavaScript, functions passed to =seamstress.async.Promise= always execute
+and have no builtin cancelation mechanism.
+Every time a =Promise= function yields,
+the seamstress event loop schedules an event which will resume the function’s execution until it returns or errors.
+
+Therefore a =Promise= is in one of three states:
+it is either mid-execution, in which case it is “pending”,
+or it has “settled”, either successfully, in which case we say
+the Promise is “resolved”, or there was an error,
+in which case the Promise is “rejected”.
+To sequence code to execute after a Promise has settled,
+call its =anon= method.
+
+**** Promise:anon
+=Promise:anon(resolve, reject)= takes one (optionally two) functions as arguments.
+The first, =resolve=, will be called if the Promise resolves,
+and receives any values returned by the given Promise as arguments.
+The second, =reject=, defaults to =function(err) error(err) end=
+and will be called if the Promise rejects with error message =err=.
+=Promise:anon= returns a new Promise,
+which settles once the initial Promise has settled.
+Note that this new Promise will /resolve/ in all cases
+unless the =resolve= or =reject= handler itself throws an error.
+
+**** Promise:catch and Promise:finally
+There are two convenience methods,
+=catch= and =finally= provided.
+=Promise:catch(reject)= is equivalent to calling =Promise:anon(resolve, reject)= with =resolve = function(...) return ... end=,
+while =Promise:finally(handler)= is equivalent to calling
+=Promise:anon(handler, handler)=.
+
+**** Promise.any, Promise.all and Promise.race
+These functions (which are called as =semastress.async.Promise.all=,
+for example, and not as methods on a Promise object)
+provide a convenient method for many-to-one transformations on Promises.
+Each one takes in a variable number of Promises as arguments
+and returns a new Promise
+whose settling is dependent on the settling of the arguments passed in.
+=Promise.all=, for instance,
+will resolve once all its arguments resolve,
+but will reject if any of them reject.
+=Promise.any= resolves it any of its arguments resolve,
+and rejects only once all of them reject.
+=Promise.race= settles in the same way as the first of its arguments to settle.
+Note that =Promise.race=, for instance,
+does not cancel execution of any of its arguments
+even though it may settle faster than some of them.
+
+*** =async= functions
+Similar to =seamstress.async.Promise=,
+the table =seamstress.async= is also callable as a function,
+taking in a function as an argument.
+Unlike =seamstress.async.Promise=,
+calling =seamstress.async= returns a /function,/
+which returns a =Promise= when called.
+For example, consider the following code
+
+#+begin_src lua
+  local fn = seamstress.async(function(x) return x + 2 end)
+  local promise = fn(5)
+  promise:anon(function(x) print("received " .. x) end)
+  -- prints "received 7"
+#+end_src
+
+That is, every invocation of =fn=
+will return a new Promise
+which corresponds to a new asynchronous invocation of the function
+initally passed as an argument to the call to =seamstress.async=.
+This Promise may be chained with =anon= like any other.
+
+*** Promise:await
+When in an asynchornous context, like within a Promise,
+one may use =Promise:await= as a convenient way of “unwrapping” Promise objects to get the values they return.
+For example, consider the following code
+
+#+begin_src lua
+  local fn = seamstress.async(function(x) return x + 2 end)
+  local promise = seamstress.async.Promise(function()
+      local y = fn(5):await()
+      print("received " .. y)
+      -- prints "received 7"
+  end)
+#+end_src
+
+In this code, =fn(5):await()=
+creates a new Promise object and invokes its =await()= method.
+This method repeatedly yields the current coroutine
+(hence must be called from within an asynchronous context like a coroutine)
+until the Promise settles.
+If the Promise resolves,
+any values returned by the Promise
+are themselves returned by the call to =await()=.
+If the Promise rejects,
+an error is thrown.
+Thus the above code is functionally identical to—but perhaps easier to read than—the following code
+
+#+begin_src lua
+  local fn = seamstress.async(function(x) return x + 2 end)
+  local promise = seamstress.async.Promise(function()
+      local p = fn(5)
+      p:anon(function(y)
+          print("received " .. y)
+      end, function(err) error(err) end)
+  end)
+#+end_src
+
