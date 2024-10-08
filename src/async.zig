@@ -50,7 +50,7 @@ pub fn register(comptime which: Which) fn (*Lua) i32 {
                     l.setFuncs(&.{
                         .{ .name = "anon", .func = ziglua.wrap(anon) },
                         .{ .name = "catch", .func = ziglua.wrap(@"catch") },
-                        .{ .name = "finally", .func = ziglua.wrap("finally") },
+                        .{ .name = "finally", .func = ziglua.wrap(finally) },
                         .{ .name = "await", .func = ziglua.wrap(@"await") },
                     }, 0); // register functions
                     _ = l.pushStringZ("__index"); // __index
@@ -98,7 +98,7 @@ fn multi(comptime how: How) fn (*Lua) i32 {
                     const lua = lu.getLua(loop);
                     _ = r catch |err| {
                         lua.unref(ziglua.registry_index, handle);
-                        lua.pushFString("unexpected timer error! {s}", .{@errorName(err)});
+                        _ = lua.pushFString("unexpected timer error! {s}", .{@errorName(err).ptr});
                         lu.reportError(lua);
                         return .disarm;
                     };
@@ -118,7 +118,7 @@ fn multi(comptime how: How) fn (*Lua) i32 {
                             .all => promise.status = .fulfilled, // we fulfill
                             .race => promise.status = .fulfilled, // TODO: does this match expectations?
                         }
-                        l.unref(ziglua.registry_index, handle); // the promise is settled, and we don't need the reference
+                        lua.unref(ziglua.registry_index, handle); // the promise is settled, and we don't need the reference
                         promise.data.timer.deinit();
                         return .disarm;
                     }
@@ -143,7 +143,7 @@ fn multi(comptime how: How) fn (*Lua) i32 {
                             },
                             .rejected => switch (how) {
                                 .any => {}, // do nothing yet
-                                .any, .race => {
+                                .all, .race => {
                                     promise.status = .rejected; // we reject
                                     _ = lua.getUserValue(-1, 1) catch unreachable; // grab the other Promise's stack
                                     const thread = lua.toThread(-1) catch unreachable;
@@ -157,7 +157,7 @@ fn multi(comptime how: How) fn (*Lua) i32 {
                             },
                             else => all_of_em = false,
                         }
-                        l.pop(1); // pop it
+                        lua.pop(1); // pop it
                     } else {
                         // we didn't break
                         if (all_of_em) {
@@ -168,7 +168,7 @@ fn multi(comptime how: How) fn (*Lua) i32 {
                                 _ = lua.getUserValue(-1, 1) catch unreachable; // grab the other Promise's stack
                                 const thread = lua.toThread(-1) catch unreachable;
                                 lua.pop(2);
-                                thread.xMove(stack, if (promise.status == .fulfilled) stack.getTop() else 1); // pull from it
+                                thread.xMove(stack, if (promise.status == .fulfilled) thread.getTop() else 1); // pull from it
                             }
                             if (promise.status == .rejected) {
                                 var k: i32 = 3; // the first two values are functions
@@ -198,6 +198,7 @@ fn multi(comptime how: How) fn (*Lua) i32 {
                     return .disarm;
                 }
             }.callback); // add to the event loop
+            return 1; // return the new promise
         }
     }.f;
 }
@@ -357,8 +358,10 @@ fn anon(l: *Lua) i32 {
     l.setMetatable(-2); // setmetatable(promise, metatable)
     const new_l = l.newThread();
     lu.checkCallable(l, 2); // second argument should be callable
+    l.pushValue(2);
     if (t3 != .nil and t3 != .none) {
         lu.checkCallable(l, 3); // third argument should be nil or callable
+        l.pushValue(3);
     } else {
         l.pushFunction(ziglua.wrap(struct {
             /// default promise rejection handler

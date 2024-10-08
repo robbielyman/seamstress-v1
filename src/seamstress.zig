@@ -44,10 +44,6 @@ pub fn run(self: *Seamstress, filename: ?[:0]const u8) !void {
                 return .disarm;
             };
             _ = r.timer catch return .disarm;
-            var bw = std.io.bufferedWriter(std.io.getStdOut().writer());
-            const stdout = bw.writer();
-            stdout.print("SEAMSTRESS\nseamstress version: {}\n> ", .{version}) catch return .disarm;
-            bw.flush() catch return .disarm;
             return .disarm;
         }
     }.f);
@@ -206,6 +202,13 @@ pub fn register(l: *Lua) i32 {
     l.setField(-2, "event");
     lu.load(l, "seamstress.async") catch unreachable;
     l.setField(-2, "async");
+    l.pushFunction(ziglua.wrap(struct {
+        fn f(lua: *Lua) i32 {
+            lu.quit(lua);
+            return 0;
+        }
+    }.f));
+    l.setField(-2, "quit");
     return 1;
 }
 

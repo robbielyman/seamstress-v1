@@ -237,4 +237,9 @@ function event.clear(namespace)
   channel.channels = {}
 end
 
+event.addSubscriber({ 'error' }, function(_, msg)
+  print(msg)
+  return true
+end)
+
 return event
