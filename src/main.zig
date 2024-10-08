@@ -35,6 +35,7 @@ pub fn main() !void {
                     if (panic_closure) |p| {
                         panic_closure = null;
                         p.panic_fn(p.ctx);
+                        std.debug.dumpCurrentStackTrace(@returnAddress());
                     }
                     std.process.exit(1);
                 }
@@ -82,7 +83,7 @@ fn setEnvironmentVariables(allocator: std.mem.Allocator) ![:null]?[*:0]u8 {
             const inner = std.mem.trimLeft(u8, token, "export ");
             const equals = std.mem.indexOfScalar(u8, inner, '=') orelse continue;
             const key = inner[0..equals];
-            const value = inner[equals + 1 .. inner.len - 1];
+            const value = inner[equals + 2 .. inner.len - 1];
             try map.put(key, value);
         }
     }

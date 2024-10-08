@@ -5,6 +5,15 @@ pub fn quit(l: *Lua) void {
     doCall(l, 0, 0) catch {
         panic("error while quitting! {s}", .{l.toString(-1) catch unreachable});
     };
+    load(l, "seamstress") catch unreachable;
+    // replace seamstress.quit so that calling seamstress.quit() is idempotent
+    l.pushFunction(ziglua.wrap(struct {
+        fn f(_: *Lua) i32 {
+            return 0;
+        }
+    }.f));
+    l.setField(-2, "quit");
+    l.pop(1);
 }
 
 /// grabs the main Lua instance from the event loop
