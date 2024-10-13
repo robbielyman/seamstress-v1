@@ -12,6 +12,11 @@ pub fn build(b: *std.Build) !void {
     });
     addImports(b, &exe.root_module, target, optimize);
     b.installArtifact(exe);
+    // const install_docs = b.addInstallDirectory(.{
+    // .source_dir = exe.getEmittedDocs(),
+    // .install_dir = .{ .custom = "share/seamstress" },
+    // .install_subdir = "docs",
+    // });
 
     const install_lua_files = b.addInstallDirectory(.{
         .source_dir = b.path("lua"),
@@ -19,6 +24,7 @@ pub fn build(b: *std.Build) !void {
         .install_subdir = "lua",
     });
     b.getInstallStep().dependOn(&install_lua_files.step);
+    // b.getInstallStep().dependOn(&install_docs.step);
 
     const tests = b.addTest(.{
         .target = target,
