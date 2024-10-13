@@ -6,6 +6,7 @@ pub const list = std.StaticStringMap(*const fn (?*ziglua.LuaState) callconv(.C) 
     .{ "seamstress.async", ziglua.wrap(@import("async.zig").register(.@"async")) },
     .{ "seamstress.async.Promise", ziglua.wrap(@import("async.zig").register(.promise)) },
     .{ "seamstress.test", ziglua.wrap(openFn("test.lua")) },
+    .{ "seamstress.Timer", ziglua.wrap(@import("timer.zig").register) },
 });
 
 fn openFn(comptime filename: []const u8) fn (*Lua) i32 {

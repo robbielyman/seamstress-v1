@@ -202,6 +202,8 @@ pub fn register(l: *Lua) i32 {
     l.setField(-2, "event");
     lu.load(l, "seamstress.async") catch unreachable;
     l.setField(-2, "async");
+    lu.load(l, "seamstress.Timer") catch unreachable;
+    l.setField(-2, "Timer");
     l.pushFunction(ziglua.wrap(struct {
         fn f(lua: *Lua) i32 {
             lu.quit(lua);

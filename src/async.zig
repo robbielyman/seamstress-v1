@@ -1,5 +1,5 @@
 /// A `Promise` is an opaque handle to an operation
-/// which will be executed on the vent loop.
+/// which will be executed on the event loop.
 /// `Promise` objects always execute and cannot be canceled or altered once created.
 const Promise = @This();
 
