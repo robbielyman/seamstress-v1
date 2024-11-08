@@ -11,5 +11,9 @@
             .url = "git+https://github.com/robbielyman/libxev#ffec853f748dc169e0d8baea398a7b252920ee3c",
             .hash = "12208f5f594722e975e9e53e53050315c17fbd205f30b4c2c180741736ba9c63af38",
         },
+        .zosc = .{
+            .url = "git+https://github.com/robbielyman/zosc?ref=main#1cdccae5f706f56fa954b682fc58f88e8025c94c",
+            .hash = "12209f4e32f3ba1440f80ecfd56a806007618eee2192e9b076b201cf3e4eb4ac171f",
+        },
     },
 }

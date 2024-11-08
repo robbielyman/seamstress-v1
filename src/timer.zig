@@ -18,10 +18,12 @@ pub fn register(l: *Lua) i32 {
 /// runs the timer's action and reschedules depending on Timer's values
 fn bang(ud: ?*anyopaque, loop: *xev.Loop, c: *xev.Completion, r: xev.Result) xev.CallbackAction {
     const l = lu.getLua(loop);
+    const top = if (builtin.mode == .Debug) l.getTop();
+    defer if (builtin.mode == .Debug) std.debug.assert(top == l.getTop());
     const handle = handleFromPtr(ud);
     _ = r.timer catch |err| {
         l.unref(ziglua.registry_index, handle);
-        _ = l.pushFString("timer error! {s}", .{@errorName(err).ptr});
+        _ = l.pushFString("timer error! %s", .{@errorName(err).ptr});
         lu.reportError(l);
         return .disarm;
     };
@@ -53,6 +55,7 @@ fn bang(ud: ?*anyopaque, loop: *xev.Loop, c: *xev.Completion, r: xev.Result) xev
     _ = l.getUserValue(-1, @intFromEnum(Indices.now)) catch unreachable;
     const then = l.toInteger(-1) catch unreachable;
     l.pop(1);
+
     _ = l.getUserValue(-1, @intFromEnum(Indices.delta)) catch unreachable;
     const old_delta = l.toNumber(-1) catch unreachable;
     l.pop(1);
@@ -245,3 +248,4 @@ const Lua = ziglua.Lua;
 const xev = @import("xev");
 const lu = @import("lua_util.zig");
 const std = @import("std");
+const builtin = @import("builtin");
