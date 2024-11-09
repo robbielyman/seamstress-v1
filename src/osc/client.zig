@@ -18,12 +18,87 @@ const Client = @This();
 
 addr: std.net.Address,
 
+fn dispatchInner(comptime which: enum { bytes, object }) fn (*Lua) i32 {
+    return struct {
+        fn inner(l: *Lua) i32 {
+            const server_idx = Lua.upvalueIndex(1);
+            const addr_idx = Lua.upvalueIndex(2);
+            const msg_idx = Lua.upvalueIndex(3);
+            const time_idx = Lua.upvalueIndex(4);
+            switch (which) {
+                .bytes => {
+                    const parsed = z.parseOSC(l.toString(msg_idx) catch unreachable) catch l.raiseErrorStr("bad OSC data!", .{});
+                    if (!z.matchPath(l.checkString(1), parsed.message.path)) {
+                        l.pushBoolean(true);
+                        return 1;
+                    }
+                },
+                .object => {
+                    _ = l.getField(msg_idx, "path");
+                    const path = l.toString(-1) catch unreachable;
+                    if (!z.matchPath(l.checkString(1), path)) {
+                        l.pushBoolean(true);
+                        return 1;
+                    }
+                },
+            }
+            l.pushValue(2);
+            l.pushValue(server_idx);
+            l.pushValue(addr_idx);
+            l.pushValue(msg_idx);
+            l.pushValue(time_idx);
+            l.call(4, 1);
+            return 1;
+        }
+    }.inner;
+}
+
+fn dispatch(l: *Lua) i32 {
+    const client = l.checkUserdata(Client, 1, "seamstress.osc.Client");
+    const time_exists = l.typeOf(5) != .none;
+    const addr = if (l.typeOf(4) == .none) client.addr else osc.parseAddress(l, 4) catch
+        l.typeError(4, "address");
+    l.pushNil();
+    const bytes_fn = l.getTop();
+    l.pushNil();
+    const obj_fn = l.getTop();
+    var bytes_fn_prepped, var obj_fn_prepped = blk: {
+        switch (l.typeOf(3)) {
+            .string => {
+                l.pushValue(1);
+                osc.pushAddress(l, .array, addr);
+                l.pushValue(3);
+                if (time_exists) l.pushValue(5) else l.pushNil();
+                l.pushClosure(ziglua.wrap(dispatchInner(.bytes)), 4);
+                l.replace(bytes_fn);
+                break :blk .{ true, false };
+            },
+            .table => {
+                lu.load(l, "seamstress.osc.Message") catch unreachable;
+                l.pushValue(3);
+                l.call(1, 1);
+                l.replace(3);
+            },
+            .userdata => {},
+            else => l.typeError(3, "seamstress.osc.Message"),
+        }
+        l.pushValue(1);
+        osc.pushAddress(l, .array, addr);
+        l.pushValue(3);
+        if (time_exists) l.pushValue(5) else l.pushNil();
+        l.pushClosure(ziglua.wrap(dispatchInner(.object)), 4);
+        l.replace(obj_fn);
+        break :blk .{ false, true };
+    };
+    _ = obj_fn_prepped; // autofix
+    _ = bytes_fn_prepped; // autofix
+}
+
 fn dispatch(l: *Lua) i32 {
     const client = l.checkUserdata(Client, 1, "seamstress.osc.Client");
     const addr = if (l.typeOf(4) == .none) client.addr else osc.parseAddress(l, 4) catch
         l.typeError(4, "address");
     const time_exists = l.typeOf(5) != .none;
-    l.pushNil(); // this will be replaced by the message object if need be
     const msg_idx, const bytes_idx, const bytes, var msg_created = blk: {
         const msg_idx = switch (l.typeOf(3)) {
             .string => {
@@ -68,7 +143,7 @@ fn dispatch(l: *Lua) i32 {
             while (true) {
                 l.pushValue(-3); // iterator function
                 l.pushValue(-3); // state
-                l.rotate(-4, 2); // stack now is function state key
+                l.rotate(-3, 1); // stack now is function state key
                 l.call(2, 2); // key, val = function(state, key)
                 if (!lu.isCallable(l, -1)) break; // if val is not a function, we're done
                 const key = l.toString(-2) catch l.raiseError(); // key should always be a string
@@ -76,6 +151,8 @@ fn dispatch(l: *Lua) i32 {
                     l.pop(1);
                     continue;
                 }
+                const top = l.getTop();
+                defer l.setTop(top - 1); // end by popping the function
                 l.pushValue(-1); // duplicate the function in case we need to call it again
                 l.pushValue(2); // server
                 osc.pushAddress(l, .array, addr); // address
@@ -103,7 +180,6 @@ fn dispatch(l: *Lua) i32 {
                 }; // continue = function(server, address, bytes, timetag)
                 const keep_going = l.toBoolean(-1);
                 if (!keep_going) break;
-                l.pop(2); // remove the other copy of the function
             }
         },
     }
@@ -194,7 +270,7 @@ fn __pairs(l: *Lua) i32 {
             return 2;
         }
     }.f;
-    // return iterator, msg, nil
+    // return iterator, tbl, nil
     l.pushFunction(ziglua.wrap(iterator));
     _ = l.getUserValue(1, 1) catch unreachable;
     l.pushNil();

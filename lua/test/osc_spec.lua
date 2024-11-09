@@ -78,6 +78,37 @@ describe('seamstress.osc.Message', function()
   end)
 end)
 
+describe('seamstress.osc.Client', function()
+  it('is callable', function()
+    assert.is.callable(osc.Client)
+  end)
+  describe('returns a value', function()
+    local sum = 0
+    local c = osc.Client {
+      address = 1881,
+      ["/test/path"] = function(_, _, msg)
+        for i, data in ipairs(msg) do
+          sum = sum + (data * i)
+        end
+        assert.are.same(17, sum)
+        return false
+      end,
+    }
+    it('which is a Client', function()
+      assert.is.userdata(c)
+      assert.is(c.__name, 'seamstress.osc.Client')
+    end)
+    it('can dispatch messages', function()
+      c:dispatch(nil, {
+        path = "/test/path",
+        2,
+        3,
+        3,
+      })
+    end)
+  end)
+end)
+
 describe('seamstress.osc.Server', function()
   it('is callable', function()
     assert.is.callable(osc.Server)
@@ -99,12 +130,19 @@ describe('seamstress.osc.Server', function()
         "message_string",
       })
     end)
+    it('can dispatch messages', function()
+      s:dispatch(1881, {
+        path = "/some/osc/path",
+        500,
+        "message_string",
+      })
+    end)
     it('starts running', function()
-         assert.are.same(true, s.running)
+      assert.are.same(true, s.running)
     end)
     it('can be stopped', function()
-         s.running = false
-         assert.are.same(false, s.running)
+      s.running = false
+      assert.are.same(false, s.running)
     end)
   end)
 end)

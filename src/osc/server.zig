@@ -53,9 +53,22 @@ fn ptrFromHandle(handle: i32) ?*anyopaque {
 
 fn add(l: *Lua) i32 {
     l.checkType(1, .userdata);
-    const client = l.checkUserdata(@import("client.zig"), 2, "seamstress.osc.Client");
-    osc.pushAddress(l, .string, client.addr);
-    l.pushValue(2);
+    switch (l.typeOf(2)) {
+        .userdata => {
+            const client = l.checkUserdata(@import("client.zig"), 2, "seamstress.osc.Client");
+            osc.pushAddress(l, .string, client.addr);
+            l.pushValue(2);
+        },
+        .table => {
+            lu.load(l, "seamstress.osc.Client") catch unreachable;
+            l.pushValue(2);
+            l.call(1, 1);
+            const client = l.toUserdata(@import("client.zig"), -1) catch unreachable;
+            osc.pushAddress(l, .string, client.addr);
+            l.rotate(-2, 1);
+        },
+        else => l.typeError(2, "seamstress.osc.Client"),
+    }
     l.setTable(1);
     return 0;
 }
@@ -156,7 +169,6 @@ fn __gc(l: *Lua) i32 {
 fn dispatch(l: *Lua) i32 {
     l.checkType(1, .userdata); // server
     const addr = osc.parseAddress(l, 2) catch l.typeError(2, "address"); // address
-    l.checkType(3, .string); // bytes
     osc.pushAddress(l, .string, addr); // use the address as a key to the server
     switch (l.getTable(1)) {
         .userdata => { // found a matching client
@@ -164,7 +176,7 @@ fn dispatch(l: *Lua) i32 {
             _ = l.getMetaField(-1, "dispatch") catch unreachable;
             l.pushValue(-2);
             l.pushValue(1);
-            l.pushValue(3);
+            l.pushValue(3); // message
             l.call(3, 0);
         },
         .none, .nil => { // no matching client found, use default
@@ -173,8 +185,8 @@ fn dispatch(l: *Lua) i32 {
             _ = l.getMetaField(-1, "dispatch") catch unreachable;
             l.pushValue(-2);
             l.pushValue(1);
-            l.pushValue(3);
-            l.pushValue(2);
+            l.pushValue(3); // message
+            l.pushValue(2); // address
             l.call(4, 0);
         },
         else => l.typeError(1, "seamstress.osc.Server"),
