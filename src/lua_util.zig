@@ -112,6 +112,16 @@ pub fn doCall(l: *Lua, nargs: i32, nres: i32) error{LuaFunctionFailed}!void {
                 .string => {
                     const msg = lua.toString(1) catch unreachable;
                     lua.traceback(lua, msg, 1);
+                    blk: {
+                        var counter = std.io.countingWriter(std.io.null_writer);
+                        std.debug.writeCurrentStackTrace(counter.writer(), std.debug.getSelfDebugInfo() catch break :blk, .no_color, null) catch break :blk;
+                        var buf: ziglua.Buffer = undefined;
+                        const slice = buf.initSize(lua, @intCast(counter.bytes_written));
+                        var stream = std.io.fixedBufferStream(slice);
+                        std.debug.writeCurrentStackTrace(stream.writer(), std.debug.getSelfDebugInfo() catch break :blk, .no_color, null) catch break :blk;
+                        buf.pushResult();
+                        lua.concat(2);
+                    }
                 },
                 else => {
                     var buf: ziglua.Buffer = undefined;
@@ -123,6 +133,16 @@ pub fn doCall(l: *Lua, nargs: i32, nres: i32) error{LuaFunctionFailed}!void {
                     buf.pushResult();
                     const msg = lua.toString(1) catch unreachable;
                     lua.traceback(lua, msg, 1);
+                    blk: {
+                        var counter = std.io.countingWriter(std.io.null_writer);
+                        std.debug.writeCurrentStackTrace(counter.writer(), std.debug.getSelfDebugInfo() catch break :blk, .no_color, null) catch break :blk;
+                        var buf2: ziglua.Buffer = undefined;
+                        const slice = buf2.initSize(lua, @intCast(counter.bytes_written));
+                        var stream = std.io.fixedBufferStream(slice);
+                        std.debug.writeCurrentStackTrace(stream.writer(), std.debug.getSelfDebugInfo() catch break :blk, .no_color, null) catch break :blk;
+                        buf2.pushResult();
+                        lua.concat(2);
+                    }
                 },
             }
             return 1;

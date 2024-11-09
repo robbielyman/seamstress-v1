@@ -22,7 +22,7 @@ pub fn register(comptime which: enum { osc, server, client, message }) fn (*Lua)
 pub fn pushAddress(l: *Lua, comptime mode: enum { array, table, string }, addr: std.net.Address) void {
     var counter = std.io.countingWriter(std.io.null_writer);
     addr.format("", .{}, counter.writer()) catch unreachable;
-    const size = counter.bytes_written;
+    const size: usize = @intCast(counter.bytes_written);
     var buf: ziglua.Buffer = undefined;
     const slice = buf.initSize(l, @intCast(size));
     var fbs = std.io.fixedBufferStream(slice);
@@ -30,17 +30,19 @@ pub fn pushAddress(l: *Lua, comptime mode: enum { array, table, string }, addr: 
     switch (mode) {
         .string => buf.pushResultSize(@intCast(size)),
         .array => {
-            l.createTable(2, 0);
             const colon_idx = std.mem.indexOfScalar(u8, slice, ':').?;
             buf.pushResultSize(colon_idx);
+            l.createTable(2, 0);
+            l.rotate(-2, 1);
             l.pushInteger(@intCast(addr.getPort()));
             l.setIndex(-3, 2);
             l.setIndex(-2, 1);
         },
         .table => {
-            l.createTable(0, 2);
             const colon_idx = std.mem.indexOfScalar(u8, slice, ':').?;
             buf.pushResultSize(colon_idx);
+            l.createTable(0, 2);
+            l.rotate(-2, 1);
             l.pushInteger(@intCast(addr.getPort()));
             l.setField(-3, "port");
             l.setField(-2, "host");
@@ -199,7 +201,9 @@ pub fn toData(l: *Lua, tag: ?u8) !z.Data {
         'T', 'F' => if (byte == 'T') .T else .F,
         'N', 'I' => if (byte == 'N') .N else .I,
         inline 'm', 'c', 's', 'S', 'b' => |which| ret: {
-            const str = l.toStringEx(-1);
+            const t = l.typeOf(-1);
+            if (t != .string) return error.TypeMismatch;
+            const str = l.toString(-1) catch unreachable;
             break :ret if (which == 'c')
                 .{ .c = str[0] }
             else if (which == 'm') blk: {

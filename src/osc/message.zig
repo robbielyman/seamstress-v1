@@ -11,6 +11,9 @@ pub fn register(l: *Lua) i32 {
             .{ .name = "__len", .func = ziglua.wrap(__len) },
         };
         l.setFuncs(funcs, 0);
+        // _ = l.pushString("seamstress.osc.Message");
+        // _ = l.pushString("__name");
+        // l.setTable(-3);
     }
     l.pop(1);
     l.pushFunction(ziglua.wrap(new));
@@ -21,26 +24,30 @@ fn __index(l: *Lua) i32 {
     const builder = l.checkUserdata(z.Message.Builder, 1, "seamstress.osc.Message");
     _ = l.pushStringZ("path");
     _ = l.pushStringZ("types");
-    _ = l.pushStringZ("bytes");
-    if (l.compare(2, -3, .eq)) { // k == "path"
+    if (l.compare(2, -2, .eq)) { // k == "path"
         _ = l.getUserValue(1, 1) catch unreachable; // user value: path
         return 1;
     }
-    if (l.compare(2, -2, .eq)) { // k == "types"
+    if (l.compare(2, -1, .eq)) { // k == "types"
         var buf: ziglua.Buffer = undefined;
         _ = buf.initSize(l, builder.data.items.len);
         for (builder.data.items) |data|
             buf.addChar(@tagName(data)[0]);
-        buf.pushResultSize(builder.data.items.len); // push the constructed typetag
+        buf.pushResult(); // push the constructed typetag
         return 1;
     }
-    if (l.compare(2, -1, .eq)) { // k == "bytes"
-        _ = l.getMetaField(1, "bytes") catch unreachable; // return getmetatable(msg).bytes
-        return 1;
+    switch (l.typeOf(2)) {
+        .string => {
+            _ = l.getMetatable(1) catch unreachable;
+            l.pushValue(2);
+            _ = l.getTable(-2);
+            return 1;
+        },
+        .number => if (!l.isInteger(2)) l.argError(2, "integer expected"),
+        else => l.argError(2, "integer expected"),
     }
-    if (l.typeOf(2) != .number or !l.isInteger(2)) l.argError(2, "integer, \"path\" or \"types\" expected"); // otherwise we allow integer indices only
     const idx = l.toInteger(2) catch unreachable;
-    if (idx <= 0 or idx >= std.math.cast(ziglua.Integer, builder.data.items.len) orelse 0)
+    if (idx <= 0 or idx > std.math.cast(ziglua.Integer, builder.data.items.len) orelse 0)
         return 0; // nothing at that index!
     osc.pushData(l, builder.data.items[@intCast(idx - 1)]); // push the data
     return 1;
@@ -125,7 +132,7 @@ fn __ipairs(l: *Lua) i32 {
             const builder = lua.checkUserdata(z.Message.Builder, 1, "seamstress.osc.Message");
             const idx = lua.checkInteger(2);
             const @"usize" = std.math.cast(usize, idx - 1) orelse lua.raiseErrorStr("bad index!", .{});
-            if (@"usize" >= builder.data.items.len) return 0;
+            if (@"usize" > builder.data.items.len) return 0;
             lua.pushInteger(idx + 1);
             osc.pushData(lua, builder.data.items[@"usize"]);
             return 2;

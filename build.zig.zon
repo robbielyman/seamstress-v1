@@ -12,8 +12,8 @@
             .hash = "12208f5f594722e975e9e53e53050315c17fbd205f30b4c2c180741736ba9c63af38",
         },
         .zosc = .{
-            .url = "git+https://github.com/robbielyman/zosc?ref=main#1cdccae5f706f56fa954b682fc58f88e8025c94c",
-            .hash = "12209f4e32f3ba1440f80ecfd56a806007618eee2192e9b076b201cf3e4eb4ac171f",
+            .url = "git+https://github.com/robbielyman/zosc#06c0daaa676a085ca5c1388b4320eae99cfa08da",
+            .hash = "1220f5ac8394d8367fca646af79641626e92c26e7aa51d0e9fba5026618e7893386b",
         },
     },
 }

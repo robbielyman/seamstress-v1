@@ -244,12 +244,14 @@ fn send(l: *Lua) i32 {
                 l.typeError(3, "seamstress.osc.Message");
             _ = l.getUserValue(-1, 1) catch unreachable;
             const path = l.toString(-1) catch l.argError(3, "seamstress.osc.Message is missing a path");
+            l.pop(1);
             break :msg .{ l.toUserdata(z.Message.Builder, -1) catch unreachable, path };
         },
         .userdata => msg: { // already a Message
             const message = l.checkUserdata(z.Message.Builder, 3, "seamstress.osc.Message");
             _ = l.getUserValue(-1, 1) catch unreachable;
             const path = l.toString(-1) catch l.argError(3, "seamstress.osc.Message is missing a path");
+            l.pop(1);
             break :msg .{ message, path };
         },
         else => l.typeError(3, "seamstress.osc.Message"),
@@ -298,34 +300,36 @@ fn __index(l: *Lua) i32 {
 }
 
 fn __newindex(l: *Lua) i32 {
-    if (l.typeOf(2) == .string) blk: { // type(k) == "string"
-        _ = osc.parseAddress(l, 2) catch break :blk; // is the string an address?
-        _ = l.checkUserdata(@import("client.zig"), 3, "seamstress.osc.Client"); // if so, are we assigning a Client?
-        _ = l.getUserValue(1, 1) catch unreachable; // great, do the assignment, this is t
-        l.pushValue(2); // k
-        l.pushValue(3); // v
-        l.setTable(-3); // t[k] = v
-        return 0;
-    }
     _ = l.pushStringZ("running");
-    if (l.compare(2, -1, .eq)) { // k == "running"
+    if (l.compare(2, -1, .eq)) return ret: { // k == "running"
         const server = l.checkUserdata(Server, 1, "seamstress.osc.Server");
         const running = l.toBoolean(3);
         if (server.running != running) {
             server.running = running;
+            l.pushValue(1);
             const err = if (running) run(l) else stop(l);
             err catch |e|
                 l.raiseErrorStr("error while setting server's running status! %s", .{@errorName(e).ptr});
         }
-    }
+        break :ret 0;
+    };
     _ = l.pushStringZ("address");
     if (l.compare(2, -1, .eq)) { // k == "address"
         l.raiseErrorStr("unable to change address after creation; close and reopen", .{});
     }
     _ = l.pushStringZ("default"); // k == "default"
-    if (l.compare(2, -1, .eq)) {
+    if (l.compare(2, -1, .eq)) return ret: {
         _ = l.checkUserdata(@import("client.zig"), 3, "seamstress.osc.Client"); // v must be a Client
         _ = l.getUserValue(1, 1) catch unreachable; // this is t
+        l.pushValue(2); // k
+        l.pushValue(3); // v
+        l.setTable(-3); // t[k] = v
+        break :ret 0;
+    };
+    if (l.typeOf(2) == .string) blk: { // type(k) == "string"
+        _ = osc.parseAddress(l, 2) catch break :blk; // is the string an address?
+        _ = l.checkUserdata(@import("client.zig"), 3, "seamstress.osc.Client"); // if so, are we assigning a Client?
+        _ = l.getUserValue(1, 1) catch unreachable; // great, do the assignment, this is t
         l.pushValue(2); // k
         l.pushValue(3); // v
         l.setTable(-3); // t[k] = v
