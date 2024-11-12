@@ -34,8 +34,15 @@ fn openFn(comptime filename: []const u8) fn (*Lua) i32 {
 }
 
 /// loads the seamstress module `module_name`; e.g. "seamstress" or "seamstress.event".
-pub fn load(l: *Lua, module_name: [:0]const u8) void {
-    const func = list.get(module_name) orelse std.debug.panic("no such seamstress module {s}!", .{module_name});
+pub const load = if (builtin.mode == .Debug) loadComptime else loadRuntime;
+
+fn loadRuntime(l: *Lua, module_name: [:0]const u8) void {
+    const func = list.get(module_name).?;
+    l.requireF(module_name, func, false);
+}
+
+fn loadComptime(l: *Lua, comptime module_name: [:0]const u8) void {
+    const func = comptime list.get(module_name) orelse @compileError("no such module name!");
     l.requireF(module_name, func, false);
 }
 
