@@ -34,9 +34,8 @@ fn openFn(comptime filename: []const u8) fn (*Lua) i32 {
 }
 
 /// loads the seamstress module `module_name`; e.g. "seamstress" or "seamstress.event".
-/// returns error.NoSuchSeamstressModule if `module_name` is not present in the list
-pub fn load(l: *Lua, module_name: [:0]const u8) !void {
-    const func = list.get(module_name) orelse return error.NoSuchSeamstressModule;
+pub fn load(l: *Lua, module_name: [:0]const u8) void {
+    const func = list.get(module_name) orelse std.debug.panic("no such seamstress module {s}!", .{module_name});
     l.requireF(module_name, func, false);
 }
 
