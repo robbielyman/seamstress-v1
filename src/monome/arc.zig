@@ -1,23 +1,94 @@
 pub fn register(l: *Lua) i32 {
-    l.pushFunction(ziglua.wrap(new));
+    blk: {
+        l.newMetatable("seamstress.monome.Arc") catch break :blk;
+        const funcs: []const ziglua.FnReg = &.{
+            .{ .name = "__index", .func = ziglua.wrap(common.__index(.arc)) },
+            .{ .name = "__newindex", .func = ziglua.wrap(common.__newindex(.arc)) },
+            .{ .name = "__gc", .func = ziglua.wrap(common.__gc(.arc)) },
+            .{ .name = "refresh", .func = ziglua.wrap(refresh) },
+            .{ .name = "led", .func = ziglua.wrap(led) },
+            .{ .name = "all", .func = ziglua.wrap(all) },
+            .{ .name = "connect", .func = ziglua.wrap(common.connect(.arc)) },
+            .{ .name = "info", .func = ziglua.wrap(common.@"/sys/info") },
+        };
+        l.setFuncs(funcs, 0);
+    }
+    l.pop(1);
+    l.newTable();
+    l.newTable();
+    const funcs: []const ziglua.FnReg = &.{
+        .{ .name = "__call", .func = ziglua.wrap(__call) },
+        .{ .name = "connect", .func = ziglua.wrap(connect) },
+    };
+    l.setFuncs(funcs, 0);
+    _ = l.pushStringZ("__index");
+    l.pushValue(-2);
+    l.setTable(-3);
+    l.setMetatable(-2);
     return 1;
 }
 
+fn getServer(l: *Lua, arc: i32) ?*osc.Server {
+    defer l.pop(1);
+    if ((l.getUserValue(arc, 1) catch return null) != .table) return null;
+    _ = l.getField(-1, "server");
+    defer l.pop(1);
+    return l.toUserdata(osc.Server, -1) catch null;
+}
+
+fn __call(l: *Lua) i32 {
+    l.len(1);
+    const len = l.toInteger(-1) catch unreachable;
+    const arc = l.newUserdata(Arc, 2);
+    arc.* = .{};
+    _ = l.getMetatableRegistry("seamstress.monome.Arc");
+    l.setMetatable(-2);
+    l.pushValue(-1);
+    l.setIndex(1, len + 1);
+    return 1;
+}
+
+fn connect(l: *Lua) i32 {
+    const idx = l.optInteger(1) orelse 1;
+    lu.load(l, "seamstress.monome.Arc") catch unreachable;
+    switch (l.getIndex(-1, idx)) { // local g = seamstress.monome.Arc[idx]
+        .userdata => {}, // g ~= nil
+        else => { // g = seamstress.monome.Arc()
+            l.pop(1);
+            const arc = l.newUserdata(Arc, 2);
+            arc.* = .{};
+            _ = l.getMetatableRegistry("seamstress.monome.Arc");
+            l.setMetatable(-2);
+            l.pushValue(-1);
+            l.setIndex(-3, idx); // seamstress.monome.Arc[idx] = g
+        },
+    }
+    // g:connect()
+    _ = l.getMetaField(-1, "connect") catch unreachable;
+    l.pushValue(-2);
+    l.call(1, 0);
+    return 1; // return g
+}
+
 fn refresh(l: *Lua) i32 {
-    const server = l.toUserdata(osc.Server, Lua.upvalueIndex(1)) catch unreachable;
     const arc = l.checkUserdata(Arc, 1, "seamstress.monome.Arc");
+    const server = getServer(l, 1) orelse return 0;
     _ = l.getField(1, "client");
     const client = l.toUserdata(osc.Client, -1) catch unreachable;
-    _ = l.getField(1, "prefix");
-    _ = l.pushString("/ring/map");
-    l.concat(2);
+    if (l.getField(1, "prefix") == .nil) {
+        l.pop(1);
+        _ = l.pushStringZ("/ring/map");
+    } else {
+        _ = l.pushStringZ("/ring/map");
+        l.concat(2);
+    }
     const path = l.toString(-1) catch unreachable;
-    _ = l.getUserValue(1, 2) catch unreachable;
+    if ((l.getUserValue(1, 2) catch unreachable) == .nil) return 0;
     for (0..4) |i| {
         if (!arc.dirty[i]) continue;
         _ = l.getIndex(-1, @intCast(i + 1));
         const builder = l.toUserdata(osc.z.Message.Builder, -1) catch unreachable;
-        builder.data.items[0] = .{ .i = @intCast(i + 1) };
+        builder.data.items[0] = .{ .i = @intCast(i) };
         const msg = builder.commit(l.allocator(), path) catch l.raiseErrorStr("out of memory!", .{});
         defer msg.unref();
         arc.dirty[i] = false;
@@ -37,7 +108,7 @@ fn led(l: *Lua) i32 {
     const level = common.checkIntegerAcceptingNumber(l, 4);
     l.argCheck(1 <= n and n <= 4, 2, "n must be between 1 and 4!");
     l.argCheck(0 <= level and level <= 15, 4, "level must be between 0 and 15!");
-    _ = l.getUserValue(1, 2) catch unreachable;
+    if ((l.getUserValue(1, 2) catch unreachable) == .nil) return 0;
     _ = l.getIndex(-1, n);
     const index: usize = @intCast(@mod(x - 1, 64));
     const builder = l.toUserdata(osc.z.Message.Builder, -1) catch unreachable;
@@ -51,12 +122,14 @@ fn all(l: *Lua) i32 {
     const level = common.checkIntegerAcceptingNumber(l, 2);
     l.argCheck(0 <= level and level <= 15, 2, "level must be between 0 and 15!");
     var i: ziglua.Integer = 1;
-    _ = l.getUserValue(1, 2) catch unreachable;
-    while (i <= 4) : (i += 1) {
-        _ = l.getIndex(-1, i);
-        const builder = l.toUserdata(osc.z.Message.Builder, -1) catch unreachable;
-        @memset(builder.data.items[1..], .{ .i = @intCast(level) });
-        l.pop(1);
+    blk: {
+        if ((l.getUserValue(1, 2) catch unreachable) == .nil) break :blk;
+        while (i <= 4) : (i += 1) {
+            _ = l.getIndex(-1, i);
+            const builder = l.toUserdata(osc.z.Message.Builder, -1) catch unreachable;
+            @memset(builder.data.items[1..], .{ .i = @intCast(level) });
+            l.pop(1);
+        }
     }
     @memset(&arc.dirty, true);
     return 0;
@@ -64,97 +137,41 @@ fn all(l: *Lua) i32 {
 
 const Arc = @This();
 dirty: [4]bool = .{ true, true, true, true },
+connected: bool = false,
 
-fn new(l: *Lua) i32 {
-    const inner = struct {
-        const funcs: []const ziglua.FnReg = &.{
-            .{ .name = "//enc/delta", .func = ziglua.wrap(osc.wrap(@"//enc/delta")) },
-            .{ .name = "//enc/key", .func = ziglua.wrap(osc.wrap(@"//enc/key")) },
-            .{ .name = "/sys/prefix", .func = ziglua.wrap(osc.wrap(common.@"/sys/prefix")) },
-        };
-        const funcs2: []const ziglua.FnReg = &.{
-            .{ .name = "/sys/host", .func = ziglua.wrap(osc.wrap(common.@"/sys/host")) },
-            .{ .name = "/sys/port", .func = ziglua.wrap(osc.wrap(common.@"/sys/port")) },
-        };
-        const funcs3: []const ziglua.FnReg = &.{
-            .{ .name = "__index", .func = ziglua.wrap(common.__index(.arc)) },
-            .{ .name = "__newindex", .func = ziglua.wrap(common.__newindex(.arc)) },
-            .{ .name = "__gc", .func = ziglua.wrap(common.__gc(.arc)) },
-            .{ .name = "refresh", .func = ziglua.wrap(refresh) },
-            .{ .name = "led", .func = ziglua.wrap(led) },
-            .{ .name = "all", .func = ziglua.wrap(all) },
-            .{ .name = "connect", .func = ziglua.wrap(common.connect) },
-        };
-    };
-    const arc = l.newUserdata(Arc, 2);
-    const arc_idx = l.getTop();
-    arc.* = .{};
-    l.newTable(); // t
-    l.pushValue(2); // id
-    l.setField(-2, "id"); // t.id = id
-    l.pushValue(3); // type
-    l.setField(-2, "type"); // t.type = type
-    lu.load(l, "seamstress.osc.Client") catch unreachable;
-    l.createTable(0, @intCast(inner.funcs.len + inner.funcs2.len + 1)); // s
-    l.pushValue(arc_idx); // arc
-    l.setFuncs(inner.funcs, 1);
-    l.pushValue(arc_idx); // arc
-    l.pushValue(1); // server
-    l.setFuncs(inner.funcs2, 2);
-    l.pushValue(4); // address
-    l.setField(-2, "address");
-    l.call(1, 1); // client = seamstress.osc.Client(s)
-    l.setField(-2, "client"); //  t.client = client
-    l.setUserValue(arc_idx, 1) catch unreachable; // assign t to arc
-    l.newTable();
-    l.pushValue(1); // server
-    l.setFuncs(inner.funcs3, 1);
-    _ = l.pushString("seamstress.monome.Arc");
-    l.setField(-2, "__name");
-    l.setMetatable(-2); // assign metatable to arc
+pub const Decls = struct {
+    pub const @"/sys/prefix" = common.@"/sys/prefix";
+    pub const @"/sys/host" = common.@"/sys/host";
+    pub const @"/sys/port" = common.@"/sys/port";
 
-    // send a /sys/info message to the arc
-    _ = l.getField(1, "send"); // send
-    l.pushValue(1); // server
-    l.pushValue(4); // address
-    l.pushClosure(ziglua.wrap(common.@"/sys/info"), 3); // set the /sys/info closure
-    l.pushValue(-1); // copy it
-    l.setField(-3, "info"); // assign to arc.info
-    l.call(0, 0); // also call it
-    return 1; // return arc
-}
+    pub fn @"//enc/delta"(l: *Lua, _: std.net.Address, _: []const u8, n: i32, d: i32) osc.z.Continue {
+        const arc_idx = Lua.upvalueIndex(1);
+        _ = l.getField(arc_idx, "delta");
+        if (!lu.isCallable(l, -1)) return .yes;
+        l.pushInteger(n + 1);
+        l.pushInteger(d);
+        l.call(2, 0);
+        return .no;
+    }
 
-fn @"//enc/delta"(l: *Lua, msg: *osc.z.Parse.MessageIterator, _: std.net.Address) osc.z.Continue {
-    const arc_idx = Lua.upvalueIndex(1);
-    if (!std.mem.eql(u8, msg.types, "ii")) l.raiseErrorStr("bad OSC types for %s: %s", .{
-        @as([*:0]const u8, @ptrCast(msg.path.ptr)),
-        @as([*:0]const u8, @ptrCast(msg.types.ptr)),
-    });
-    const n = (msg.next() catch l.raiseErrorStr("bad OSC data!", .{})).?.i;
-    const d = (msg.next() catch l.raiseErrorStr("bad OSC data!", .{})).?.i;
-    _ = l.getField(arc_idx, "delta");
-    if (!lu.isCallable(l, -1)) return .yes;
-    l.pushInteger(n);
-    l.pushInteger(d);
-    l.call(2, 0);
-    return .no;
-}
+    pub fn @"//enc/key"(l: *Lua, _: std.net.Address, _: []const u8, n: i32, z: i32) osc.z.Continue {
+        const arc_idx = Lua.upvalueIndex(1);
+        _ = l.getField(arc_idx, "delta");
+        if (!lu.isCallable(l, -1)) return .yes;
+        l.pushInteger(n + 1);
+        l.pushInteger(z);
+        l.call(2, 0);
+        return .no;
+    }
+};
 
-fn @"//enc/key"(l: *Lua, msg: *osc.z.Parse.MessageIterator, _: std.net.Address) osc.z.Continue {
-    const arc_idx = Lua.upvalueIndex(1);
-    if (!std.mem.eql(u8, msg.types, "ii")) l.raiseErrorStr("bad OSC types for %s: %s", .{
-        @as([*:0]const u8, @ptrCast(msg.path.ptr)),
-        @as([*:0]const u8, @ptrCast(msg.types.ptr)),
-    });
-    const n = (msg.next() catch l.raiseErrorStr("bad OSC data!", .{})).?.i;
-    const z = (msg.next() catch l.raiseErrorStr("bad OSC data!", .{})).?.i;
-    _ = l.getField(arc_idx, "delta");
-    if (!lu.isCallable(l, -1)) return .yes;
-    l.pushInteger(n);
-    l.pushInteger(z);
-    l.call(2, 0);
-    return .no;
-}
+pub const DeclsTypes = std.StaticStringMap([]const u8).initComptime(.{
+    .{ "/sys/prefix", "s" },
+    .{ "/sys/host", "s" },
+    .{ "/sys/port", "i" },
+    .{ "//enc/delta", "ii" },
+    .{ "//enc/key", "ii" },
+});
 
 const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;

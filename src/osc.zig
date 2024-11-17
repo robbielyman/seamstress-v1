@@ -29,23 +29,20 @@ pub fn pushAddress(l: *Lua, comptime mode: enum { array, table, string }, addr: 
     addr.format("", .{}, fbs.writer()) catch unreachable;
     switch (mode) {
         .string => buf.pushResultSize(@intCast(size)),
-        .array => {
+        .array, .table => {
             const colon_idx = std.mem.indexOfScalar(u8, slice, ':').?;
+            const port = std.fmt.parseInt(ziglua.Integer, slice[colon_idx + 1 .. size], 10) catch unreachable;
             buf.pushResultSize(colon_idx);
             l.createTable(2, 0);
             l.rotate(-2, 1);
-            l.pushInteger(@intCast(addr.getPort()));
-            l.setIndex(-3, 2);
-            l.setIndex(-2, 1);
-        },
-        .table => {
-            const colon_idx = std.mem.indexOfScalar(u8, slice, ':').?;
-            buf.pushResultSize(colon_idx);
-            l.createTable(0, 2);
-            l.rotate(-2, 1);
-            l.pushInteger(@intCast(addr.getPort()));
-            l.setField(-3, "port");
-            l.setField(-2, "host");
+            l.pushInteger(port);
+            if (mode == .array) {
+                l.setIndex(-3, 2);
+                l.setIndex(-2, 1);
+            } else {
+                l.setField(-3, "port");
+                l.setField(-2, "host");
+            }
         },
     }
 }
@@ -117,23 +114,48 @@ pub fn prepare(allocator: std.mem.Allocator, args: anytype) !z.Message.Builder {
     return builder;
 }
 
-pub fn wrap(comptime zigFn: fn (*Lua, *z.Parse.MessageIterator, std.net.Address) z.Continue) fn (*Lua) i32 {
-    return struct {
-        fn wrapped(l: *Lua) i32 {
-            const bytes = l.checkString(3);
-            const addr = parseAddress(l, 2) catch l.raiseError();
-            var parsed = z.parseOSC(bytes) catch l.raiseError();
-            const ret = switch (parsed) {
-                .bundle => l.raiseError(),
-                .message => |*iter| @call(.always_inline, zigFn, .{ l, iter, addr }),
+/// creates a "seamstress.osc.Method" closure, consuming num_upvalues from the top of the stack
+/// this is a convenience function
+/// allowing Zig-defined OSC handlers to not pay the cost of creating a seamstress.osc.Message
+/// zigFn should be a function of type fn (*Lua, std.net.Address, path, ...) z.Continue;
+pub fn wrap(l: *Lua, comptime arg_types: []const u8, zigFn: anytype, num_upvalues: i32) void {
+    const wrapped = struct {
+        fn wrapped(lua: *Lua) i32 {
+            const bytes = lua.checkString(2);
+            const addr = parseAddress(lua, 3) catch lua.typeError(3, "address");
+            var parsed = z.parseOSC(bytes) catch lua.typeError(2, "seamstress.osc.Message");
+            const ret: z.Continue = switch (parsed) {
+                .bundle => lua.raiseError(),
+                .message => |*iter| ret: {
+                    if (!z.matchTypes(arg_types, iter.types)) {
+                        lua.raiseErrorStr("unexpected types for path %s: %s!", .{ iter.path.ptr, iter.types.ptr });
+                    }
+                    const tuple = iter.unpack(arg_types) catch
+                        lua.raiseErrorStr("bad OSC data!", .{});
+                    break :ret @call(.always_inline, zigFn, .{ lua, addr, iter.path } ++ tuple);
+                },
             };
-            l.pushBoolean(switch (ret) {
+            lua.pushBoolean(switch (ret) {
                 .yes => true,
                 .no => false,
             });
             return 1;
         }
     }.wrapped;
+    l.pushClosure(ziglua.wrap(wrapped), num_upvalues);
+    l.newTable();
+    l.createTable(0, 3);
+    l.rotate(-3, -1);
+    _ = l.pushStringZ("__call");
+    l.rotate(-2, 1);
+    l.setTable(-3);
+    _ = l.pushStringZ("__name");
+    _ = l.pushStringZ("seamstress.osc.Method");
+    l.setTable(-3);
+    // l.pushValue(-1);
+    // _ = l.pushStringZ("__index");
+    // l.setTable(-3);
+    l.setMetatable(-2);
 }
 
 pub const ClientZigFn = fn (l: *Lua, handle: i32, message: *z.Parse.MessageIterator) z.Continue;

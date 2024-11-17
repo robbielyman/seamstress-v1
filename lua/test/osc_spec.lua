@@ -86,11 +86,10 @@ describe('seamstress.osc.Client', function()
     local sum = 0
     local c = osc.Client {
       address = 1881,
-      ["/test/path"] = function(_, _, msg)
+      ["/test/path"] = function(msg)
         for i, data in ipairs(msg) do
           sum = sum + (data * i)
         end
-        assert.are.same(17, sum)
         return false
       end,
     }
@@ -99,12 +98,13 @@ describe('seamstress.osc.Client', function()
       assert.is(c.__name, 'seamstress.osc.Client')
     end)
     it('can dispatch messages', function()
-      c:dispatch(nil, {
+      c:dispatch({
         path = "/test/path",
         2,
         3,
         3,
       })
+      assert.are.same(17, sum)
     end)
   end)
 end)
@@ -114,13 +114,13 @@ describe('seamstress.osc.Server', function()
     assert.is.callable(osc.Server)
   end)
   describe('returns a value', function()
-    local s = osc.Server(1991)
+    local s = osc.Server(2992)
     it('which is a Server', function()
       assert.is.userdata(s)
       assert.is(s.__name, 'seamstress.osc.Server')
     end)
     it('which has an address', function()
-      local expected = { host = "127.0.0.1", port = 1991 }
+      local expected = { host = "127.0.0.1", port = 2992 }
       assert.are.same(expected, s.address)
     end)
     it('can send messages', function()
@@ -130,12 +130,28 @@ describe('seamstress.osc.Server', function()
         "message_string",
       })
     end)
+    local ok = false
+    it('can add clients', function()
+      s:add({
+        address = 1881,
+        ["/some/osc/path"] = function(msg)
+          ok = msg[1] == 500 and msg[2] == "message_string"
+          return false
+        end,
+      })
+      local pos = false
+      for _, _ in pairs(s) do
+        pos = true
+      end
+      assert(pos)
+    end)
     it('can dispatch messages', function()
       s:dispatch(1881, {
         path = "/some/osc/path",
         500,
         "message_string",
       })
+      assert(ok)
     end)
     it('starts running', function()
       assert.are.same(true, s.running)

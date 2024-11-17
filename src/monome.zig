@@ -3,23 +3,31 @@ pub fn register(comptime which: enum { monome, grid, arc }) fn (*Lua) i32 {
         .monome => struct {
             fn f(l: *Lua) i32 {
                 lu.load(l, "seamstress.osc.Server") catch unreachable;
+                l.pushNil();
                 const realLoader = struct {
                     fn f(lua: *Lua) i32 {
                         const id = Lua.upvalueIndex(1);
+                        const monome = Lua.upvalueIndex(2);
+                        if (lua.typeOf(monome) != .nil) {
+                            lua.pushValue(monome);
+                            return 1;
+                        }
                         lua.createTable(0, 3);
                         lua.pushValue(id);
                         lua.pushValue(1);
                         lu.doCall(lua, 1, 1) catch lua.raiseErrorStr("unable to create serialosc server!", .{});
-                        populateSerialoscServer(lua) catch lua.raiseError();
+                        populateSerialoscServer(lua) catch lua.raiseErrorStr("error populating serialosc client!", .{});
                         lua.setField(-2, "serialosc");
                         lu.load(lua, "seamstress.monome.Grid") catch unreachable;
                         lua.setField(-2, "Grid");
                         lu.load(lua, "seamstress.monome.Arc") catch unreachable;
                         lua.setField(-2, "Arc");
+                        lua.pushValue(-1);
+                        lua.replace(monome);
                         return 1;
                     }
                 }.f;
-                l.pushClosure(ziglua.wrap(realLoader), 1);
+                l.pushClosure(ziglua.wrap(realLoader), 2);
                 return 1;
             }
         }.f,
@@ -29,6 +37,8 @@ pub fn register(comptime which: enum { monome, grid, arc }) fn (*Lua) i32 {
 }
 
 fn populateSerialoscServer(l: *Lua) !void {
+    const builtin = @import("builtin");
+    const top = if (builtin.mode == .Debug) l.getTop();
     const server_idx = l.getTop();
     const server = try l.toUserdata(osc.Server, -1);
     osc.pushAddress(l, .array, server.addr);
@@ -45,116 +55,111 @@ fn populateSerialoscServer(l: *Lua) !void {
     l.pop(3);
     l.newTable(); // t
     _ = l.pushString(m.toBytes()); // bytes; upvalue for the functions to add
-    const funcs: []const ziglua.FnReg = &.{
-        .{ .name = "/serialosc/add", .func = ziglua.wrap(osc.wrap(@"/serialosc/add")) },
-        .{ .name = "/serialosc/device", .func = ziglua.wrap(osc.wrap(@"/serialosc/device")) },
-        .{ .name = "/serialosc/remove", .func = ziglua.wrap(osc.wrap(@"/serialosc/remove")) },
-    };
-    l.setFuncs(funcs, 1);
+    const funcs: [3][]const u8 = .{ "/serialosc/add", "/serialosc/device", "/serialosc/remove" };
+    inline for (funcs) |name| {
+        _ = l.pushString(name);
+        l.pushValue(-2);
+        l.pushValue(server_idx);
+        osc.wrap(l, "ssi", @field(@This(), name), 2);
+        l.setTable(-4);
+    }
+    l.pop(1);
     const serialosc_addr = std.net.Address.initIp4(.{ 127, 0, 0, 1 }, 12002);
     osc.pushAddress(l, .array, serialosc_addr);
     l.setField(-2, "address");
-    try lu.doCall(l, 1, 1); // seamstress.osc.Client(t)
+    lu.load(l, "seamstress.osc.Client") catch unreachable;
+    l.rotate(-2, 1);
+    try lu.doCall(l, 1, 1); // c =  seamstress.osc.Client(t)
+    osc.pushAddress(l, .string, serialosc_addr);
+    l.rotate(-2, 1);
+    l.setTable(server_idx); // serialosc[addr] = c
+
     const m2 = try builder.commit(l.allocator(), "/serialosc/list");
     defer m2.unref();
-    _ = l.pushString(m2.toBytes());
-    l.pushClosure(ziglua.wrap(@"/serialosc/list"), 1);
-    l.pushValue(server_idx);
-    osc.pushAddress(l, .string, serialosc_addr);
-    try lu.doCall(l, 2, 0);
+    try server.sendOSCBytes(serialosc_addr, m2.toBytes()); // send /serialosc/list
+    try server.sendOSCBytes(serialosc_addr, m.toBytes()); // send /serialosc/notify
+    if (builtin.mode == .Debug) std.debug.assert(l.getTop() == top);
 }
 
 const @"/serialosc/add" = @"/serialosc/device";
 
-fn @"/serialosc/device"(l: *Lua, msg: *z.Parse.MessageIterator, from: std.net.Address) z.Continue {
-    // FIXME: this never runs if we raise a Lua error... is that ok?
-    defer if (std.mem.eql(u8, msg.path, "/serialosc/add")) @"/serialosc/notify"(l, from);
-    if (!std.mem.eql(u8, "ssi", msg.types)) // check the types: must be 'ssi'
-        l.raiseErrorStr("bad argument types for %s: %s", .{
-            @as([*:0]const u8, @ptrCast(msg.path.ptr)),
-            @as([*:0]const u8, @ptrCast(msg.types.ptr)), // should this be part of zOSC?
-        });
-    const id = (msg.next() catch l.raiseErrorStr("bad OSC data!", .{})).?.s;
-    const @"type" = (msg.next() catch l.raiseErrorStr("bad OSC data!", .{})).?.s;
-    const port = (msg.next() catch l.raiseErrorStr("bad OSC data!", .{})).?.i;
+fn @"/serialosc/device"(l: *Lua, from: std.net.Address, path: []const u8, id: []const u8, @"type": []const u8, port: i32) z.Continue {
+    if (std.mem.eql(u8, path, "/serialosc/add")) @"/serialosc/notify"(l, from);
+    const is_arc = std.mem.indexOf(u8, @"type", "arc") != null; // an arc is something that calls itself an arc
     const addr = std.net.Address.initIp4(.{ 127, 0, 0, 1 }, std.math.cast(u16, port) orelse
         l.raiseErrorStr("bad port number %d", .{port}));
     osc.pushAddress(l, .string, addr); // this will be the key to the server table
     l.pushValue(-1); // duplicate the key
-    if (l.getTable(1) != .userdata) {
-        l.pop(1);
-        // create a new object!
-        return addNewDevice(l, id, @"type", port);
-    } else {
-        // check that the provided client matches our expectation
-        if (std.mem.indexOf(u8, @"type", "arc")) |_| // an arc is something that calls itself an arc
-            lu.load(l, "seamstress.monome.Arc") catch unreachable
-        else
-            lu.load(l, "seamstress.monome.Grid") catch unreachable;
-        l.pushValue(-2); // key
-        if (l.getTable(-2) != .userdata) { // should be unlikely
-            l.pop(2); // need key to be at the top of the stack to call addNew
-            return addNewDevice(l, id, @"type", port);
+    const add = add: {
+        if (l.getTable(Lua.upvalueIndex(2)) != .userdata) {
+            l.pop(1);
+            // create a new object!
+            break :add true;
+        } else {
+            // check that the provided client matches our expectation
+            if (is_arc)
+                lu.load(l, "seamstress.monome.Arc") catch unreachable
+            else
+                lu.load(l, "seamstress.monome.Grid") catch unreachable;
+            l.pushValue(-3); // key
+            if (l.getTable(-2) != .userdata) { // should be unlikely
+                l.pop(3); // dev, dev_table, obj
+                break :add true;
+            }
+            _ = l.getField(-1, "id"); // check the device's id
+            _ = l.pushString(id);
+            if (l.compare(-1, -2, .eq)) {
+                l.pop(2);
+                break :add false; // it's a match!
+            }
+            // it's not a match, so let's prepare to call addNew
+            l.pop(5); // dev, device table, device, its id, id
+            break :add true;
         }
-        _ = l.getField(-1, "id"); // check the device's id
-        _ = l.pushString(id);
-        if (l.compare(-1, -2, .eq)) return .no; // it's a match!
-        // it's not a match, so let's prepare to call addNew
-        l.pop(4); // device table, device, its id, id
-        return addNewDevice(l, id, @"type", port);
+    };
+    // top of stack should be the new device
+    const common = @import("monome/common.zig");
+    if (add) {
+        if (is_arc)
+            common.addNewDevice(l, Lua.upvalueIndex(2), id, @"type", port, .arc)
+        else
+            common.addNewDevice(l, Lua.upvalueIndex(2), id, @"type", port, .grid);
     }
-}
-
-fn @"/serialosc/remove"(l: *Lua, msg: *z.Parse.MessageIterator, from: std.net.Address) z.Continue {
-    // FIXME: this never runs if we raise a Lua error: is that fine?
-    @"/serialosc/notify"(l, from);
-    if (!std.mem.eql(u8, "ssi", msg.types)) // check the types: must be 'ssi'
-        l.raiseErrorStr("bad argument types for %s: %s", .{
-            @as([*:0]const u8, @ptrCast(msg.path.ptr)),
-            @as([*:0]const u8, @ptrCast(msg.types.ptr)), // should this be part of zOSC?
-        });
-    const id = (msg.next() catch l.raiseErrorStr("bad OSC data!", .{})).?.s;
-    const @"type" = (msg.next() catch l.raiseErrorStr("bad OSC data!", .{})).?.s;
-    const port = (msg.next() catch l.raiseErrorStr("bad OSC data!", .{})).?.i;
-    const addr = std.net.Address.initIp4(.{ 127, 0, 0, 1 }, std.math.cast(u16, port) orelse
-        l.raiseErrorStr("bad port number %d", .{port}));
-    if (std.mem.indexOf(u8, @"type", "arc")) |_| // an arc is something that calls itself an arc
-        lu.load(l, "seamstress.monome.Arc") catch unreachable
-    else
-        lu.load(l, "seamstress.monome.Grid") catch unreachable;
-    osc.pushAddress(l, .string, addr);
-    if (l.getTable(-2) != .userdata) return .no;
-    _ = l.getField(-1, "id");
-    _ = l.pushString(id);
-    if (!l.compare(-1, -2, .eq)) return .no;
-    l.pushBoolean(false);
-    l.setField(-3, "connected");
+    lu.preparePublish(l, if (is_arc) &.{ "monome", "arc", "add" } else &.{ "monome", "grid", "add" }) catch unreachable;
+    l.rotate(-3, -1); // publish, namespace, device
+    l.call(2, 0); // publish(namespace, device)
     return .no;
 }
 
-/// assumes that the top of the stack is a string key representing the address
-/// and that stack index 1 is the server
-/// stack effec: -1 (consumes key)
-fn addNewDevice(l: *Lua, id: []const u8, @"type": []const u8, port: i32) z.Continue {
-    if (std.mem.indexOf(u8, @"type", "arc")) |_| // an arc is something that calls itself an arc
-        lu.load(l, "seamstress.monome.Arc") catch unreachable
-    else
-        lu.load(l, "seamstress.monome.Grid") catch unreachable;
-    l.pushValue(-1); // duplicate the table
-    l.rotate(-3, 1); // top of stack is now: seamstress.osc.[Arc|Grid], key, seamstress.osc.[Arc|Grid]
-    l.pushValue(1); // server
-    _ = l.pushString(id); // id
-    _ = l.pushString(@"type"); // type
-    l.pushInteger(port); // port
-    l.call(4, 1); // dev = seamstress.osc.[Arc|Grid](server, id, type, port)
-    l.rotate(-2, 1); // top of stack is now: dev, key
-    _ = l.getField(-2, "client"); // dev.client
-    l.setTable(1); // server[key] = dev.client
-    l.len(-2); // #seamstress.osc.[Arc|Grid]
-    const idx = l.toInteger(-1) catch unreachable;
-    l.pop(1);
-    l.setIndex(-2, idx + 1); // seamstress.osc.[Arc|Grid][#seamstress.osc.[Arc|Grid] + 1] = arc
-    return .no; // we're done!
+fn @"/serialosc/remove"(l: *Lua, from: std.net.Address, _: []const u8, id: []const u8, @"type": []const u8, port: i32) z.Continue {
+    @"/serialosc/notify"(l, from);
+    const addr = std.net.Address.initIp4(.{ 127, 0, 0, 1 }, std.math.cast(u16, port) orelse
+        l.raiseErrorStr("bad port number %d", .{port}));
+    const is_arc = std.mem.indexOf(u8, @"type", "arc") != null; // an arc is something that calls itself an arc
+    blk: {
+        if (is_arc)
+            lu.load(l, "seamstress.monome.Arc") catch unreachable
+        else
+            lu.load(l, "seamstress.monome.Grid") catch unreachable;
+        osc.pushAddress(l, .string, addr);
+        if (l.getTable(-2) != .userdata) break :blk;
+        _ = l.getField(-1, "id");
+        _ = l.pushString(id);
+        if (!l.compare(-1, -2, .eq)) break :blk;
+        l.pop(2);
+        if (is_arc) {
+            const arc = l.toUserdata(@import("monome/arc.zig"), -1) catch unreachable;
+            arc.connected = false;
+        } else {
+            const grid = l.toUserdata(@import("monome/grid.zig"), -1) catch unreachable;
+            grid.connected = false;
+        }
+    }
+    lu.preparePublish(l, if (is_arc) &.{ "monome", "arc", "remove" } else &.{ "monome", "grid", "remove" }) catch unreachable;
+    _ = l.pushString(id);
+    l.pushInteger(port);
+    l.call(3, 0);
+    return .no;
 }
 
 /// raises an error on failure
@@ -163,25 +168,11 @@ fn addNewDevice(l: *Lua, id: []const u8, @"type": []const u8, port: i32) z.Conti
 /// stack effect: nothing (unless we error)
 fn @"/serialosc/notify"(l: *Lua, to: std.net.Address) void {
     const idx = Lua.upvalueIndex(1); // preprepared /serialosc/notify message
-    const server = l.checkUserdata(osc.Server, 1, "seamstress.osc.Server");
+    const server_idx = Lua.upvalueIndex(2);
+    const server = l.toUserdata(osc.Server, server_idx) catch unreachable;
     server.sendOSCBytes(to, l.toString(idx) catch unreachable) catch |err| {
-        _ = l.pushFString("error sending /serialosc/notify message! %s", .{@errorName(err).ptr});
-        l.raiseError();
+        l.raiseErrorStr("error sending /serialosc/notify message! %s", .{@errorName(err).ptr});
     };
-}
-
-/// raises an error on failure
-/// relies on the first upvalue being a preprepared /serialosc/list message
-/// stack effect: nothing (unless we error)
-fn @"/serialosc/list"(l: *Lua) i32 {
-    const idx = Lua.upvalueIndex(1); // preprepared /serialosc/list message
-    const server = l.checkUserdata(osc.Server, 1, "seamstress.osc.Server");
-    const to = osc.parseAddress(l, 2) catch l.raiseError();
-    server.sendOSCBytes(to, l.toString(idx) catch unreachable) catch |err| {
-        _ = l.pushFString("error sending /serialosc/list message! %s", .{@errorName(err).ptr});
-        l.raiseError();
-    };
-    return 0;
 }
 
 const ziglua = @import("ziglua");

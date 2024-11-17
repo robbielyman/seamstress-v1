@@ -8,6 +8,8 @@ pub fn register(l: *Lua) i32 {
             .{ .name = "dispatch", .func = ziglua.wrap(dispatch) },
             .{ .name = "__gc", .func = ziglua.wrap(__gc) },
             .{ .name = "add", .func = ziglua.wrap(add) },
+            .{ .name = "__cancel", .func = ziglua.wrap(__cancel) },
+            .{ .name = "__pairs", .func = ziglua.wrap(__pairs) },
         };
         l.setFuncs(funcs, 0);
     }
@@ -19,7 +21,7 @@ pub fn register(l: *Lua) i32 {
 /// sends the bytes to the given address via the UDP server
 pub fn sendOSCBytes(self: *Server, addr: std.net.Address, bytes: []const u8) !void {
     _ = try std.posix.sendto(
-        self.udp.fd,
+        self.socket,
         bytes,
         0,
         &addr.any,
@@ -35,6 +37,7 @@ state: xev.UDP.State = .{
     .userdata = null,
 },
 addr: std.net.Address,
+socket: std.posix.socket_t,
 buf: [0xffff]u8 = undefined,
 running: bool = true,
 
@@ -111,7 +114,7 @@ fn run(l: *Lua) !void {
                 // runs server:dispatch(addr, bytes)
                 _ = lua.rawGetIndex(ziglua.registry_index, handleFromPtr(ud));
                 _ = lua.getMetaField(-1, "dispatch") catch unreachable;
-                lua.pushValue(-2);
+                lua.rotate(-2, 1);
                 osc.pushAddress(lua, .string, addr);
                 _ = lua.pushString(b.slice[0..len]);
                 lu.doCall(lua, 3, 0) catch lu.reportError(lua);
@@ -157,6 +160,18 @@ fn stop(l: *Lua) !void {
     seamstress.loop.add(&server.c_c);
 }
 
+/// should only be called by seamstress's internal quit handler
+/// asserts that running is true and cancels the read callback
+/// panics on failure
+fn __cancel(l: *Lua) i32 {
+    const server = l.checkUserdata(Server, 1, "seamstress.osc.Server");
+    if (!server.running) return 0;
+    server.running = false;
+    l.pushValue(1);
+    stop(l) catch std.debug.panic("error stopping seamstress.osc.Server!", .{});
+    return 0;
+}
+
 /// closes the socket
 fn __gc(l: *Lua) i32 {
     const server = l.checkUserdata(Server, 1, "seamstress.osc.Server");
@@ -164,30 +179,37 @@ fn __gc(l: *Lua) i32 {
     return 0;
 }
 
+/// function seamstress.osc.Server:dispatch(addr, msg, time)
 /// if there is a matching client, use that to respond
 /// otherwise, use the default client
 fn dispatch(l: *Lua) i32 {
+    const time_exists = l.typeOf(4) != .none;
     l.checkType(1, .userdata); // server
     const addr = osc.parseAddress(l, 2) catch l.typeError(2, "address"); // address
     osc.pushAddress(l, .string, addr); // use the address as a key to the server
     switch (l.getTable(1)) {
         .userdata => { // found a matching client
-            // call client:dispatch(server, bytes)
+            // call client:dispatch(bytes)
             _ = l.getMetaField(-1, "dispatch") catch unreachable;
-            l.pushValue(-2);
-            l.pushValue(1);
+            l.rotate(-2, 1);
             l.pushValue(3); // message
-            l.call(3, 0);
+            if (time_exists) {
+                l.pushNil();
+                l.pushValue(4);
+                l.call(4, 0);
+            } else l.call(2, 0);
         },
         .none, .nil => { // no matching client found, use default
             _ = l.getField(1, "default");
-            // call client:dispatch(server, bytes, addr)
+            // call client:dispatch(bytes, addr)
             _ = l.getMetaField(-1, "dispatch") catch unreachable;
-            l.pushValue(-2);
-            l.pushValue(1);
+            l.rotate(-2, 1);
             l.pushValue(3); // message
             l.pushValue(2); // address
-            l.call(4, 0);
+            if (time_exists) {
+                l.pushValue(4);
+                l.call(4, 0);
+            } else l.call(3, 0);
         },
         else => l.typeError(1, "seamstress.osc.Server"),
     }
@@ -206,7 +228,9 @@ fn new(l: *Lua) i32 {
     server.* = .{
         .addr = std.net.Address.initIp4(.{ 127, 0, 0, 1 }, port),
         .udp = xev.UDP.init(server.addr) catch l.raiseErrorStr("unable to open UDP socket at port %d", .{port}),
+        .socket = std.posix.socket(server.addr.any.family, std.posix.SOCK.DGRAM, 0) catch l.raiseErrorStr("unable to open UDP socket for sending!", .{}),
     };
+
     server.udp.bind(server.addr) catch |err| l.raiseErrorStr("unable to bind to UDP socket at port %d; %s", .{ port, @errorName(err).ptr });
     l.newTable(); // our uservalue table
     if (is_client) switch (l.typeOf(2)) { // we passed a default client
@@ -224,7 +248,7 @@ fn new(l: *Lua) i32 {
         else => unreachable,
     } else { // create a default Client
         lu.load(l, "seamstress.osc.Client") catch unreachable;
-        lu.doCall(l, 0, 1) catch unreachable;
+        l.call(0, 1);
         l.setField(-2, "default");
     }
     l.setUserValue(-2, 1) catch unreachable;
@@ -348,6 +372,40 @@ fn __newindex(l: *Lua) i32 {
         return 0;
     }
     l.typeError(2, "\"default\", \"running\" or IP string expected");
+}
+
+fn __pairs(l: *Lua) i32 {
+    const iterator = struct {
+        fn f(lua: *Lua) i32 {
+            _ = lua.pushStringZ("default");
+            const default_str = lua.getTop();
+            while (true) {
+                lua.pushValue(2);
+                if (!lua.next(1)) return 0;
+                if (lua.compare(default_str, -2, .eq)) {
+                    lua.pop(1); // remove val
+                    lua.replace(2); // replace key
+                    continue;
+                }
+                if (!lua.isUserdata(-1)) {
+                    lua.pop(1); // remove val
+                    lua.replace(2); // replace key
+                    continue;
+                }
+                if (!lua.isString(-2)) {
+                    lua.pop(1); // remove val
+                    lua.replace(2); //replace key
+                    continue;
+                }
+                return 2;
+            }
+        }
+    }.f;
+    // return iterator, tbl, nil
+    l.pushFunction(ziglua.wrap(iterator));
+    _ = l.getUserValue(1, 1) catch unreachable;
+    l.pushNil();
+    return 3;
 }
 
 const z = @import("zosc");

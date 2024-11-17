@@ -8,12 +8,12 @@
             .hash = "1220b53725744decfb2aba1269ae830b34ae30655154ba1144a8e722f9220cbbf0b0",
         },
         .libxev = .{
-            .url = "git+https://github.com/robbielyman/libxev#ffec853f748dc169e0d8baea398a7b252920ee3c",
-            .hash = "12208f5f594722e975e9e53e53050315c17fbd205f30b4c2c180741736ba9c63af38",
+            .url = "git+https://github.com/robbielyman/libxev?ref=cancel_udpsend#9fd748607d0b7295bd15e07676a0cfb954df579f",
+            .hash = "1220ff589a67de32bcce706b90d73e93b366c40bec9f0e53856d8c9ab4ddf4e32af7",
         },
         .zosc = .{
-            .url = "git+https://github.com/robbielyman/zosc#06c0daaa676a085ca5c1388b4320eae99cfa08da",
-            .hash = "1220f5ac8394d8367fca646af79641626e92c26e7aa51d0e9fba5026618e7893386b",
+            .url = "git+https://github.com/robbielyman/zosc?ref=v1.1.0#ef8caf3c9f86b09b7fbed9fe6d4cdba3a43fb9de",
+            .hash = "12207c108f821340bc3514117afd24bace658bc3ad06b79c51d1440eb498cec4349c",
         },
     },
 }
