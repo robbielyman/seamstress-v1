@@ -2,7 +2,7 @@ pub fn register(comptime which: enum { monome, grid, arc }) fn (*Lua) i32 {
     return switch (which) {
         .monome => struct {
             fn f(l: *Lua) i32 {
-                lu.load(l, "seamstress.osc.Server") catch unreachable;
+                lu.load(l, "seamstress.osc.Server");
                 l.pushNil();
                 const realLoader = struct {
                     fn f(lua: *Lua) i32 {
@@ -18,9 +18,9 @@ pub fn register(comptime which: enum { monome, grid, arc }) fn (*Lua) i32 {
                         lu.doCall(lua, 1, 1) catch lua.raiseErrorStr("unable to create serialosc server!", .{});
                         populateSerialoscServer(lua) catch lua.raiseErrorStr("error populating serialosc client!", .{});
                         lua.setField(-2, "serialosc");
-                        lu.load(lua, "seamstress.monome.Grid") catch unreachable;
+                        lu.load(lua, "seamstress.monome.Grid");
                         lua.setField(-2, "Grid");
-                        lu.load(lua, "seamstress.monome.Arc") catch unreachable;
+                        lu.load(lua, "seamstress.monome.Arc");
                         lua.setField(-2, "Arc");
                         lua.pushValue(-1);
                         lua.replace(monome);
@@ -67,7 +67,7 @@ fn populateSerialoscServer(l: *Lua) !void {
     const serialosc_addr = std.net.Address.initIp4(.{ 127, 0, 0, 1 }, 12002);
     osc.pushAddress(l, .array, serialosc_addr);
     l.setField(-2, "address");
-    lu.load(l, "seamstress.osc.Client") catch unreachable;
+    lu.load(l, "seamstress.osc.Client");
     l.rotate(-2, 1);
     try lu.doCall(l, 1, 1); // c =  seamstress.osc.Client(t)
     osc.pushAddress(l, .string, serialosc_addr);
@@ -97,10 +97,7 @@ fn @"/serialosc/device"(l: *Lua, from: std.net.Address, path: []const u8, id: []
             break :add true;
         } else {
             // check that the provided client matches our expectation
-            if (is_arc)
-                lu.load(l, "seamstress.monome.Arc") catch unreachable
-            else
-                lu.load(l, "seamstress.monome.Grid") catch unreachable;
+            if (is_arc) lu.load(l, "seamstress.monome.Arc") else lu.load(l, "seamstress.monome.Grid");
             l.pushValue(-3); // key
             if (l.getTable(-2) != .userdata) { // should be unlikely
                 l.pop(3); // dev, dev_table, obj
@@ -125,7 +122,7 @@ fn @"/serialosc/device"(l: *Lua, from: std.net.Address, path: []const u8, id: []
         else
             common.addNewDevice(l, Lua.upvalueIndex(2), id, @"type", port, .grid);
     }
-    lu.preparePublish(l, if (is_arc) &.{ "monome", "arc", "add" } else &.{ "monome", "grid", "add" }) catch unreachable;
+    lu.preparePublish(l, if (is_arc) &.{ "monome", "arc", "add" } else &.{ "monome", "grid", "add" });
     l.rotate(-3, -1); // publish, namespace, device
     l.call(2, 0); // publish(namespace, device)
     return .no;
@@ -137,10 +134,7 @@ fn @"/serialosc/remove"(l: *Lua, from: std.net.Address, _: []const u8, id: []con
         l.raiseErrorStr("bad port number %d", .{port}));
     const is_arc = std.mem.indexOf(u8, @"type", "arc") != null; // an arc is something that calls itself an arc
     blk: {
-        if (is_arc)
-            lu.load(l, "seamstress.monome.Arc") catch unreachable
-        else
-            lu.load(l, "seamstress.monome.Grid") catch unreachable;
+        if (is_arc) lu.load(l, "seamstress.monome.Arc") else lu.load(l, "seamstress.monome.Grid");
         osc.pushAddress(l, .string, addr);
         if (l.getTable(-2) != .userdata) break :blk;
         _ = l.getField(-1, "id");
@@ -155,7 +149,7 @@ fn @"/serialosc/remove"(l: *Lua, from: std.net.Address, _: []const u8, id: []con
             grid.connected = false;
         }
     }
-    lu.preparePublish(l, if (is_arc) &.{ "monome", "arc", "remove" } else &.{ "monome", "grid", "remove" }) catch unreachable;
+    lu.preparePublish(l, if (is_arc) &.{ "monome", "arc", "remove" } else &.{ "monome", "grid", "remove" });
     _ = l.pushString(id);
     l.pushInteger(port);
     l.call(3, 0);

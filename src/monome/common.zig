@@ -31,8 +31,8 @@ fn findOrCreateDevice(l: *Lua) void {
 pub fn addNewDevice(l: *Lua, server_idx: i32, id: []const u8, @"type": []const u8, port: i32, comptime which: enum { grid, arc }) void {
     const key_idx = l.getTop();
     switch (which) {
-        .grid => lu.load(l, "seamstress.monome.Grid") catch unreachable,
-        .arc => lu.load(l, "seamstress.monome.Arc") catch unreachable,
+        .grid => lu.load(l, "seamstress.monome.Grid"),
+        .arc => lu.load(l, "seamstress.monome.Arc"),
     }
     findOrCreateDevice(l); // dev
     l.newTable(); // uservalue
@@ -86,7 +86,7 @@ fn createClient(
     comptime decls: type,
     comptime map: std.StaticStringMap([]const u8),
 ) void {
-    lu.load(l, "seamstress.osc.Client") catch unreachable;
+    lu.load(l, "seamstress.osc.Client");
     l.newTable(); // the argument: t
     const info = @typeInfo(decls);
     inline for (info.Struct.decls) |decl| {
@@ -384,7 +384,7 @@ pub fn connect(comptime which: enum { grid, arc }) fn (*Lua) i32 {
             }
             if (which == .arc) {
                 l.createTable(4, 0); // create arc led data
-                lu.load(l, "seamstress.osc.Message") catch unreachable; // each datum is a seamstress.osc.Message
+                lu.load(l, "seamstress.osc.Message"); // each datum is a seamstress.osc.Message
                 var i: i32 = 1;
                 while (i <= 4) : (i += 1) {
                     l.pushValue(-1); // push the function
