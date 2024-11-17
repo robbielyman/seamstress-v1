@@ -63,7 +63,7 @@ fn add(l: *Lua) i32 {
             l.pushValue(2);
         },
         .table => {
-            lu.load(l, "seamstress.osc.Client") catch unreachable;
+            lu.load(l, "seamstress.osc.Client");
             l.pushValue(2);
             l.call(1, 1);
             const client = l.toUserdata(@import("client.zig"), -1) catch unreachable;
@@ -240,14 +240,14 @@ fn new(l: *Lua) i32 {
             l.setField(-2, "default");
         },
         .table => { // we passed it as a table, so create the client by calling Client on it
-            lu.load(l, "seamstress.osc.Client") catch unreachable;
+            lu.load(l, "seamstress.osc.Client");
             l.pushValue(2);
             lu.doCall(l, 1, 1) catch l.typeError(2, "seamstress.osc.Client");
             l.setField(-2, "default");
         },
         else => unreachable,
     } else { // create a default Client
-        lu.load(l, "seamstress.osc.Client") catch unreachable;
+        lu.load(l, "seamstress.osc.Client");
         l.call(0, 1);
         l.setField(-2, "default");
     }
@@ -274,7 +274,7 @@ fn send(l: *Lua) i32 {
     // grab the message and its path
     const message: *z.Message.Builder, const path: []const u8 = switch (l.typeOf(3)) {
         .table => msg: { // if passed as a table, convert it to a Message
-            lu.load(l, "seamstress.osc.Message") catch unreachable;
+            lu.load(l, "seamstress.osc.Message");
             l.pushValue(3);
             lu.doCall(l, 1, 1) catch
                 l.typeError(3, "seamstress.osc.Message");

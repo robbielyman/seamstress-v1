@@ -39,7 +39,7 @@ pub fn register(comptime which: Which) fn (*Lua) i32 {
                 l.setMetatable(-2); // setmetatable(t, metatable)
 
                 _ = l.pushStringZ("Promise"); // Promise
-                lu.load(l, "seamstress.async.Promise") catch unreachable; // s
+                lu.load(l, "seamstress.async.Promise"); // s
                 l.setTable(-3); // t.Promise = s
                 return 1;
             }

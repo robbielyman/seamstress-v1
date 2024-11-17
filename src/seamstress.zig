@@ -47,7 +47,7 @@ pub fn run(self: *Seamstress, filename: ?[:0]const u8) !void {
                     lu.reportError(s.lua);
                 };
             }
-            lu.preparePublish(s.lua, &.{"init"}) catch return .disarm;
+            lu.preparePublish(s.lua, &.{"init"});
             lu.doCall(s.lua, 1, 0) catch {
                 lu.reportError(s.lua);
                 return .disarm;
@@ -102,7 +102,7 @@ fn setup(self: *Seamstress, filename: ?[:0]const u8) !void {
     self.lua.requireF("seamstress", ziglua.wrap(register), true);
     if (is_test) {
         // adds an `init` handler that runs the seamstress tests
-        try lu.load(self.lua, "seamstress.test");
+        lu.load(self.lua, "seamstress.test");
     } else {
         self.lua.rotate(-2, 1);
         // seamstress.config = the table returned by config
@@ -167,7 +167,7 @@ fn createMetatable(seamstress: *Seamstress) !void {
                     lu.preparePublish(l, &.{switch (which) {
                         .panic => "panic",
                         .quit => "quit",
-                    }}) catch l.setTop(0);
+                    }});
                     lu.doCall(l, 1, 0) catch {
                         std.log.scoped(.seamstress).err("error in event handler: {s}", .{l.toString(-1) catch unreachable});
                         l.pop(1);
@@ -209,11 +209,11 @@ fn createMetatable(seamstress: *Seamstress) !void {
 pub fn register(l: *Lua) i32 {
     l.newTable();
     // TODO: fill this out more
-    lu.load(l, "seamstress.event") catch unreachable;
+    lu.load(l, "seamstress.event");
     l.setField(-2, "event");
-    lu.load(l, "seamstress.async") catch unreachable;
+    lu.load(l, "seamstress.async");
     l.setField(-2, "async");
-    lu.load(l, "seamstress.Timer") catch unreachable;
+    lu.load(l, "seamstress.Timer");
     l.setField(-2, "Timer");
     l.pushFunction(ziglua.wrap(struct {
         fn f(lua: *Lua) i32 {

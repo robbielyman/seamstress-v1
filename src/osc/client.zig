@@ -154,7 +154,7 @@ fn dispatch(l: *Lua) i32 {
     }
 
     if (t == .table) {
-        lu.load(l, "seamstress.osc.Message") catch unreachable;
+        lu.load(l, "seamstress.osc.Message");
         l.pushValue(2);
         l.call(1, 1);
         l.replace(2);
@@ -284,7 +284,7 @@ fn default(l: *Lua) i32 {
     const path = l.toString(-1) catch unreachable;
     var iter = std.mem.tokenizeScalar(u8, path, '/');
     // we don't use prepare publish because it duplicates the work
-    lu.load(l, "seamstress.event") catch unreachable;
+    lu.load(l, "seamstress.event");
     _ = l.getField(-1, "publish"); // publish
     var index: ziglua.Integer = index: {
         // messages starting with "/seamstress" result in events without prepended "/seamstress"
