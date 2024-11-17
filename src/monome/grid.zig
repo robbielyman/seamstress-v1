@@ -39,7 +39,7 @@ connected: bool = false,
 
 fn connect(l: *Lua) i32 {
     const idx = l.optInteger(1) orelse 1;
-    lu.load(l, "seamstress.monome.Grid") catch unreachable;
+    lu.load(l, "seamstress.monome.Grid");
     switch (l.getIndex(-1, idx)) { // local g = seamstress.monome.Grid[idx]
         .userdata => {}, // g ~= nil
         else => { // g = seamstress.monome.Grid()
@@ -363,7 +363,7 @@ pub const Decls = struct {
         l.pushInteger(quads);
         l.setField(grid_tbl_idx, "quads"); // set grid.quads
         l.createTable(quads, 0); // create grid quad data
-        lu.load(l, "seamstress.osc.Message") catch unreachable; // each datum is a seamstress.osc.Message
+        lu.load(l, "seamstress.osc.Message"); // each datum is a seamstress.osc.Message
         var i: i32 = 1;
         while (i <= quads) : (i += 1) {
             l.pushValue(-1); // push the function

@@ -5,7 +5,7 @@ pub fn quit(l: *Lua) void {
     doCall(l, 0, 0) catch {
         panic("error while quitting! {s}", .{l.toString(-1) catch unreachable});
     };
-    load(l, "seamstress") catch unreachable;
+    load(l, "seamstress");
     // replace seamstress.quit so that calling seamstress.quit() is idempotent
     l.pushFunction(ziglua.wrap(struct {
         fn f(_: *Lua) i32 {
@@ -60,12 +60,11 @@ pub const load = @import("modules.zig").load;
 /// also pushes the strings given as the namespace as the first argument
 /// if namespace is empty, does nothing!
 /// stack effect: +2: `seamstress.event.publish` and a table containing the strings in namespace
-pub fn preparePublish(l: *Lua, namespace: []const []const u8) !void {
+pub fn preparePublish(l: *Lua, namespace: []const []const u8) void {
     if (namespace.len == 0) return;
-    try load(l, "seamstress.event");
+    load(l, "seamstress.event");
     _ = l.getField(-1, "publish");
     l.remove(-2);
-    if (!isCallable(l, -1)) return error.EventPublishNotCallable;
     l.createTable(@intCast(namespace.len), 0);
     for (namespace, 1..) |name, i| {
         _ = l.pushString(name);
@@ -79,12 +78,10 @@ pub fn preparePublish(l: *Lua, namespace: []const []const u8) !void {
 pub fn reportError(l: *Lua) void {
     const msg = l.toStringEx(-1);
     std.log.scoped(.lua).err("{s}", .{msg});
-    preparePublish(l, &.{"error"}) catch {
-        panic("unable to report the following error: {s}", .{msg});
-    };
+    preparePublish(l, &.{"error"});
     l.rotate(-3, -1);
     doCall(l, 2, 0) catch {
-        panic("error while reporting the following error: {s}", .{msg});
+        panic("error while reporting the following error: {s}\n{s}", .{ msg, l.toStringEx(-1) });
     };
 }
 
