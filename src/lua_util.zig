@@ -78,12 +78,11 @@ pub fn preparePublish(l: *Lua, namespace: []const []const u8) !void {
 /// panics on failure
 pub fn reportError(l: *Lua) void {
     const msg = l.toStringEx(-1);
-    l.pop(1);
     std.log.scoped(.lua).err("{s}", .{msg});
     preparePublish(l, &.{"error"}) catch {
         panic("unable to report the following error: {s}", .{msg});
     };
-    _ = l.pushString(msg);
+    l.rotate(-3, -1);
     doCall(l, 2, 0) catch {
         panic("error while reporting the following error: {s}", .{msg});
     };
@@ -100,40 +99,67 @@ pub fn luaPrint(l: *Lua, n: ?i32) !void {
     try doCall(l, num_args, 0);
 }
 
+const BufferWriter = std.io.GenericWriter(*ziglua.Buffer, error{}, bufferWrite);
+pub const LuaWriter = std.io.BufferedWriter(4096, BufferWriter);
+
+fn bufferWrite(buf: *ziglua.Buffer, bytes: []const u8) error{}!usize {
+    buf.addString(bytes);
+    return bytes.len;
+}
+
+pub fn luaWriter(buf: *ziglua.Buffer) LuaWriter {
+    const writer: BufferWriter = .{ .context = buf };
+    return std.io.bufferedWriter(writer);
+}
+
+/// uses a Buffer object to print to a lua string
+/// stack effect: +1 (the newly created string)
+pub fn format(l: *Lua, comptime fmt: []const u8, args: anytype) void {
+    var buf: ziglua.Buffer = undefined;
+    buf.init(l);
+    var bw = luaWriter(&buf);
+    bw.writer().print(fmt, args) catch unreachable;
+    bw.flush() catch unreachable;
+    buf.pushResult();
+}
+
 /// a wrapper around `pcall`
 /// returns an error to signal function failure; `catch reportError(l)`
 /// is often correct if the way Lua handles errors from pcall is sufficient
 pub fn doCall(l: *Lua, nargs: i32, nres: i32) error{LuaFunctionFailed}!void {
     const base = l.getTop() - nargs;
-    l.pushFunction(ziglua.wrap(struct {
+    l.pushLightUserdata(@ptrFromInt(@returnAddress()));
+    l.pushClosure(ziglua.wrap(struct {
         /// adds a stack trace to the error message on top of the stack
         fn messageHandler(lua: *Lua) i32 {
-            switch (lua.typeOf(1)) {
-                .string => {
-                    const msg = lua.toString(1) catch unreachable;
-                    lua.traceback(lua, msg, 1);
+            const return_address = @intFromPtr(lua.toUserdata(anyopaque, Lua.upvalueIndex(1)) catch unreachable);
+            const msg = switch (lua.typeOf(1)) {
+                .string => lua.toString(1) catch unreachable,
+                else => msg: {
+                    format(lua, "error object is an {s} value: {s}", .{ lua.typeName(lua.typeOf(1)), lua.toStringEx(1) });
+                    break :msg lua.toString(-1) catch unreachable;
                 },
-                else => {
-                    var buf: ziglua.Buffer = undefined;
-                    buf.init(lua);
-                    buf.addStringZ("error object is an ");
-                    buf.addStringZ(lua.typeName(lua.typeOf(1)));
-                    buf.addStringZ(" value: ");
-                    buf.addStringZ(lua.toStringEx(1));
-                    buf.pushResult();
-                    const msg = lua.toString(1) catch unreachable;
-                    lua.traceback(lua, msg, 1);
-                },
+            };
+            lua.traceback(lua, msg, 1);
+            var buf: ziglua.Buffer = undefined;
+            buf.init(lua);
+            lua.rotate(-2, 1);
+            buf.addValue();
+            buf.addChar('\n');
+            var bw = luaWriter(&buf);
+            blk: {
+                const info = std.debug.getSelfDebugInfo() catch break :blk;
+                std.debug.writeCurrentStackTrace(bw.writer(), info, .no_color, return_address) catch unreachable;
+                bw.flush() catch unreachable;
             }
+            buf.pushResult();
             return 1;
         }
-    }.messageHandler));
+    }.messageHandler), 1);
     l.insert(base);
-    l.protectedCall(nargs, nres, base) catch {
-        l.remove(base);
-        return error.LuaFunctionFailed;
-    };
+    const ret = l.protectedCall(nargs, nres, base) catch error.LuaFunctionFailed;
     l.remove(base);
+    return ret;
 }
 
 /// processes the buffer as plaintext Lua code

@@ -46,11 +46,12 @@ pub fn setup(self: *Cli) !void {
             var buf = std.io.bufferedWriter(std.io.getStdOut().writer());
             const stdout = buf.writer();
             const was_complete = lu.processChunk(s.lua, cli.buffer.items) catch blk: {
-                stdout.writeAll(s.lua.toString(-1) catch unreachable) catch |err| {
+                stdout.print("{s}\n", .{s.lua.toString(-1) catch unreachable}) catch |err| {
                     logger.err("unable to write to stdout! {s}", .{@errorName(err)});
                     s.lua.setTop(0);
                     return .disarm;
                 };
+                s.lua.pop(1);
                 break :blk true;
             };
             defer s.lua.setTop(0);

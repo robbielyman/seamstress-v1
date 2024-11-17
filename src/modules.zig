@@ -7,6 +7,13 @@ pub const list = std.StaticStringMap(*const fn (?*ziglua.LuaState) callconv(.C) 
     .{ "seamstress.async.Promise", ziglua.wrap(@import("async.zig").register(.promise)) },
     .{ "seamstress.test", ziglua.wrap(openFn("test.lua")) },
     .{ "seamstress.Timer", ziglua.wrap(@import("timer.zig").register) },
+    .{ "seamstress.osc", ziglua.wrap(@import("osc.zig").register(.osc)) },
+    .{ "seamstress.osc.Client", ziglua.wrap(@import("osc.zig").register(.client)) },
+    .{ "seamstress.osc.Server", ziglua.wrap(@import("osc.zig").register(.server)) },
+    .{ "seamstress.osc.Message", ziglua.wrap(@import("osc.zig").register(.message)) },
+    .{ "seamstress.monome", ziglua.wrap(@import("monome.zig").register(.monome)) },
+    .{ "seamstress.monome.Grid", ziglua.wrap(@import("monome.zig").register(.grid)) },
+    .{ "seamstress.monome.Arc", ziglua.wrap(@import("monome.zig").register(.arc)) },
 });
 
 fn openFn(comptime filename: []const u8) fn (*Lua) i32 {

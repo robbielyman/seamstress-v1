@@ -38,6 +38,15 @@ pub fn run(self: *Seamstress, filename: ?[:0]const u8) !void {
     self.loop.timer(&c, 0, self, struct {
         fn f(ud: ?*anyopaque, _: *xev.Loop, _: *xev.Completion, r: xev.Result) xev.CallbackAction {
             const s: *Seamstress = @ptrCast(@alignCast(ud.?));
+            blk: {
+                const args = std.process.argsAlloc(s.lua.allocator()) catch break :blk;
+                defer std.process.argsFree(s.lua.allocator(), args);
+                if (args.len < 2) break :blk;
+                if (std.mem.eql(u8, "test", args[1])) break :blk;
+                s.lua.doFile(args[1]) catch {
+                    lu.reportError(s.lua);
+                };
+            }
             lu.preparePublish(s.lua, &.{"init"}) catch return .disarm;
             lu.doCall(s.lua, 1, 0) catch {
                 lu.reportError(s.lua);
@@ -102,6 +111,8 @@ fn setup(self: *Seamstress, filename: ?[:0]const u8) !void {
     self.lua.pop(1); // pop seamstress from the stack
     // set up CLI interaction
     try self.cli.setup();
+    self.lua.pushFunction(ziglua.wrap(clearRegistry));
+    lu.addExitHandler(self.lua, .quit);
 }
 
 /// attempts to call `dofile` on $SEAMSTRESS_HOME/$SEAMSTRESS_CONFIG_FILENAME
@@ -231,6 +242,38 @@ fn addPackageSearcher(lua: *Lua) !void {
     }.searcher));
     lua.rawSetIndex(-2, @intCast(lua.rawLen(-2) + 1)); // add our searcher to the end
     lua.pop(2); // pop `package` and `package.searchers`
+}
+
+/// creates a copy of the registry table and then, for each entry in the copy table,
+/// checks to see if the entry has a __cancel metamethod and calls that metamethod if so
+fn clearRegistry(l: *Lua) i32 {
+    l.newTable();
+    const tbl = l.getTop();
+    l.pushNil();
+    const key = l.getTop();
+    var index: ziglua.Integer = 1;
+    while (l.next(ziglua.registry_index)) {
+        defer l.setTop(key);
+        switch (l.typeOf(-1)) {
+            .userdata, .table => {
+                _ = l.getMetaField(-1, "__cancel") catch continue;
+                l.pop(1);
+                l.setIndex(tbl, index);
+                index += 1;
+            },
+            else => {},
+        }
+    }
+    const len = index;
+    index = 1;
+    // @breakpoint();
+    while (index < len) : (index += 1) {
+        _ = l.getIndex(tbl, index);
+        _ = l.getMetaField(-1, "__cancel") catch {};
+        l.rotate(-2, 1);
+        l.call(1, 0);
+    }
+    return 0;
 }
 
 const builtin = @import("builtin");
