@@ -50,7 +50,7 @@ fn __call(l: *Lua) i32 {
 
 fn connect(l: *Lua) i32 {
     const idx = l.optInteger(1) orelse 1;
-    lu.load(l, "seamstress.monome.Arc") catch unreachable;
+    lu.load(l, "seamstress.monome.Arc");
     switch (l.getIndex(-1, idx)) { // local g = seamstress.monome.Arc[idx]
         .userdata => {}, // g ~= nil
         else => { // g = seamstress.monome.Arc()

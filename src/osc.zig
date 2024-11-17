@@ -3,11 +3,11 @@ pub fn register(comptime which: enum { osc, server, client, message }) fn (*Lua)
         .osc => struct {
             fn f(l: *Lua) i32 {
                 l.createTable(0, 3);
-                lu.load(l, "seamstress.osc.Client") catch unreachable;
+                lu.load(l, "seamstress.osc.Client");
                 l.setField(-2, "Client");
-                lu.load(l, "seamstress.osc.Server") catch unreachable;
+                lu.load(l, "seamstress.osc.Server");
                 l.setField(-2, "Server");
-                lu.load(l, "seamstress.osc.Message") catch unreachable;
+                lu.load(l, "seamstress.osc.Message");
                 l.setField(-2, "Message");
                 return 1;
             }
@@ -162,7 +162,7 @@ pub const ClientZigFn = fn (l: *Lua, handle: i32, message: *z.Parse.MessageItera
 
 /// stack effect: adds one (the message)
 pub fn pushMessage(l: *Lua, message: *z.Parse.MessageIterator) !void {
-    lu.load(l, "seamstress.osc.Message") catch unreachable;
+    lu.load(l, "seamstress.osc.Message");
     l.createTable(@intCast(message.types.len), 2);
     errdefer l.pop(1);
     _ = l.pushString(message.path);
