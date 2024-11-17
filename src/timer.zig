@@ -7,12 +7,45 @@ pub fn register(l: *Lua) i32 {
         const funcs: []const ziglua.FnReg = &.{
             .{ .name = "__index", .func = ziglua.wrap(__index) },
             .{ .name = "__newindex", .func = ziglua.wrap(__newindex) },
+            .{ .name = "__cancel", .func = ziglua.wrap(__cancel) },
         };
         l.setFuncs(funcs, 0);
     }
     l.pop(1);
-    l.pushFunction(ziglua.wrap(Timer));
+    l.pushFunction(ziglua.wrap(new));
     return 1;
+}
+
+fn __cancel(l: *Lua) i32 {
+    const timer = l.checkUserdata(Timer, 1, "seamstress.Timer");
+    l.pushValue(1);
+    const handle = l.ref(ziglua.registry_index) catch
+        std.debug.panic("unable to register Timer!", .{});
+    timer.c_c = .{
+        .op = .{ .cancel = .{ .c = &timer.c } },
+        .userdata = ptrFromHandle(handle),
+        .callback = struct {
+            fn callback(
+                userdata: ?*anyopaque,
+                loop: *xev.Loop,
+                _: *xev.Completion,
+                result: xev.Result,
+            ) xev.CallbackAction {
+                const lua = lu.getLua(loop);
+                const top = if (builtin.mode == .Debug) lua.getTop();
+                defer if (builtin.mode == .Debug) std.debug.assert(top == lua.getTop()); // stack must be unchanged
+                lua.unref(ziglua.registry_index, handleFromPtr(userdata)); // release the reference
+                _ = result.cancel catch |err| {
+                    _ = lua.pushFString("unable to cancel: %s", .{@errorName(err).ptr});
+                    lu.reportError(lua);
+                };
+                return .disarm;
+            }
+        }.callback,
+    };
+    const seamstress = lu.getSeamstress(l);
+    seamstress.loop.add(&timer.c_c);
+    return 0;
 }
 
 /// runs the timer's action and reschedules depending on Timer's values
@@ -23,6 +56,7 @@ fn bang(ud: ?*anyopaque, loop: *xev.Loop, c: *xev.Completion, r: xev.Result) xev
     const handle = handleFromPtr(ud);
     _ = r.timer catch |err| {
         l.unref(ziglua.registry_index, handle);
+        if (err == error.Canceled) return .disarm;
         _ = l.pushFString("timer error! %s", .{@errorName(err).ptr});
         lu.reportError(l);
         return .disarm;
@@ -94,8 +128,12 @@ fn bang(ud: ?*anyopaque, loop: *xev.Loop, c: *xev.Completion, r: xev.Result) xev
     return .disarm;
 }
 
+const Timer = @This();
+c: xev.Completion = .{},
+c_c: xev.Completion = .{},
+
 /// creates and returns a Timer object
-fn Timer(l: *Lua) i32 {
+fn new(l: *Lua) i32 {
     const delta = l.optNumber(@intFromEnum(Indices.delta)) orelse 1;
     l.argCheck(delta >= std.math.floatEps(f64), @intFromEnum(Indices.delta), "delta must be positive");
     const stage_end = l.optNumber(@intFromEnum(Indices.stage_end)) orelse -1;
@@ -103,7 +141,7 @@ fn Timer(l: *Lua) i32 {
     const running_t = l.typeOf(@intFromEnum(Indices.running));
     const running = running_t == .none or running_t == .nil or l.toBoolean(@intFromEnum(Indices.running));
     lu.checkCallable(l, @intFromEnum(Indices.action));
-    const c = l.newUserdata(xev.Completion, @intFromEnum(Indices.data));
+    const c = l.newUserdata(Timer, @intFromEnum(Indices.data));
     c.* = .{};
     // set uservalues
     l.pushValue(1); // action = f
@@ -129,7 +167,7 @@ fn Timer(l: *Lua) i32 {
     l.pushValue(-1); // push the Timer
     const handle = l.ref(ziglua.registry_index) catch l.raiseErrorStr("unable to register timer!", .{});
     const next: u64 = @intFromFloat(delta * std.time.ms_per_s);
-    seamstress.loop.timer(c, next, ptrFromHandle(handle), bang);
+    seamstress.loop.timer(&c.c, next, ptrFromHandle(handle), bang);
     return 1;
 }
 
@@ -207,7 +245,7 @@ fn __newindex(l: *Lua) i32 {
                         const now = seamstress.loop.now();
                         l.pushInteger(now);
                         l.setUserValue(1, @intFromEnum(Indices.now)) catch unreachable; // current time (in ns)
-                        const c = l.checkUserdata(xev.Completion, 1, "seamstress.Timer");
+                        const c = &l.checkUserdata(Timer, 1, "seamstress.Timer").c;
                         _ = l.getUserValue(1, @intFromEnum(Indices.delta)) catch unreachable;
                         const delta = l.toNumber(-1) catch unreachable;
                         l.pop(2);
