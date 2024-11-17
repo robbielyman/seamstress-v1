@@ -65,4 +65,10 @@ fn addImports(b: *std.Build, m: *std.Build.Module, target: std.Build.ResolvedTar
         .optimize = optimize,
     });
     m.addImport("xev", xev.module("xev"));
+
+    const zosc = b.dependency("zosc", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    m.addImport("zosc", zosc.module("zosc"));
 }
