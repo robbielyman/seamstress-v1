@@ -5,6 +5,7 @@ const Promise = @This();
 
 status: enum { waiting, pending, fulfilled, rejected },
 c: xev.Completion = .{},
+c_c: xev.Completion = .{},
 data: union(enum) {
     timer: xev.Timer, // for use with lua-generated promises
     @"async": xev.Async, // for use with other modules
@@ -52,6 +53,7 @@ pub fn register(comptime which: Which) fn (*Lua) i32 {
                         .{ .name = "catch", .func = ziglua.wrap(@"catch") },
                         .{ .name = "finally", .func = ziglua.wrap(finally) },
                         .{ .name = "await", .func = ziglua.wrap(@"await") },
+                        .{ .name = "__cancel", .func = ziglua.wrap(__cancel) },
                     }, 0); // register functions
                     _ = l.pushStringZ("__index"); // __index
                     l.pushValue(-2); // metatable
@@ -77,6 +79,39 @@ pub fn register(comptime which: Which) fn (*Lua) i32 {
     };
 }
 
+fn __cancel(l: *Lua) i32 {
+    const builtin = @import("builtin");
+    const promise = l.checkUserdata(Promise, 1, "seamstress.async.Promise");
+    l.pushValue(1);
+    const handle = l.ref(ziglua.registry_index) catch
+        std.debug.panic("unable to register Promise!", .{});
+    promise.c_c = .{
+        .op = .{ .cancel = .{ .c = &promise.c } },
+        .userdata = ptrFromHandle(handle),
+        .callback = struct {
+            fn callback(
+                userdata: ?*anyopaque,
+                loop: *xev.Loop,
+                _: *xev.Completion,
+                result: xev.Result,
+            ) xev.CallbackAction {
+                const lua = lu.getLua(loop);
+                const top = if (builtin.mode == .Debug) lua.getTop();
+                defer if (builtin.mode == .Debug) std.debug.assert(top == lua.getTop()); // stack must be unchanged
+                lua.unref(ziglua.registry_index, handleFromPtr(userdata)); // release the reference
+                _ = result.cancel catch |err| {
+                    _ = lua.pushFString("unable to cancel: %s", .{@errorName(err).ptr});
+                    lu.reportError(lua);
+                };
+                return .disarm;
+            }
+        }.callback,
+    };
+    const seamstress = lu.getSeamstress(l);
+    seamstress.loop.add(&promise.c_c);
+    return 0;
+}
+
 const How = enum { all, any, race };
 
 fn multi(comptime how: How) fn (*Lua) i32 {
@@ -98,7 +133,7 @@ fn multi(comptime how: How) fn (*Lua) i32 {
                     const lua = lu.getLua(loop);
                     _ = r catch |err| {
                         lua.unref(ziglua.registry_index, handle);
-                        _ = lua.pushFString("unexpected timer error! {s}", .{@errorName(err).ptr});
+                        _ = lua.pushFString("unexpected timer error! %s", .{@errorName(err).ptr});
                         lu.reportError(lua);
                         return .disarm;
                     };
@@ -310,7 +345,7 @@ fn settle(ptr: ?*anyopaque, loop: *xev.Loop, c: *xev.Completion, r: xev.Timer.Ru
     const handle = handleFromPtr(ptr);
     _ = r catch |err| {
         l.unref(ziglua.registry_index, handle);
-        _ = l.pushFString("unexpected timer error! {s}", .{@errorName(err).ptr});
+        _ = l.pushFString("unexpected timer error! %s", .{@errorName(err).ptr});
         lu.reportError(l);
         return .disarm;
     };
@@ -396,7 +431,7 @@ fn anon(l: *Lua) i32 {
             const inner_handle = handleFromPtr(ptr);
             _ = r catch |err| {
                 lua.unref(ziglua.registry_index, inner_handle);
-                _ = lua.pushFString("unexpected timer error! {s}", .{@errorName(err).ptr});
+                _ = lua.pushFString("unexpected timer error! %s", .{@errorName(err).ptr});
                 lu.reportError(lua);
                 return .disarm;
             };
