@@ -14,6 +14,7 @@ pub const list = std.StaticStringMap(*const fn (?*ziglua.LuaState) callconv(.C) 
     .{ "seamstress.monome", ziglua.wrap(@import("monome.zig").register(.monome)) },
     .{ "seamstress.monome.Grid", ziglua.wrap(@import("monome.zig").register(.grid)) },
     .{ "seamstress.monome.Arc", ziglua.wrap(@import("monome.zig").register(.arc)) },
+    .{ "tl", ziglua.wrap(openFn("tl.lua")) },
 });
 
 fn openFn(comptime filename: []const u8) fn (*Lua) i32 {
@@ -21,13 +22,15 @@ fn openFn(comptime filename: []const u8) fn (*Lua) i32 {
         fn f(l: *Lua) i32 {
             const prefix = std.process.getEnvVarOwned(l.allocator(), "SEAMSTRESS_LUA_PATH") catch return 0;
             defer l.allocator().free(prefix);
-            var buf: ziglua.Buffer = undefined;
-            buf.init(l); // local buf = ""
-            buf.addString(prefix); // buf = buf .. os.getenv("SEAMSTRESS_LUA_PATH")
-            buf.addString(if (builtin.os.tag == .windows) "\\core\\" else "/core/"); // buf = buf .. "/core/"
-            buf.addString(filename); // buf = buf .. filename
-            buf.pushResult();
-            l.doFile(l.toString(-1) catch unreachable) catch l.raiseError(); // local res = dofile(buf) -- (not pcalled!)
+            const path = std.fs.path.joinZ(l.allocator(), &.{ prefix, "core", filename }) catch
+                l.raiseErrorStr("out of memory!", .{});
+            defer l.allocator().free(path);
+            if (std.mem.endsWith(u8, filename, ".tl")) {
+                load(l, "tl");
+                _ = l.getField(-1, "loader");
+                l.call(0, 0);
+            }
+            l.doFile(path) catch l.raiseError(); // local res = dofile(buf) -- (not pcalled!)
             return 1; // return res
         }
     }.f;

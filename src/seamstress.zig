@@ -113,6 +113,14 @@ fn setup(self: *Seamstress, filename: ?[:0]const u8) !void {
     try self.cli.setup();
     self.lua.pushFunction(ziglua.wrap(clearRegistry));
     lu.addExitHandler(self.lua, .quit);
+    const args = try std.process.argsAlloc(self.lua.allocator());
+    defer std.process.argsFree(self.lua.allocator(), args);
+    self.lua.createTable(@intCast(args.len), 0);
+    for (args, 0..) |arg, i| {
+        _ = self.lua.pushString(arg);
+        self.lua.setIndex(-2, @intCast(i));
+    }
+    self.lua.setGlobal("arg");
 }
 
 /// attempts to call `dofile` on $SEAMSTRESS_HOME/$SEAMSTRESS_CONFIG_FILENAME

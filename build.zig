@@ -18,12 +18,22 @@ pub fn build(b: *std.Build) !void {
     // .install_subdir = "docs",
     // });
 
+    const teal = b.dependency("teal", .{});
+    const tl_tl_install = b.addInstallFileWithDir(teal.path("tl.tl"), .{
+        .custom = try std.fs.path.join(b.allocator, &.{ "share", "seamstress", "lua", "core" }),
+    }, "tl.tl");
+    const tl_lua_install = b.addInstallFileWithDir(teal.path("tl.lua"), .{
+        .custom = try std.fs.path.join(b.allocator, &.{ "share", "seamstress", "lua", "core" }),
+    }, "tl.lua");
+    const install = b.getInstallStep();
     const install_lua_files = b.addInstallDirectory(.{
         .source_dir = b.path("lua"),
         .install_dir = .{ .custom = "share/seamstress" },
         .install_subdir = "lua",
     });
-    b.getInstallStep().dependOn(&install_lua_files.step);
+    install.dependOn(&install_lua_files.step);
+    install.dependOn(&tl_tl_install.step);
+    install.dependOn(&tl_lua_install.step);
     // b.getInstallStep().dependOn(&install_docs.step);
 
     const tests = b.addTest(.{

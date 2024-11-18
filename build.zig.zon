@@ -15,5 +15,9 @@
             .url = "git+https://github.com/robbielyman/zosc?ref=v1.1.0#ef8caf3c9f86b09b7fbed9fe6d4cdba3a43fb9de",
             .hash = "12207c108f821340bc3514117afd24bace658bc3ad06b79c51d1440eb498cec4349c",
         },
+        .teal = .{
+            .url = "git+https://github.com/teal-language/tl?ref=v0.24.1#0bff43a53b60f98e67fde58f22bdbb538776e1fe",
+            .hash = "1220755d4a7be10cd0d3dfe2b2420fd8e98e4c45c8b0df10bf3a58b2fff978f1049b",
+        },
     },
 }
