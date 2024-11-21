@@ -105,9 +105,8 @@ fn led(l: *Lua) i32 {
     const arc = l.checkUserdata(Arc, 1, "seamstress.monome.Arc");
     const n = common.checkIntegerAcceptingNumber(l, 2);
     const x = common.checkIntegerAcceptingNumber(l, 3);
-    const level = common.checkIntegerAcceptingNumber(l, 4);
-    l.argCheck(1 <= n and n <= 4, 2, "n must be between 1 and 4!");
-    l.argCheck(0 <= level and level <= 15, 4, "level must be between 0 and 15!");
+    const level = @min(@max(0, common.checkIntegerAcceptingNumber(l, 4)), 15);
+    if (n < 1 or n > 4) return 0;
     if ((l.getUserValue(1, 2) catch unreachable) == .nil) return 0;
     _ = l.getIndex(-1, n);
     const index: usize = @intCast(@mod(x - 1, 64));
