@@ -176,6 +176,7 @@ fn __cancel(l: *Lua) i32 {
 fn __gc(l: *Lua) i32 {
     const server = l.checkUserdata(Server, 1, "seamstress.osc.Server");
     std.posix.close(server.udp.fd);
+    std.posix.close(server.socket);
     return 0;
 }
 
@@ -230,6 +231,11 @@ fn new(l: *Lua) i32 {
         .udp = xev.UDP.init(server.addr) catch l.raiseErrorStr("unable to open UDP socket at port %d", .{port}),
         .socket = std.posix.socket(server.addr.any.family, std.posix.SOCK.DGRAM, 0) catch l.raiseErrorStr("unable to open UDP socket for sending!", .{}),
     };
+
+    std.posix.setsockopt(server.socket, std.posix.SOL.SOCKET, std.posix.SO.REUSEPORT, &std.mem.toBytes(@as(c_int, 1))) catch
+        l.raiseErrorStr("unable to set socket option: reuse port", .{});
+    std.posix.setsockopt(server.socket, std.posix.SOL.SOCKET, std.posix.SO.REUSEADDR, &std.mem.toBytes(@as(c_int, 1))) catch
+        l.raiseErrorStr("unable to set socket option: reuse addr", .{});
 
     server.udp.bind(server.addr) catch |err| l.raiseErrorStr("unable to bind to UDP socket at port %d; %s", .{ port, @errorName(err).ptr });
     l.newTable(); // our uservalue table

@@ -237,7 +237,7 @@ fn whichQuad(grid: *const Grid, x: ziglua.Integer, y: ziglua.Integer) ziglua.Int
     return switch (grid.quads) {
         .one => 1,
         .two => if (x > 8) 2 else 1,
-        .four => (@as(ziglua.Integer, if (y > 8) 1 else 0) << 1) + @as(ziglua.Integer, if (x > 8) 2 else 1),
+        .four => @as(ziglua.Integer, if (y > 8) 2 else 0) + @as(ziglua.Integer, if (x > 8) 2 else 1),
     };
 }
 
@@ -257,10 +257,9 @@ fn led(l: *Lua) i32 {
         .two => .{ 8, 16 },
         .four => .{ 16, 16 },
     };
-    l.argCheck(1 <= x and x <= cols, 2, "x out of bounds!");
-    l.argCheck(1 <= y and y <= rows, 3, "y out of bounds!");
-    const z = common.checkIntegerAcceptingNumber(l, 4);
-    l.argCheck(0 <= z and z <= 15, 4, "level must be between 0 and 15!");
+    if (x < 1 or x > cols) return 0;
+    if (y < 1 or y > rows) return 0;
+    const z = @min(@max(0, common.checkIntegerAcceptingNumber(l, 4)), 15);
     const quad = grid.whichQuad(x, y);
     if ((l.getUserValue(1, 2) catch unreachable) == .nil) return 0;
     _ = l.getIndex(-1, quad);

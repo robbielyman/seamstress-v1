@@ -34,6 +34,10 @@ fn __cancel(l: *Lua) i32 {
                 const lua = lu.getLua(loop);
                 const top = if (builtin.mode == .Debug) lua.getTop();
                 defer if (builtin.mode == .Debug) std.debug.assert(top == lua.getTop()); // stack must be unchanged
+                _ = lua.rawGetIndex(ziglua.registry_index, handleFromPtr(userdata));
+                lua.pushBoolean(false);
+                lua.setUserValue(-2, @intFromEnum(Indices.running)) catch unreachable;
+                lua.pop(1);
                 lua.unref(ziglua.registry_index, handleFromPtr(userdata)); // release the reference
                 _ = result.cancel catch |err| {
                     _ = lua.pushFString("unable to cancel: %s", .{@errorName(err).ptr});
@@ -96,7 +100,7 @@ fn bang(ud: ?*anyopaque, loop: *xev.Loop, c: *xev.Completion, r: xev.Result) xev
     const old_delta_ms: u64 = @intFromFloat(old_delta * std.time.ms_per_s);
     l.pushInteger(now);
     l.setUserValue(-2, @intFromEnum(Indices.now)) catch unreachable; // update now
-    const dt: f64 = @as(f64, @floatFromInt(now - then)) / std.time.ns_per_s;
+    const dt: f64 = @as(f64, @floatFromInt(now - then)) / std.time.ms_per_s;
     _ = l.getUserValue(-1, @intFromEnum(Indices.action)) catch unreachable; // f
     l.pushValue(-2); // self
     l.pushNumber(dt);
