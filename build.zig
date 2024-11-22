@@ -33,6 +33,9 @@ pub fn build(b: *std.Build) !void {
     });
     addImports(b, &tests.root_module, target, optimize);
     const tests_run = b.addRunArtifact(tests);
+    var env_map = try std.process.getEnvMap(b.allocator);
+    try env_map.put("SEAMSTRESS_LUA_PATH", b.path("lua").getPath(b));
+    tests_run.env_map = &env_map;
     const tests_step = b.step("test", "run the zig tests");
     tests_step.dependOn(&tests_run.step);
 
