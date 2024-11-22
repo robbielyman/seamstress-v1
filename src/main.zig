@@ -7,9 +7,13 @@ pub fn main() !void {
 
     // allocation
     var gpa: if (builtin.mode == .Debug) std.heap.GeneralPurposeAllocator(.{}) else void = if (builtin.mode == .Debug) .{};
-    defer {
-        if (builtin.mode == .Debug) _ = gpa.deinit();
-    }
+    defer if (builtin.mode == .Debug) {
+        if (gpa.deinit() == .leak) {
+            std.debug.print("leaked memory!\n", .{});
+            // the leaks are printed to /tmp/seamstress.log,
+            // but it would be nice to know to check for them!
+        }
+    };
     const allocator = if (builtin.mode == .Debug) gpa.allocator() else std.heap.c_allocator;
 
     // arguments
