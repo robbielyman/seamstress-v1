@@ -20,7 +20,6 @@ pub fn main() !void {
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
     maybePrintSweetNothingsAndExit(args);
-    const filename: ?[:0]const u8 = if (args.len > 1) args[1] else null;
 
     // environment variables
     const environ = try setEnvironmentVariables(allocator);
@@ -59,7 +58,7 @@ pub fn main() !void {
         .panic_fn = Seamstress.panicCleanup,
     };
 
-    try seamstress.run(filename);
+    try seamstress.run();
     // flush any accumulated logs
     try bw.flush();
     // in release modes, this calls `exit(0)`, saving us from having to wait for memory to be freed
