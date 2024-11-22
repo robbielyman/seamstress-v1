@@ -211,7 +211,7 @@ test unrotate {
         1, 8,  8,  1,
         1, 16, 16, 1,
     };
-    for (grids, x_s, y_s) |grid, exp_x, exp_y| {
+    for (grids, x_s, y_s) |*grid, exp_x, exp_y| {
         const x, const y = unrotate(grid, 1, 1);
         try std.testing.expectEqual(exp_x, x);
         try std.testing.expectEqual(exp_y, y);
@@ -226,7 +226,7 @@ test unrotate {
         2, 4,  7,  5,
         2, 12, 15, 5,
     };
-    for (grids, x_s2, y_s2) |grid, exp_x, exp_y| {
+    for (grids, x_s2, y_s2) |*grid, exp_x, exp_y| {
         const x, const y = unrotate(grid, 5, 2);
         try std.testing.expectEqual(exp_x, x);
         try std.testing.expectEqual(exp_y, y);

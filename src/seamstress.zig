@@ -17,7 +17,7 @@ pub fn init(self: *Seamstress, alloc_ptr: *const std.mem.Allocator) !void {
     self.loop = try xev.Loop.init(.{ .thread_pool = &self.pool });
 }
 
-pub fn run(self: *Seamstress, filename: ?[:0]const u8) !void {
+pub fn run(self: *Seamstress) !void {
     // we want a zig stack trace
     _ = self.lua.atPanic(ziglua.wrap(struct {
         fn panic(l: *Lua) i32 { // function panic(error_msg)
@@ -33,7 +33,7 @@ pub fn run(self: *Seamstress, filename: ?[:0]const u8) !void {
         }
     }.panic));
     // prepare the lua environment
-    try self.setup(filename);
+    try self.setup();
     var c: xev.Completion = .{};
     self.loop.timer(&c, 0, self, struct {
         fn f(ud: ?*anyopaque, _: *xev.Loop, _: *xev.Completion, r: xev.Result) xev.CallbackAction {
@@ -43,6 +43,7 @@ pub fn run(self: *Seamstress, filename: ?[:0]const u8) !void {
                 defer std.process.argsFree(s.lua.allocator(), args);
                 if (args.len < 2) break :blk;
                 if (std.mem.eql(u8, "test", args[1])) break :blk;
+                if (builtin.is_test) break :blk;
                 s.lua.doFile(args[1]) catch {
                     lu.reportError(s.lua);
                 };
@@ -87,27 +88,33 @@ pub const version: std.SemanticVersion = .{
     .build = "241005",
 };
 
-fn setup(self: *Seamstress, filename: ?[:0]const u8) !void {
-    const is_test = if (filename) |f| if (std.mem.eql(u8, f, "test")) true else false else false;
+fn setup(self: *Seamstress) !void {
+    const allocator = self.lua.allocator();
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
+    const is_test = is_test: {
+        if (args.len < 2) break :is_test false;
+        break :is_test std.mem.eql(u8, args[1], "test");
+    };
     // open standard lua libraries
     self.lua.openLibs();
     // load the config file---unless we're running tests
     // the config file leaves a table on the stack
-    if (!is_test) try self.configure();
+    if (!is_test and !builtin.is_test) try self.configure();
     // create the seamstress metatable
     try self.createMetatable();
     // add our package searcher
     try addPackageSearcher(self.lua);
     // populates "seamstress" as a lua global and leaves it on the stack
     self.lua.requireF("seamstress", ziglua.wrap(register), true);
-    if (is_test) {
+    if (!builtin.is_test) if (is_test) {
         // adds an `init` handler that runs the seamstress tests
         lu.load(self.lua, "seamstress.test");
     } else {
         self.lua.rotate(-2, 1);
         // seamstress.config = the table returned by config
         self.lua.setField(-2, "config");
-    }
+    };
     self.lua.pop(1); // pop seamstress from the stack
     // set up CLI interaction
     try self.cli.setup();
@@ -293,7 +300,7 @@ test "ref" {
 test "lifecycle" {
     // for reasons that are not clear to me, this test causes the zig test runner to hang
     // when run in "server mode"
-    if (true) return error.SkipZigTest;
+    // if (true) return error.SkipZigTest;
     var seamstress: Seamstress = undefined;
     try seamstress.init(&std.testing.allocator);
     defer seamstress.deinit();
@@ -307,5 +314,5 @@ test "lifecycle" {
             return .disarm;
         }
     }.f);
-    try seamstress.run(null);
+    try seamstress.run();
 }
