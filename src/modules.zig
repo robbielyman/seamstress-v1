@@ -19,7 +19,7 @@ pub const list = std.StaticStringMap(*const fn (?*ziglua.LuaState) callconv(.C) 
 fn openFn(comptime filename: []const u8) fn (*Lua) i32 {
     return struct {
         fn f(l: *Lua) i32 {
-            const prefix = std.process.getEnvVarOwned(l.allocator(), "SEAMSTRESS_LUA_PATH") catch return 0;
+            const prefix = std.process.getEnvVarOwned(l.allocator(), "SEAMSTRESS_LUA_PATH") catch |err| l.raiseErrorStr("unable to get environment variable SEAMSTRESS_LUA_PATH! %s", .{@errorName(err).ptr});
             defer l.allocator().free(prefix);
             var buf: ziglua.Buffer = undefined;
             buf.init(l); // local buf = ""
