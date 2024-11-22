@@ -298,15 +298,29 @@ test "ref" {
 }
 
 test "lifecycle" {
-    // for reasons that are not clear to me, this test causes the zig test runner to hang
-    // when run in "server mode"
-    // if (true) return error.SkipZigTest;
     var seamstress: Seamstress = undefined;
     try seamstress.init(&std.testing.allocator);
     defer seamstress.deinit();
 
     var c: xev.Completion = .{};
-    seamstress.loop.timer(&c, 1000, seamstress.lua, struct {
+    var failed: bool = false;
+    seamstress.loop.timer(&c, 1, &failed, struct {
+        fn f(ud: ?*anyopaque, loop: *xev.Loop, _: *xev.Completion, r: xev.Result) xev.CallbackAction {
+            _ = r.timer catch unreachable;
+            const boolean: *bool = @ptrCast(@alignCast(ud.?));
+            const l = lu.getLua(loop);
+            for (modules.list.values()) |@"fn"| {
+                l.pushFunction(@"fn");
+                lu.doCall(l, 0, 0) catch {
+                    l.pop(1);
+                    boolean.* = true;
+                };
+            }
+            return .disarm;
+        }
+    }.f);
+    var d: xev.Completion = .{};
+    seamstress.loop.timer(&d, 1000, seamstress.lua, struct {
         fn f(ud: ?*anyopaque, _: *xev.Loop, _: *xev.Completion, r: xev.Result) xev.CallbackAction {
             _ = r.timer catch unreachable;
             const l: *Lua = @ptrCast(@alignCast(ud.?));
@@ -315,4 +329,5 @@ test "lifecycle" {
         }
     }.f);
     try seamstress.run();
+    try std.testing.expect(failed == false);
 }
