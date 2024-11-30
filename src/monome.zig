@@ -42,7 +42,7 @@ fn populateSerialoscServer(l: *Lua) !void {
     const server_idx = l.getTop();
     const server = try l.toUserdata(osc.Server, -1);
     osc.pushAddress(l, .array, server.addr);
-    var builder = osc.z.Message.Builder.init(l.allocator());
+    var builder = osc.z.Message.Builder.init(lu.allocator(l));
     defer builder.deinit();
     _ = l.getIndex(-1, 1);
     _ = l.getIndex(-2, 2);
@@ -50,7 +50,7 @@ fn populateSerialoscServer(l: *Lua) !void {
     const portnum = try l.toInteger(-1);
     try builder.append(.{ .s = host });
     try builder.append(.{ .i = std.math.cast(i32, portnum) orelse return error.BadPort });
-    const m = try builder.commit(l.allocator(), "/serialosc/notify");
+    const m = try builder.commit(lu.allocator(l), "/serialosc/notify");
     defer m.unref();
     l.pop(3);
     l.newTable(); // t
@@ -74,7 +74,7 @@ fn populateSerialoscServer(l: *Lua) !void {
     l.rotate(-2, 1);
     l.setTable(server_idx); // serialosc[addr] = c
 
-    const m2 = try builder.commit(l.allocator(), "/serialosc/list");
+    const m2 = try builder.commit(lu.allocator(l), "/serialosc/list");
     defer m2.unref();
     try server.sendOSCBytes(serialosc_addr, m2.toBytes()); // send /serialosc/list
     try server.sendOSCBytes(serialosc_addr, m.toBytes()); // send /serialosc/notify

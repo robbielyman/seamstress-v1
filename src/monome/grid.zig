@@ -102,7 +102,7 @@ fn refresh(l: *Lua) i32 {
             const builder = l.toUserdata(osc.z.Message.Builder, -1) catch unreachable;
             builder.data.items[0] = .{ .i = 0 };
             builder.data.items[1] = .{ .i = 0 };
-            const msg = builder.commit(l.allocator(), path) catch l.raiseErrorStr("out of memory!", .{});
+            const msg = builder.commit(lu.allocator(l), path) catch l.raiseErrorStr("out of memory!", .{});
             defer msg.unref();
             grid.dirty[0] = false;
             server.sendOSCBytes(client.addr, msg.toBytes()) catch |err|
@@ -121,7 +121,7 @@ fn refresh(l: *Lua) i32 {
                 const builder = l.toUserdata(osc.z.Message.Builder, -1) catch unreachable;
                 builder.data.items[0] = .{ .i = x_off[i] };
                 builder.data.items[1] = .{ .i = y_off[i] };
-                const msg = builder.commit(l.allocator(), path) catch l.raiseErrorStr("out of memory!", .{});
+                const msg = builder.commit(lu.allocator(l), path) catch l.raiseErrorStr("out of memory!", .{});
                 defer msg.unref();
                 grid.dirty[@intCast(j)] = false;
                 server.sendOSCBytes(client.addr, msg.toBytes()) catch |err| {
@@ -138,7 +138,7 @@ fn refresh(l: *Lua) i32 {
                 const builder = l.toUserdata(osc.z.Message.Builder, -1) catch unreachable;
                 builder.data.items[0] = .{ .i = x_off[i] };
                 builder.data.items[1] = .{ .i = y_off[i] };
-                const msg = builder.commit(l.allocator(), path) catch l.raiseErrorStr("out of memory!", .{});
+                const msg = builder.commit(lu.allocator(l), path) catch l.raiseErrorStr("out of memory!", .{});
                 defer msg.unref();
                 grid.dirty[@intCast(i)] = false;
                 server.sendOSCBytes(client.addr, msg.toBytes()) catch |err| {
@@ -162,7 +162,7 @@ fn tiltEnable(l: *Lua) i32 {
     _ = l.pushString("/tilt/set");
     l.concat(2);
     const path = l.toString(-1) catch unreachable;
-    const msg = osc.z.Message.fromTuple(l.allocator(), path, .{ sensor, @as(i32, if (enable) 1 else 0) }) catch
+    const msg = osc.z.Message.fromTuple(lu.allocator(l), path, .{ sensor, @as(i32, if (enable) 1 else 0) }) catch
         l.raiseErrorStr("out of memory!", .{});
     defer msg.unref();
     server.sendOSCBytes(client.addr, msg.toBytes()) catch |err| {
@@ -302,7 +302,7 @@ fn intensity(l: *Lua) i32 {
     _ = l.pushStringZ("/grid/led/intensity");
     l.concat(2);
     const path = l.toString(-1) catch unreachable;
-    const msg = osc.z.Message.fromTuple(l.allocator(), path, .{@as(i32, @intCast(level))}) catch
+    const msg = osc.z.Message.fromTuple(lu.allocator(l), path, .{@as(i32, @intCast(level))}) catch
         l.raiseErrorStr("out of memory!", .{});
     defer msg.unref();
     server.sendOSCBytes(client.addr, msg.toBytes()) catch |err| {

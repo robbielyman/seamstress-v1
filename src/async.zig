@@ -13,17 +13,8 @@ data: union(enum) {
 
 pub const Which = enum { @"async", promise };
 
-fn handleFromPtr(ptr: ?*anyopaque) i32 {
-    const num = @intFromPtr(ptr);
-    const @"u32": u32 = @intCast(num);
-    return @bitCast(@"u32");
-}
-
-fn ptrFromHandle(handle: i32) ?*anyopaque {
-    const @"u32": u32 = @bitCast(handle);
-    const num: usize = @"u32";
-    return @ptrFromInt(num);
-}
+const handleFromPtr = lu.handleFromPtr;
+const ptrFromHandle = lu.ptrFromHandle;
 
 pub fn register(comptime which: Which) fn (*Lua) i32 {
     return switch (which) {
@@ -81,6 +72,7 @@ pub fn register(comptime which: Which) fn (*Lua) i32 {
 
 fn __cancel(l: *Lua) i32 {
     const builtin = @import("builtin");
+    _ = builtin; // autofix
     const promise = l.checkUserdata(Promise, 1, "seamstress.async.Promise");
     l.pushValue(1);
     const handle = l.ref(ziglua.registry_index) catch
@@ -88,24 +80,7 @@ fn __cancel(l: *Lua) i32 {
     promise.c_c = .{
         .op = .{ .cancel = .{ .c = &promise.c } },
         .userdata = ptrFromHandle(handle),
-        .callback = struct {
-            fn callback(
-                userdata: ?*anyopaque,
-                loop: *xev.Loop,
-                _: *xev.Completion,
-                result: xev.Result,
-            ) xev.CallbackAction {
-                const lua = lu.getLua(loop);
-                const top = if (builtin.mode == .Debug) lua.getTop();
-                defer if (builtin.mode == .Debug) std.debug.assert(top == lua.getTop()); // stack must be unchanged
-                lua.unref(ziglua.registry_index, handleFromPtr(userdata)); // release the reference
-                _ = result.cancel catch |err| {
-                    _ = lua.pushFString("unable to cancel: %s", .{@errorName(err).ptr});
-                    lu.reportError(lua);
-                };
-                return .disarm;
-            }
-        }.callback,
+        .callback = lu.unrefCallback,
     };
     const seamstress = lu.getSeamstress(l);
     seamstress.loop.add(&promise.c_c);

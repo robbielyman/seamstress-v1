@@ -149,7 +149,7 @@ local function runner()
 
   local execute = require 'busted.execute' (busted)
   execute(1, {})
-  seamstress.quit()
+  seamstress:stop()
 end
 
 event.addSubscriber({ 'init' }, function()
@@ -159,6 +159,6 @@ event.addSubscriber({ 'init' }, function()
     return false
   end
   print(busted)
-  seamstress.quit()
+  seamstress:stop()
   return false
 end)
