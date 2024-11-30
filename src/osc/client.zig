@@ -80,7 +80,7 @@ fn dispatchWhich(l: *Lua, comptime which: enum { bytes, msg }) void {
                         if (l.typeOf(5) == .nil) {
                             // we have to create the bytes
                             const msg = l.checkUserdata(z.Message.Builder, 2, "seamstress.osc.Message");
-                            const m = msg.commit(l.allocator(), path) catch l.raiseErrorStr("out of memory!", .{});
+                            const m = msg.commit(lu.allocator(l), path) catch l.raiseErrorStr("out of memory!", .{});
                             defer m.unref();
                             _ = l.pushString(m.toBytes());
                             l.replace(5);

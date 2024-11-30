@@ -1,21 +1,3 @@
-/// quits seamstress (by running the quit handlers)
-pub fn quit(l: *Lua) void {
-    _ = l.getMetatableRegistry("seamstress");
-    _ = l.getField(-1, "__quit");
-    doCall(l, 0, 0) catch {
-        panic("error while quitting! {s}", .{l.toString(-1) catch unreachable});
-    };
-    load(l, "seamstress");
-    // replace seamstress.quit so that calling seamstress.quit() is idempotent
-    l.pushFunction(ziglua.wrap(struct {
-        fn f(_: *Lua) i32 {
-            return 0;
-        }
-    }.f));
-    l.setField(-2, "quit");
-    l.pop(1);
-}
-
 /// grabs the main Lua instance from the event loop
 pub fn getLua(loop: *xev.Loop) *Lua {
     const s: *Seamstress = @fieldParentPtr("loop", loop);
@@ -26,22 +8,21 @@ pub fn getLua(loop: *xev.Loop) *Lua {
 /// panics on failure
 /// stack effect: 0
 pub fn getSeamstress(l: *Lua) *Seamstress {
-    _ = l.getMetatableRegistry("seamstress");
-    _ = l.getField(-1, "__seamstress");
+    load(l, "seamstress");
     const seamstress = l.toUserdata(Seamstress, -1) catch panic("unable to get handle to seamstress object!", .{});
-    l.pop(2);
+    l.pop(1);
     return seamstress;
 }
 
 /// adds the closure on top of the stack to the array of exit handlers
 /// panics if unable to get the upvalue
 /// stack effect: -1 (removes the handler)
-pub fn addExitHandler(l: *Lua, which: enum { panic, quit }) void {
+pub fn addExitHandler(l: *Lua, which: enum { panic, stop }) void {
     if (l.getTop() == 0) panic("no exit handler on the stack!", .{});
     _ = l.getMetatableRegistry("seamstress");
     _ = l.getField(-1, switch (which) {
-        .panic => "__panic",
-        .quit => "__quit",
+        .panic => "panic",
+        .stop => "stop",
     });
     l.remove(-2);
     _ = l.getUpvalue(-1, 1) catch panic("unable to get exit function upvalue!", .{});
@@ -159,52 +140,6 @@ pub fn doCall(l: *Lua, nargs: i32, nres: i32) error{LuaFunctionFailed}!void {
     return ret;
 }
 
-/// processes the buffer as plaintext Lua code
-/// returns `false` when the chunk fails to compile because it is incomplete
-/// otherwise returns `true` or an error
-/// stack effect: essentially arbitrary: usually you should subsequently call `print`
-pub fn processChunk(l: *Lua, buffer: []const u8) !bool {
-    // add "return" to the beginning of the buffer
-    const with_return = try std.fmt.allocPrint(l.allocator(), "return {s}", .{buffer});
-    defer l.allocator().free(with_return);
-    // loads the chunk...
-    l.loadBuffer(with_return, "=stdin", .text) catch |err| {
-        // ... if the chunk does not compile
-        switch (err) {
-            error.Memory => return error.OutOfMemory,
-            error.Syntax => {
-                // remove the error message
-                l.pop(1);
-                // load the original buffer
-                l.loadBuffer(buffer, "=stdin", .text) catch |err2| switch (err2) {
-                    error.Memory => return error.OutOfMemory,
-                    error.Syntax => {
-                        const msg = l.toStringEx(-1);
-                        // does the syntax error tell us the statement isn't finished?
-                        if (std.mem.endsWith(u8, msg, "<eof>")) {
-                            l.pop(1);
-                            // false means we're not done
-                            return false;
-                        } else {
-                            // return an error to signal the syntax error
-                            return error.LuaSyntaxError;
-                        }
-                    },
-                };
-            },
-        }
-        // call the compiled function
-        try doCall(l, 0, ziglua.mult_return);
-        // true means we're done
-        return true;
-    };
-    // ... the chunk compiles fine with "return " added!
-    // call the compiled function
-    try doCall(l, 0, ziglua.mult_return);
-    // true means we're done
-    return true;
-}
-
 /// determines whether the value on the stack at the given index may be called
 pub fn isCallable(l: *Lua, index: i32) bool {
     switch (l.typeOf(index)) {
@@ -224,6 +159,43 @@ pub fn isCallable(l: *Lua, index: i32) bool {
 /// raises a lua error if the function argument at the given index is not callable
 pub fn checkCallable(l: *Lua, argument: i32) void {
     if (!isCallable(l, argument)) l.typeError(argument, "callable value");
+}
+
+/// converts a userdata pointer (as in an xev callback)
+/// into a handle suitable for using with the Lua registry table
+pub fn handleFromPtr(ptr: ?*anyopaque) i32 {
+    const num = @intFromPtr(ptr);
+    const @"u32": u32 = @intCast(num);
+    return @bitCast(@"u32");
+}
+
+/// converts a Lua registry handle (from Lua.ref)
+/// into a userdata pointer for using with xev callbacks
+pub fn ptrFromHandle(handle: i32) ?*anyopaque {
+    const @"u32": u32 = @bitCast(handle);
+    const num: usize = @"u32";
+    return @ptrFromInt(num);
+}
+
+/// for use as an xev callback for a cancel operation;
+/// pass it ptrFromHandle(handle) after calling Lua.ref
+pub fn unrefCallback(ud: ?*anyopaque, loop: *xev.Loop, _: *xev.Completion, result: xev.Result) xev.CallbackAction {
+    const l = getLua(loop);
+    const top = if (builtin.mode == .Debug) l.getTop();
+    defer if (builtin.mode == .Debug) std.debug.assert(top == l.getTop()); // stack must be unchanged
+    l.unref(ziglua.registry_index, handleFromPtr(ud)); // release the reference
+    _ = result.cancel catch |err| {
+        _ = l.pushFString("unable to cancel: %s", .{@errorName(err).ptr});
+        reportError(l);
+    };
+    return .disarm;
+}
+
+pub fn allocator(l: *Lua) std.mem.Allocator {
+    return if (@hasDecl(@import("root"), "main"))
+        l.allocator()
+    else
+        std.heap.c_allocator;
 }
 
 const ziglua = @import("ziglua");

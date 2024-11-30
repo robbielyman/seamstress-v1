@@ -17,9 +17,11 @@ pub fn main() !void {
     const allocator = if (builtin.mode == .Debug) gpa.allocator() else std.heap.c_allocator;
 
     // arguments
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
-    maybePrintSweetNothingsAndExit(args);
+    {
+        const args = try std.process.argsAlloc(allocator);
+        defer std.process.argsFree(allocator, args);
+        maybePrintSweetNothingsAndExit(args);
+    }
 
     // environment variables
     const environ = try setEnvironmentVariables(allocator);
@@ -49,16 +51,15 @@ pub fn main() !void {
     };
     if (builtin.mode == .Debug) try std.posix.sigaction(std.posix.SIG.ABRT, &act, null);
 
-    var seamstress: Seamstress = undefined;
-    try seamstress.init(&allocator);
-    defer seamstress.deinit();
+    const l = try Lua.init(&allocator);
+    defer l.deinit();
 
     panic_closure = .{
-        .ctx = &seamstress,
+        .ctx = l,
         .panic_fn = Seamstress.panicCleanup,
     };
 
-    try seamstress.run();
+    try Seamstress.main(l);
     // flush any accumulated logs
     try bw.flush();
     // in release modes, this calls `exit(0)`, saving us from having to wait for memory to be freed
@@ -184,8 +185,8 @@ pub const std_options: std.Options = .{
 
 // used by std.debug.panic, so global state is unavoidable
 var panic_closure: ?struct {
-    ctx: *Seamstress,
-    panic_fn: *const fn (*Seamstress) void,
+    ctx: *Lua,
+    panic_fn: *const fn (*Lua) void,
 } = null;
 
 // allows us to shut down cleanly when panicking
@@ -201,6 +202,9 @@ pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_
 const std = @import("std");
 const builtin = @import("builtin");
 const Seamstress = @import("seamstress.zig");
+const ziglua = @import("ziglua");
+const Lua = ziglua.Lua;
+const lu = @import("lua_util.zig");
 
 test "ref" {
     _ = Seamstress;

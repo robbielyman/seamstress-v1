@@ -14,13 +14,15 @@ pub const list = std.StaticStringMap(*const fn (?*ziglua.LuaState) callconv(.C) 
     .{ "seamstress.monome", ziglua.wrap(@import("monome.zig").register(.monome)) },
     .{ "seamstress.monome.Grid", ziglua.wrap(@import("monome.zig").register(.grid)) },
     .{ "seamstress.monome.Arc", ziglua.wrap(@import("monome.zig").register(.arc)) },
+    .{ "seamstress.repl", ziglua.wrap(@import("repl.zig").register) },
+    .{ "seamstress.cli", ziglua.wrap(@import("cli.zig").register) },
 });
 
 fn openFn(comptime filename: []const u8) fn (*Lua) i32 {
     return struct {
         fn f(l: *Lua) i32 {
-            const prefix = std.process.getEnvVarOwned(l.allocator(), "SEAMSTRESS_LUA_PATH") catch |err| l.raiseErrorStr("unable to get environment variable SEAMSTRESS_LUA_PATH! %s", .{@errorName(err).ptr});
-            defer l.allocator().free(prefix);
+            const prefix = std.process.getEnvVarOwned(lu.allocator(l), "SEAMSTRESS_LUA_PATH") catch |err| l.raiseErrorStr("unable to get environment variable SEAMSTRESS_LUA_PATH! %s", .{@errorName(err).ptr});
+            defer lu.allocator(l).free(prefix);
             var buf: ziglua.Buffer = undefined;
             buf.init(l); // local buf = ""
             buf.addString(prefix); // buf = buf .. os.getenv("SEAMSTRESS_LUA_PATH")
@@ -42,7 +44,7 @@ fn loadRuntime(l: *Lua, module_name: [:0]const u8) void {
 }
 
 fn loadComptime(l: *Lua, comptime module_name: [:0]const u8) void {
-    const func = comptime list.get(module_name) orelse @compileError("no such module name!");
+    const func = comptime list.get(module_name) orelse @compileError("no such module name: " ++ module_name);
     l.requireF(module_name, func, false);
 }
 
@@ -50,3 +52,4 @@ const std = @import("std");
 const builtin = @import("builtin");
 const ziglua = @import("ziglua");
 const Lua = ziglua.Lua;
+const lu = @import("lua_util.zig");

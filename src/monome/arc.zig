@@ -89,7 +89,7 @@ fn refresh(l: *Lua) i32 {
         _ = l.getIndex(-1, @intCast(i + 1));
         const builder = l.toUserdata(osc.z.Message.Builder, -1) catch unreachable;
         builder.data.items[0] = .{ .i = @intCast(i) };
-        const msg = builder.commit(l.allocator(), path) catch l.raiseErrorStr("out of memory!", .{});
+        const msg = builder.commit(lu.allocator(l), path) catch l.raiseErrorStr("out of memory!", .{});
         defer msg.unref();
         arc.dirty[i] = false;
         server.sendOSCBytes(client.addr, msg.toBytes()) catch |err| {
