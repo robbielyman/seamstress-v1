@@ -41,18 +41,8 @@ socket: std.posix.socket_t,
 buf: [0xffff]u8 = undefined,
 running: bool = true,
 
-/// converts a userdata pointer to a Lua registry index handle
-fn handleFromPtr(ptr: ?*anyopaque) i32 {
-    const @"u32": u32 = @intCast(@intFromPtr(ptr));
-    return @bitCast(@"u32");
-}
-
-/// converts a Lua registry index handle to a userdata pointer
-fn ptrFromHandle(handle: i32) ?*anyopaque {
-    const @"u32": u32 = @bitCast(handle);
-    const ptr: usize = @"u32";
-    return @ptrFromInt(ptr);
-}
+const handleFromPtr = lu.handleFromPtr;
+const ptrFromHandle = lu.ptrFromHandle;
 
 fn add(l: *Lua) i32 {
     l.checkType(1, .userdata);
@@ -137,24 +127,7 @@ fn stop(l: *Lua) !void {
             .cancel = .{ .c = &server.c },
         },
         .userdata = ptrFromHandle(handle),
-        .callback = struct {
-            fn callback(
-                userdata: ?*anyopaque,
-                loop: *xev.Loop,
-                _: *xev.Completion,
-                result: xev.Result,
-            ) xev.CallbackAction {
-                const lua = lu.getLua(loop);
-                const top = if (builtin.mode == .Debug) lua.getTop();
-                defer if (builtin.mode == .Debug) std.debug.assert(top == lua.getTop()); // stack must be unchanged
-                lua.unref(ziglua.registry_index, handleFromPtr(userdata)); // release the reference
-                _ = result.cancel catch |err| {
-                    _ = lua.pushFString("unable to cancel: %s", .{@errorName(err).ptr});
-                    lu.reportError(lua);
-                };
-                return .disarm;
-            }
-        }.callback,
+        .callback = lu.unrefCallback,
     };
     const seamstress = lu.getSeamstress(l);
     seamstress.loop.add(&server.c_c);
@@ -299,7 +272,7 @@ fn send(l: *Lua) i32 {
         else => l.typeError(3, "seamstress.osc.Message"),
     };
     // get the bytes
-    const msg = message.commit(l.allocator(), path) catch l.raiseErrorStr("out of memory!", .{});
+    const msg = message.commit(lu.allocator(l), path) catch l.raiseErrorStr("out of memory!", .{});
     defer msg.unref();
     // send it!
     server.sendOSCBytes(addr, msg.toBytes()) catch |err| {

@@ -191,7 +191,7 @@ pub fn __newindex(comptime which: enum { grid, arc }) fn (*Lua) i32 {
                     .one_eighty => 180,
                     .two_seventy => 270,
                 };
-                const msg = osc.z.Message.fromTuple(l.allocator(), "/sys/rotation", .{rot}) catch
+                const msg = osc.z.Message.fromTuple(lu.allocator(l), "/sys/rotation", .{rot}) catch
                     l.raiseErrorStr("out of memory!", .{});
                 defer msg.unref();
                 server.sendOSCBytes(client.addr, msg.toBytes()) catch |err| {
@@ -221,7 +221,7 @@ pub fn __newindex(comptime which: enum { grid, arc }) fn (*Lua) i32 {
                 l.setTable(-3);
                 _ = l.getField(1, "client");
                 const client = l.toUserdata(osc.Client, -1) catch unreachable;
-                const msg = osc.z.Message.fromTuple(l.allocator(), "/sys/prefix", .{actual_prefix}) catch
+                const msg = osc.z.Message.fromTuple(lu.allocator(l), "/sys/prefix", .{actual_prefix}) catch
                     l.raiseErrorStr("out of memory!", .{});
                 defer msg.unref();
                 server.sendOSCBytes(client.addr, msg.toBytes()) catch |err| {
@@ -291,7 +291,7 @@ pub fn @"/sys/info"(l: *Lua) i32 {
     const host = l.toString(-1) catch unreachable;
     _ = l.getIndex(-2, 2);
     const port: i32 = @intCast(l.toInteger(-1) catch unreachable);
-    const msg = osc.z.Message.fromTuple(l.allocator(), "/sys/info", .{ host, port }) catch
+    const msg = osc.z.Message.fromTuple(lu.allocator(l), "/sys/info", .{ host, port }) catch
         l.raiseErrorStr("out of memory!", .{});
     defer msg.unref();
     server.sendOSCBytes(client.addr, msg.toBytes()) catch |err| {
@@ -365,7 +365,7 @@ pub fn connect(comptime which: enum { grid, arc }) fn (*Lua) i32 {
             _ = l.getIndex(-2, 2);
             const port = l.toInteger(-1) catch unreachable;
             {
-                const msg = osc.z.Message.fromTuple(l.allocator(), "/sys/host", .{host}) catch
+                const msg = osc.z.Message.fromTuple(lu.allocator(l), "/sys/host", .{host}) catch
                     l.raiseErrorStr("out of memory!", .{});
                 defer msg.unref();
                 server.sendOSCBytes(client.addr, msg.toBytes()) catch |err| {
@@ -374,7 +374,7 @@ pub fn connect(comptime which: enum { grid, arc }) fn (*Lua) i32 {
                 };
             }
             {
-                const msg = osc.z.Message.fromTuple(l.allocator(), "/sys/port", .{@as(i32, @intCast(port))}) catch
+                const msg = osc.z.Message.fromTuple(lu.allocator(l), "/sys/port", .{@as(i32, @intCast(port))}) catch
                     l.raiseErrorStr("out of memory!", .{});
                 defer msg.unref();
                 server.sendOSCBytes(client.addr, msg.toBytes()) catch |err| {

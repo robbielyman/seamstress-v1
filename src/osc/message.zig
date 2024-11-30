@@ -152,7 +152,7 @@ fn bytes(l: *Lua) i32 {
     if (l.getUserValue(1, 1) catch unreachable != .string) l.raiseErrorStr("missing or invalid OSC path!", .{});
     const path = l.toString(-1) catch unreachable;
     // build a message
-    const msg = builder.commit(l.allocator(), path) catch l.raiseErrorStr("out of memory!", .{});
+    const msg = builder.commit(lu.allocator(l), path) catch l.raiseErrorStr("out of memory!", .{});
     // be sure to release it
     defer msg.unref();
     // return the bytes
@@ -166,7 +166,7 @@ fn bytes(l: *Lua) i32 {
 fn new(l: *Lua) i32 {
     const arg_exists = l.getTop() != 0;
     const builder = l.newUserdata(z.Message.Builder, 1); // create a builder
-    builder.* = z.Message.Builder.init(l.allocator()); // initialize
+    builder.* = z.Message.Builder.init(lu.allocator(l)); // initialize
     if (arg_exists) {
         // set path
         if (l.getField(1, "path") != .string) {

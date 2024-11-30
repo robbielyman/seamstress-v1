@@ -16,6 +16,9 @@ pub fn register(l: *Lua) i32 {
     return 1;
 }
 
+const handleFromPtr = lu.handleFromPtr;
+const ptrFromHandle = lu.ptrFromHandle;
+
 fn __cancel(l: *Lua) i32 {
     const timer = l.checkUserdata(Timer, 1, "seamstress.Timer");
     l.pushValue(1);
@@ -208,19 +211,6 @@ fn __index(l: *Lua) i32 {
     _ = l.getTable(-2); // v = t[k]
     l.remove(-2); // remove t
     return 1; // return v
-}
-
-/// converts a userdata pointer to a Lua registry index handle
-fn handleFromPtr(ptr: ?*anyopaque) i32 {
-    const @"u32": u32 = @intCast(@intFromPtr(ptr));
-    return @bitCast(@"u32");
-}
-
-/// converts a Lua registry index handle to a userdata pointer
-fn ptrFromHandle(handle: i32) ?*anyopaque {
-    const @"u32": u32 = @bitCast(handle);
-    const ptr: usize = @"u32";
-    return @ptrFromInt(ptr);
 }
 
 /// performs t[k] = v, special casing based on whether k is in the list of indices above

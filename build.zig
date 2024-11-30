@@ -4,6 +4,17 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
+    const lib = b.addSharedLibrary(.{
+        .name = "seamstress",
+        .root_source_file = b.path("src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+        .link_libc = true,
+    });
+    addImports(b, &lib.root_module, target, optimize);
+    const lib_install = b.addInstallFileWithDir(lib.getEmittedBin(), .lib, "seamstress.so");
+    b.getInstallStep().dependOn(&lib_install.step);
+
     const exe = b.addExecutable(.{
         .name = "seamstress",
         .root_source_file = b.path("src/main.zig"),
@@ -12,11 +23,6 @@ pub fn build(b: *std.Build) !void {
     });
     addImports(b, &exe.root_module, target, optimize);
     b.installArtifact(exe);
-    // const install_docs = b.addInstallDirectory(.{
-    // .source_dir = exe.getEmittedDocs(),
-    // .install_dir = .{ .custom = "share/seamstress" },
-    // .install_subdir = "docs",
-    // });
 
     const install_lua_files = b.addInstallDirectory(.{
         .source_dir = b.path("lua"),
@@ -24,7 +30,6 @@ pub fn build(b: *std.Build) !void {
         .install_subdir = "lua",
     });
     b.getInstallStep().dependOn(&install_lua_files.step);
-    // b.getInstallStep().dependOn(&install_docs.step);
 
     const tests = b.addTest(.{
         .target = target,
@@ -33,9 +38,7 @@ pub fn build(b: *std.Build) !void {
     });
     addImports(b, &tests.root_module, target, optimize);
     const tests_run = b.addRunArtifact(tests);
-    var env_map = try std.process.getEnvMap(b.allocator);
-    try env_map.put("SEAMSTRESS_LUA_PATH", b.path("lua").getPath(b));
-    tests_run.env_map = &env_map;
+    tests_run.setEnvironmentVariable("SEAMSTRESS_LUA_PATH", b.path("lua").getPath(b));
     const tests_step = b.step("test", "run the zig tests");
     tests_step.dependOn(&tests_run.step);
 
@@ -51,9 +54,17 @@ pub fn build(b: *std.Build) !void {
         .target = target,
         .optimize = optimize,
     });
+    const root_comp_check = b.addSharedLibrary(.{
+        .name = "seamstress",
+        .root_source_file = b.path("src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+    addImports(b, &root_comp_check.root_module, target, optimize);
     addImports(b, &comp_check.root_module, target, optimize);
     const check = b.step("check", "check for compile errors");
     check.dependOn(&comp_check.step);
+    check.dependOn(&root_comp_check.step);
 }
 
 fn addImports(b: *std.Build, m: *std.Build.Module, target: std.Build.ResolvedTarget, optimize: std.builtin.OptimizeMode) void {
