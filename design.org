@@ -1,0 +1,97 @@
+* seamstress is an art engine
+a “game engine” is the common name for a wide variety of software platforms used in creating games.
+seamstress is like a game engine, but with an additional focus on music, visuals and creative coding.
+like a game engine, seamstress itself is not a game, nor is it music or visuals.
+rather, its intention is to be a useful tool in helping a user marshall code to create their own.
+
+seamstress is written in [[https://ziglang.org][Zig]], a systems programming language in the vein of C.
+it embeds the [[https://lua.org][Lua]] programming language.
+creators of software using seamstress write Lua code to create their software.
+seamstress enhances the standard offerings of Lua by providing access to, for example,
+methods for musically relevant timing.
+this functionality is provided by a mixture of Lua and Zig code.
+this document is intended to describe the design of seamstress,
+partly so that the author can hold it outside of his head,
+and partly so that a reader interested in contributing to the project can bring it into hers.
+
+in some ways, seamstress may be productively thought of as a batteries-included Lua runtime,
+in the way that [[https://nodejs.org][Node.js]] is a batteries-included runtime for JavaScript.
+that is, its core functionality is to execute Lua code.
+all of its core behavior should be accessible to Lua code in some way,
+and its behavior is dramatically influenced by the Lua code that it runs,
+without attempting to assert a “core identity” that shines through.
+
+* event loop
+at the core of seamstress is an event loop,
+an instance of [[https://github.com/mitchellh/libxev][libxev]], a cross-platform general-purpose Zig event loop modeled on =io_uring=.
+in libxev, an event on the event loop asks the kernel (or another thread) to perform some task,
+like reading OSC data from a UDP socket or waiting for a timer to run down,
+and executes a callback function when the task is completed.
+in seamstress, successful program execution is terminated only when the event loop has nothing “in flight” to wait for.
+for this reason, it is important that Zig code which places events onto the loop
+is also able to take events off the loop in the event that the user signals that they want the program to exit.
+
+since Lua is itself more or less fundamentally single-threaded
+(despite internally using the term “thread” to refer to its coroutines),
+so too is seamstress a concurrent program without being particularly /parallel./
+on macOS, the libxev event loop is in fact /implemented/ by using a thread pool rather than =io_uring=
+to handle I/O asynchronously.
+additionally, some I/O processes like MIDI require code that is executed off of the main thread.
+however, for the most part, it is a design goal of the event loop code to allow contributors to seamstress
+to write code as if it were executing asynchronously on a single thread.
+
+* module structure
+seamstress’s functionality is broken up as a number of Lua modules,
+which can be loaded from Lua code by calling =require=.
+each module should be namespaced as =seamstress.module_name=.
+under normal operation, seamstress also creates a single global table named =seamstress=.
+it is /not/ expected that executing =require "seamstress.module_name"= will store whatever is returned as a field in this table.
+calling =require= should perform the loading of the module’s core functionality, which should otherwise not be present.
+so for example, a user wanting to use MIDI in her program should call =require "seamstress.midi"=,
+while another user who does not require MIDI may omit this call, so that that instance of seamstress will not use MIDI resources.
+the Lua C (and hence Zig) API provides several useful features for accomplishing this purpose.
+one is the concept of a loader function, which provides the code that is run when =require "seamstress.module_name"= is called.
+generally, a Zig implementation of a Lua module should comprise one or more Zig source files
+which together export this function, (naming it =register= is good practice)
+which is then referenced in =src/modules.zig=, which contains the canonical list of all modules available to seamstress.
+for most modules, this function =register= should be the only function referenced outside of the module itself.
+
+the =register= function is a Lua function implemented in Zig, so has signature =fn (*Lua) i32=.
+it should exit by leaving one item (typically a table) on the stack;
+this is what will be returned to the user by the =require= call.
+like all Lua functions implemented in Zig,
+the return value (an =i32=) of this function indicates the number of items left on the stack,
+so should typically be =1=.
+
+many Lua modules need to store some program state,
+which should under correct operation be cleaned up when the program exits.
+for this purpose, seamstress makes use of the Lua concept of (full) userdata.
+from Zig’s perspective, userdata is memory allocated and garbage-collected by Lua.
+the Lua API provides a userdata objects with the ability to write a =__gc= metamethod
+which is run when the garbage collector marks an object for destruction.
+for tables and objects whose lifetime is potentially shorter than the life of seamstress,
+the =__gc= metamethod is ideal for cleanup code.
+however, for modules themselves, which expect to be available to Lua for the entire lifetime of a seamstress program,
+the =__gc= metamethod is not appropriate for cleanup code,
+for the reason that when compiled with optimizations for speed,
+the seamstress program does not “close” the Lua instance,
+opting instead to exit the program early and save a user of a seamstress program from having to wait while memory is freed.
+to ensure correct operations in all compilation modes,
+it is sometimes still correct to provide a =__gc= metamethod which simply frees memory.
+
+instead, seamstress provides (under =lua_util.zig=) a Zig API for registering a function to be called at program exit.
+this API is important for two reasons.
+first, for many modules which interact with the “outside world”, for example the user’s terminal,
+this is the appropriate place to leave things in a good state no matter how the program exits.
+and second, this API is also how modules which add recurring events to the event loop should take them off
+so that seamstress does shut down correctly.
+
+* multiple layers of access
+it is a design goal of seamstress that a user should be able to productively engage with their ideas on many levels,
+and the software should therefore provide multiple layers of abstraction.
+for example, it should be possible to access and process mouse information directly
+whether using a terminal which supports mouse usage or an OS window.
+however, since it likely isn’t always inspiring to code the hitbox calculation, hover responsiveness and so on
+for creating a push button,
+seamstress should provide a push button abstraction with an appropriate level of customizability.
+

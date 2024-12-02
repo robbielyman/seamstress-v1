@@ -1,6 +1,6 @@
-*.*~
-\#*.*\#
-config.log
-.zig-cache/
-zig-out/
 *.DS_Store
+\#*.*\#
+*.*\#
+*.*~
+.zig-cache
+zig-out

@@ -1,126 +1,127 @@
-/// entry point!
-pub fn main() void {
-    const logfile: ?std.fs.File = std.fs.cwd().createFile("/tmp/seamstress.log", .{}) catch blk: {
-        std.debug.print("unable to open a log file! logging will be disabled!!", .{});
-        std.time.sleep(std.time.ns_per_s / 2);
-        break :blk null;
-    };
-    var bw: ?std.io.BufferedWriter(4096, std.io.AnyWriter) = null;
-    if (logfile) |f| {
-        bw = std.io.bufferedWriter(f.writer().any());
-        // set up logging
-        log_writer = bw.?.writer().any();
-    }
+pub fn main() !void {
+    // logging
+    const logfile = try std.fs.cwd().createFile("/tmp/seamstress.log", .{});
+    var bw = std.io.bufferedWriter(logfile.writer());
+    defer bw.flush() catch {};
+    log_writer = bw.writer().any();
 
-    // TODO: is the GPA best for seamstress?
-    var gpa: std.heap.GeneralPurposeAllocator(.{}) = .{};
+    // allocation
+    var gpa: if (builtin.mode == .Debug) std.heap.GeneralPurposeAllocator(.{}) else void = if (builtin.mode == .Debug) .{};
     defer {
-        // in case we leaked memory, let's log it to stderr on exit
-        log_writer = std.io.getStdErr().writer().any();
-        _ = gpa.deinit();
+        if (builtin.mode == .Debug) _ = gpa.deinit();
     }
-    const allocator = gpa.allocator();
+    const allocator = if (builtin.mode == .Debug) gpa.allocator() else std.heap.c_allocator;
 
-    const args = std.process.argsAlloc(allocator) catch @panic("out of memory!");
+    // arguments
+    const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
-
-    for (args) |arg| {
-        if (std.mem.startsWith(u8, arg, "-v") or std.mem.startsWith(u8, arg, "--v") or std.mem.startsWith(u8, arg, "-h") or std.mem.startsWith(u8, arg, "--h"))
-            printSweetNothingsAndExit();
-    }
+    maybePrintSweetNothingsAndExit(args);
     const filename: ?[:0]const u8 = if (args.len > 1) args[1] else null;
 
-    var act: std.posix.Sigaction = .{
-        .handler = .{ .handler = handleAbrt },
-        .mask = switch (builtin.os.tag) {
-            .macos => 0,
-            .linux => std.posix.empty_sigset,
-            else => @compileError("os not supported"),
+    // lua files prefix
+    const lua_files_path = lua_files_path: {
+        const location = try std.fs.selfExeDirPathAlloc(allocator);
+        defer allocator.free(location);
+        const path = std.process.getEnvVarOwned(allocator, "SEAMSTRESS_LUA_PATH") catch
+            try std.fs.path.joinZ(allocator, &.{ location, "..", "share", "seamstress", "lua" });
+        defer allocator.free(path);
+        break :lua_files_path std.fs.realpathAlloc(allocator, path) catch |err| {
+            if (err == error.FileNotFound) {
+                std.debug.print(
+                    \\unable to normalize given path: "{s}"
+                    \\define $SEAMSTRESS_LUA_PATH to overwrite and try again
+                    \\
+                , .{path});
+                std.process.exit(1);
+            } else return err;
+        };
+    };
+    defer allocator.free(lua_files_path);
+
+    // handle SIGABRT (called by lua in Debug mode)
+    const act: if (builtin.mode == .Debug) std.posix.Sigaction = if (builtin.mode == .Debug) .{
+        .handler = .{
+            .handler = struct {
+                fn handleAbrt(_: c_int) callconv(.C) noreturn {
+                    @call(.always_inline, std.debug.panic, .{ "abort called!", .{} });
+                }
+            }.handleAbrt,
         },
+        .mask = if (builtin.os.tag == .linux) std.posix.empty_sigset else 0,
         .flags = 0,
     };
-    std.posix.sigaction(std.posix.SIG.ABRT, &act, null) catch @panic("not supported!");
+    if (builtin.mode == .Debug) try std.posix.sigaction(std.posix.SIG.ABRT, &act, null);
 
-    // stack-allocated, baby!
-    var seamstress: Seamstress = undefined;
-    // allows for hot reload
-    var go_again = true;
-    while (go_again) {
-        // initialize
-        seamstress.init(&allocator, if (bw) |*ptr| ptr else null, filename);
+    var seamstress = try Seamstress.init(&allocator, &bw, lua_files_path);
 
-        // ensures that we clean things up however we panic
-        panic_closure = .{
-            .ctx = &seamstress,
-            .panic_fn = Seamstress.panicCleanup,
-        };
-        // gooooooooo
-        seamstress.run() catch |err| std.debug.panic("{s}", .{@errorName(err)});
-        // should we go again?
-        go_again = seamstress.go_again;
-        seamstress.go_again = false;
+    panic_closure = .{
+        .ctx = &seamstress,
+        .panic_fn = Seamstress.panicCleanup,
+    };
+
+    try seamstress.run(filename);
+}
+
+/// if we get an agrument starting with -h, --h, -v or --v, print usage and exit
+fn maybePrintSweetNothingsAndExit(args: []const []const u8) void {
+    const needles: []const []const u8 = &.{ "-h", "--h", "--v", "-v" };
+    blk: {
+        for (args) |arg| {
+            for (needles) |needle| if (std.mem.startsWith(u8, arg, needle)) break :blk;
+        }
+        return;
     }
-}
-
-// since this is used by logFn (which is called by std.log), global state is unavoidable
-var log_writer: ?std.io.AnyWriter = null;
-
-// since this is called by std.debug.panic, global state is unavoidable.
-var panic_closure: ?struct {
-    ctx: *Seamstress,
-    panic_fn: *const fn (*Seamstress) void,
-} = null;
-
-// pub so that std can find it
-pub const std_options: std.Options = .{
-    // allows functions under std.log to use our logging function
-    .logFn = logFn,
-    .log_level = switch (builtin.mode) {
-        .ReleaseFast, .ReleaseSmall => .warn,
-        .Debug, .ReleaseSafe => .debug,
-    },
-};
-
-// pretty basic logging function; called by std.log
-fn logFn(
-    comptime level: std.log.Level,
-    comptime scope: @TypeOf(.enum_literal),
-    comptime fmt: []const u8,
-    args: anytype,
-) void {
-    const w = log_writer orelse return;
-    const prefix = "[" ++ @tagName(scope) ++ "]" ++ "(" ++ comptime level.asText() ++ "): ";
-    w.print(prefix ++ fmt ++ "\n", args) catch {};
-}
-
-// allows us to always shut down cleanly when panicking
-pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_addr: ?usize) noreturn {
-    if (panic_closure) |p| p.panic_fn(p.ctx);
-    panic_closure = null;
-    // inline so that the stack traces are correct
-    @call(.always_inline, std.builtin.default_panic, .{ msg, error_return_trace, ret_addr });
-}
-
-// handles SIGABRT so that we get a stack trace when a Lua debug assertion fails
-fn handleAbrt(_: c_int) callconv(.C) noreturn {
-    @call(.always_inline, std.debug.panic, .{ "assertion failed!!", .{} });
-}
-
-// if we got an argument of -h or -v
-fn printSweetNothingsAndExit() void {
     const stdout_file = std.io.getStdOut().writer();
     var bw = std.io.bufferedWriter(stdout_file);
     const stdout = bw.writer();
     stdout.print(
         \\SEAMSTRESS
         \\seamstress version: {}
-        \\seamstress is an art engine.
+        \\seamstress is an art engine,
         \\usage: seamstress [script_file_name]
         \\goodbye.
         \\
     , .{Seamstress.version}) catch {};
     bw.flush() catch {};
     std.process.exit(0);
+}
+
+// used by logFn (called by std.log), so global state is unavoidable
+var log_writer: ?std.io.AnyWriter = null;
+
+pub const std_options: std.Options = .{
+    .logFn = struct {
+        fn logFn(
+            comptime level: std.log.Level,
+            comptime scope: @TypeOf(.enum_literal),
+            comptime fmt: []const u8,
+            args: anytype,
+        ) void {
+            const w = log_writer orelse return;
+            const prefix = "[" ++ @tagName(scope) ++ "]" ++ " (" ++ comptime level.asText() ++ "): ";
+            w.print(prefix ++ fmt ++ "\n", args) catch {};
+        }
+    }.logFn,
+    .log_level = switch (builtin.mode) {
+        .ReleaseFast, .ReleaseSmall => .warn,
+        .Debug, .ReleaseSafe => .debug,
+    },
+};
+
+// used by std.debug.panic, so global state is unavoidable
+var panic_closure: ?struct {
+    ctx: *Seamstress,
+    panic_fn: *const fn (*Seamstress) void,
+} = null;
+
+// allows us to shut down cleanly when panicking
+pub fn panic(msg: []const u8, error_return_trace: ?*std.builtin.StackTrace, ret_addr: ?usize) noreturn {
+    if (panic_closure) |p| {
+        panic_closure = null;
+        p.panic_fn(p.ctx);
+    }
+    // inline so that stack traces are correct
+    @call(.always_inline, std.builtin.default_panic, .{ msg, error_return_trace, ret_addr });
 }
 
 const std = @import("std");
