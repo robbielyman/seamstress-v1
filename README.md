@@ -3,6 +3,11 @@
 *seamstress* is a Lua scripting environment
 for communicating with music, visuals and data.
 
+[!Note]
+this repository is for seamstress v1, for which development is more or less complete.
+i'm willing to provide maintenance for seamstress 1 if requested via the issue tracker!
+the future of the project is at [https://github.com/robbielyman/seamstress].
+
 ## usage
 
 seamstress is run from the command line. 
