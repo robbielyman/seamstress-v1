@@ -8,7 +8,7 @@
     },
     .name = .seamstress,
     .fingerprint = 0xddf04d098cc31c65,
-    .version = "1.4.5",
+    .version = "1.4.7",
     .dependencies = .{
         .abl_link = .{
             .url = "git+https://github.com/robbielyman/zig-abl_link#c4fb74acb59662910833fd5cdca40f1c4bd8be0c",

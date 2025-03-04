@@ -13,7 +13,7 @@ const socket = @import("socket.zig");
 const watcher = @import("watcher.zig");
 const create = @import("create.zig");
 
-const VERSION: std.SemanticVersion = .{ .major = 1, .minor = 4, .patch = 6 };
+const VERSION: std.SemanticVersion = .{ .major = 1, .minor = 4, .patch = 7 };
 
 pub const std_options: std.Options = .{
     .log_level = .info,
