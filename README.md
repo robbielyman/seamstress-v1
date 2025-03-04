@@ -46,8 +46,8 @@ brew install freetype2 harfbuzz ncurses
 
 alternatively to install with homebrew, do
 ```bash
-brew tap ryleelyman/seamstress
-brew install seamstress
+brew tap robbielyman/seamstress
+brew install seamstress@1
 ```
 
 on linux, additional requirements include `alsa`.
