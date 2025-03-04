@@ -37,8 +37,7 @@ const Metro = struct {
         self.thread = null;
     }
     fn bang(self: *Metro) void {
-        const event = .{ .Metro = .{ .id = self.id, .stage = self.stage } };
-        events.post(event);
+        events.post(.{ .Metro = .{ .id = self.id, .stage = self.stage } });
     }
     fn init(self: *Metro, delta: u64, count: i64) !void {
         self.delta = delta;

@@ -70,12 +70,6 @@ pub fn loop() !void {
             logger.err("receive error: {}", .{err});
             continue;
         };
-        const event = .{
-            .Exec_Code_Line = .{
-                .line = line,
-                .allocator = allocator,
-            },
-        };
-        events.post(event);
+        events.post(.{ .Exec_Code_Line = .{ .line = line, .allocator = allocator } });
     }
 }

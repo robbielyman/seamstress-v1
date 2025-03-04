@@ -26,7 +26,7 @@ pub fn init(prefix: []const u8, config: []const u8, time: std.time.Timer, versio
     children = std.ArrayList(std.process.Child).init(interpreter_alloc);
     timer = time;
     logger.info("starting lua vm", .{});
-    lvm = try Lua.init(&std.heap.raw_c_allocator);
+    lvm = try Lua.init(std.heap.raw_c_allocator);
 
     lvm.openLibs();
 
@@ -184,7 +184,7 @@ pub fn startup(script: []const u8, buffer: []u8) !?[:0]const u8 {
     const base = lvm.getTop() - 1;
     lvm.pushFunction(ziglua.wrap(message_handler));
     lvm.insert(base);
-    lvm.protectedCall(1, 1, base) catch |err| {
+    lvm.protectedCall(.{ .args = 1, .results = 1, .msg_handler = base }) catch |err| {
         lvm.remove(base);
         _ = lua_print(lvm);
         return err;
@@ -199,8 +199,7 @@ pub fn startup(script: []const u8, buffer: []u8) !?[:0]const u8 {
 // @function reset_lvm
 fn reset_lvm(l: *Lua) i32 {
     check_num_args(l, 0);
-    const event = .{ .Reset = {} };
-    events.post(event);
+    events.post(.Reset);
     return 0;
 }
 
@@ -1935,7 +1934,7 @@ fn docall(l: *Lua, nargs: i32, nres: i32) !void {
     const base = l.getTop() - nargs;
     l.pushFunction(ziglua.wrap(message_handler));
     l.insert(base);
-    l.protectedCall(nargs, nres, base) catch {
+    l.protectedCall(.{ .args = nargs, .results = nres, .msg_handler = base }) catch {
         l.remove(base);
         _ = lua_print(l);
         return;

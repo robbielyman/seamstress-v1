@@ -7,7 +7,7 @@ __pycache__/
 .lock-waf*
 .cache/
 config.log
-zig-cache/
+.zig-cache/
 zig-out/
 lua/core/.DS_Store
 lua/.DS_Store

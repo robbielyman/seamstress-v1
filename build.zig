@@ -34,14 +34,14 @@ pub fn build(b: *std.Build) void {
     exe.linkSystemLibrary("SDL2");
     exe.linkSystemLibrary("SDL2_image");
     exe.linkSystemLibrary("SDL2_ttf");
-    const zig_lua = b.dependency("Lua", .{
+    const zig_lua = b.dependency("ziglua", .{
         .target = target,
         .optimize = optimize,
     });
     exe.root_module.addImport("ziglua", zig_lua.module("ziglua"));
     exe.linkSystemLibrary("lua");
 
-    const zig_link = b.dependency("link", .{
+    const zig_link = b.dependency("abl_link", .{
         .target = target,
         .optimize = optimize,
     });
@@ -51,9 +51,9 @@ pub fn build(b: *std.Build) void {
     switch (target.result.os.tag) {
         .macos => {
             exe.addLibraryPath(.{ .cwd_relative = "/opt/homebrew/opt/readline/lib" });
-            exe.addLibraryPath(.{ .cwd_relative = "/usr/local/opt/readline/lib" });
+            // exe.addLibraryPath(.{ .cwd_relative = "/usr/local/opt/readline/lib" });
             exe.addSystemIncludePath(.{ .cwd_relative = "/opt/homebrew/opt/readline/include" });
-            exe.addSystemIncludePath(.{ .cwd_relative = "/usr/local/opt/readline/include" });
+            // exe.addSystemIncludePath(.{ .cwd_relative = "/usr/local/opt/readline/include" });
         },
         else => {},
     }

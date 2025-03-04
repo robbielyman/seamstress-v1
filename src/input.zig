@@ -89,11 +89,7 @@ fn inner() !void {
             continue;
         }
         _ = c.add_history(c_line);
-        const event = .{ .Exec_Code_Line = .{
-            .line = line,
-            .allocator = allocator,
-        } };
-        events.post(event);
+        events.post(.{ .Exec_Code_Line = .{ .line = line, .allocator = allocator } });
     }
     events.post(.{ .Quit = {} });
 }
@@ -124,13 +120,7 @@ fn bare_input_run() !void {
             quit = true;
             continue;
         }
-        const event = .{
-            .Exec_Code_Line = .{
-                .line = line,
-                .allocator = allocator,
-            },
-        };
-        events.post(event);
+        events.post(.{ .Exec_Code_Line = .{ .line = line, .allocator = allocator } });
     }
     events.post(.{ .Quit = {} });
 }

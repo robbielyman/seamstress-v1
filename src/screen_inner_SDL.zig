@@ -576,14 +576,11 @@ pub fn set_fullscreen(is_fullscreen: bool) void {
         );
         set_size(gui.WIDTH, gui.HEIGHT, gui.ZOOM);
     }
-    const event = .{
-        .Screen_Resized = .{
-            .w = gui.width,
-            .h = gui.height,
-            .window = current,
-        },
-    };
-    events.post(event);
+    events.post(.{ .Screen_Resized = .{
+        .w = gui.width,
+        .h = gui.height,
+        .window = current,
+    } });
 }
 
 pub fn set_position(x: i32, y: i32) void {
@@ -683,18 +680,13 @@ pub fn loop() void {
         var ev: c.SDL_Event = undefined;
         while (c.SDL_PollEvent(&ev) != 0) {
             switch (ev.type) {
-                c.SDL_KEYUP, c.SDL_KEYDOWN => {
-                    const event = .{
-                        .Screen_Key = .{
-                            .sym = ev.key.keysym.sym,
-                            .mod = ev.key.keysym.mod,
-                            .repeat = ev.key.repeat > 0,
-                            .state = ev.key.state == c.SDL_PRESSED,
-                            .window = ev.key.windowID,
-                        },
-                    };
-                    events.post(event);
-                },
+                c.SDL_KEYUP, c.SDL_KEYDOWN => events.post(.{ .Screen_Key = .{
+                    .sym = ev.key.keysym.sym,
+                    .mod = ev.key.keysym.mod,
+                    .repeat = ev.key.repeat > 0,
+                    .state = ev.key.state == c.SDL_PRESSED,
+                    .window = ev.key.windowID,
+                } }),
                 c.SDL_QUIT => {
                     events.post(.{ .Quit = {} });
                     screen.quit = true;
@@ -703,41 +695,33 @@ pub fn loop() void {
                     const flipped = ev.wheel.direction == c.SDL_MOUSEWHEEL_FLIPPED;
                     const x: f64 = if (flipped) -ev.wheel.preciseX else ev.wheel.preciseX;
                     const y: f64 = if (flipped) -ev.wheel.preciseY else ev.wheel.preciseY;
-                    events.post(.{
-                        .Screen_Mouse_Wheel = .{
-                            .x = x,
-                            .y = y,
-                            .window = ev.wheel.windowID,
-                        },
-                    });
+                    events.post(.{ .Screen_Mouse_Wheel = .{
+                        .x = x,
+                        .y = y,
+                        .window = ev.wheel.windowID,
+                    } });
                 },
                 c.SDL_MOUSEMOTION => {
                     const zoom: f64 = @floatFromInt(windows[ev.button.windowID - 1].zoom);
                     const x: f64 = @floatFromInt(ev.button.x);
                     const y: f64 = @floatFromInt(ev.button.y);
-                    const event = .{
-                        .Screen_Mouse_Motion = .{
-                            .x = x / zoom,
-                            .y = y / zoom,
-                            .window = ev.motion.windowID,
-                        },
-                    };
-                    events.post(event);
+                    events.post(.{ .Screen_Mouse_Motion = .{
+                        .x = x / zoom,
+                        .y = y / zoom,
+                        .window = ev.motion.windowID,
+                    } });
                 },
                 c.SDL_MOUSEBUTTONDOWN, c.SDL_MOUSEBUTTONUP => {
                     const zoom: f64 = @floatFromInt(windows[ev.button.windowID - 1].zoom);
                     const x: f64 = @floatFromInt(ev.button.x);
                     const y: f64 = @floatFromInt(ev.button.y);
-                    const event = .{
-                        .Screen_Mouse_Click = .{
-                            .state = ev.button.state == c.SDL_PRESSED,
-                            .x = x / zoom,
-                            .y = y / zoom,
-                            .button = ev.button.button,
-                            .window = ev.button.windowID,
-                        },
-                    };
-                    events.post(event);
+                    events.post(.{ .Screen_Mouse_Click = .{
+                        .state = ev.button.state == c.SDL_PRESSED,
+                        .x = x / zoom,
+                        .y = y / zoom,
+                        .button = ev.button.button,
+                        .window = ev.button.windowID,
+                    } });
                 },
                 c.SDL_WINDOWEVENT => {
                     switch (ev.window.event) {
@@ -761,14 +745,11 @@ pub fn loop() void {
                             window_rect(&windows[current]);
                             refresh();
                             set(old);
-                            const event = .{
-                                .Screen_Resized = .{
-                                    .w = windows[id].width,
-                                    .h = windows[id].height,
-                                    .window = id + 1,
-                                },
-                            };
-                            events.post(event);
+                            events.post(.{ .Screen_Resized = .{
+                                .w = windows[id].width,
+                                .h = windows[id].height,
+                                .window = id + 1,
+                            } });
                         },
                         else => {},
                     }

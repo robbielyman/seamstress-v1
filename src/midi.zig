@@ -160,7 +160,8 @@ fn add_devices() !void {
         input: bool,
         output: bool,
     };
-    var is_active: [32]Is_Active = .{.{ .input = false, .output = false }} ** 32;
+    const initial: Is_Active = .{ .input = false, .output = false };
+    var is_active: [32]Is_Active = .{initial} ** 32;
     const in_count = c.rtmidi_get_port_count(midi_in_counter);
     for (0..in_count) |i| {
         var len: c_int = 256;
