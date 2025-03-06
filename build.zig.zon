@@ -14,9 +14,9 @@
             .url = "git+https://github.com/robbielyman/zig-abl_link#c4fb74acb59662910833fd5cdca40f1c4bd8be0c",
             .hash = "abl_link-3.1.1-kE5CL1FYAAAEILPom95ZVqlks0UezAKHuS2PuorYsCUF",
         },
-        .ziglua = .{
-            .url = "git+https://github.com/natecraddock/ziglua#00a3c39c587b1b853748c05b5f5c1dc68f5f3683",
-            .hash = "ziglua-0.1.0-AAAAAMDKBADubTbfjHhHI0_1IS63_IV9KEsNLsy0fLm6",
+        .lua_wrapper = .{
+            .url = "git+https://github.com/natecraddock/ziglua#7bfb3c2b87220cdc89ef01cc99a200dad7a28e50",
+            .hash = "lua_wrapper-0.1.0-OyMC27fOBAAU3E2ueB-EWGSgsuCFQZL83pT0nQJ1ufOI",
         },
     },
 }

@@ -10,11 +10,11 @@ const midi = @import("midi.zig");
 const clock = @import("clock.zig");
 const screen = @import("screen.zig");
 const metro = @import("metros.zig");
-const ziglua = @import("ziglua");
+const lua_wrapper = @import("lua_wrapper");
 const input = @import("input.zig");
 const c = input.c;
 
-const Lua = ziglua.Lua;
+const Lua = lua_wrapper.Lua;
 var lvm: *Lua = undefined;
 const logger = std.log.scoped(.spindle);
 var stdout = std.io.getStdOut().writer();
@@ -32,85 +32,85 @@ pub fn init(prefix: []const u8, config: []const u8, time: std.time.Timer, versio
 
     lvm.newTable();
 
-    register_seamstress("reset_lvm", ziglua.wrap(reset_lvm));
+    register_seamstress("reset_lvm", lua_wrapper.wrap(reset_lvm));
 
-    register_seamstress("osc_send", ziglua.wrap(osc_send));
-    register_seamstress("osc_register", ziglua.wrap(osc_register));
-    register_seamstress("osc_delete", ziglua.wrap(osc_delete));
+    register_seamstress("osc_send", lua_wrapper.wrap(osc_send));
+    register_seamstress("osc_register", lua_wrapper.wrap(osc_register));
+    register_seamstress("osc_delete", lua_wrapper.wrap(osc_delete));
 
-    register_seamstress("child_process", ziglua.wrap(child_process));
+    register_seamstress("child_process", lua_wrapper.wrap(child_process));
 
-    register_seamstress("grid_set_led", ziglua.wrap(grid_set_led));
-    register_seamstress("grid_all_led", ziglua.wrap(grid_all_led));
-    register_seamstress("grid_rows", ziglua.wrap(grid_rows));
-    register_seamstress("grid_cols", ziglua.wrap(grid_cols));
-    register_seamstress("grid_set_rotation", ziglua.wrap(grid_set_rotation));
-    register_seamstress("grid_tilt_enable", ziglua.wrap(grid_tilt_enable));
-    register_seamstress("grid_tilt_disable", ziglua.wrap(grid_tilt_disable));
+    register_seamstress("grid_set_led", lua_wrapper.wrap(grid_set_led));
+    register_seamstress("grid_all_led", lua_wrapper.wrap(grid_all_led));
+    register_seamstress("grid_rows", lua_wrapper.wrap(grid_rows));
+    register_seamstress("grid_cols", lua_wrapper.wrap(grid_cols));
+    register_seamstress("grid_set_rotation", lua_wrapper.wrap(grid_set_rotation));
+    register_seamstress("grid_tilt_enable", lua_wrapper.wrap(grid_tilt_enable));
+    register_seamstress("grid_tilt_disable", lua_wrapper.wrap(grid_tilt_disable));
 
-    register_seamstress("arc_set_led", ziglua.wrap(arc_set_led));
-    register_seamstress("arc_all_led", ziglua.wrap(arc_all_led));
+    register_seamstress("arc_set_led", lua_wrapper.wrap(arc_set_led));
+    register_seamstress("arc_all_led", lua_wrapper.wrap(arc_all_led));
 
-    register_seamstress("monome_refresh", ziglua.wrap(monome_refresh));
-    register_seamstress("monome_intensity", ziglua.wrap(monome_intensity));
+    register_seamstress("monome_refresh", lua_wrapper.wrap(monome_refresh));
+    register_seamstress("monome_intensity", lua_wrapper.wrap(monome_intensity));
 
-    register_seamstress("screen_refresh", ziglua.wrap(screen_refresh));
-    register_seamstress("screen_pixel", ziglua.wrap(screen_pixel));
-    register_seamstress("screen_pixel_rel", ziglua.wrap(screen_pixel_rel));
-    register_seamstress("screen_line", ziglua.wrap(screen_line));
-    register_seamstress("screen_line_rel", ziglua.wrap(screen_line_rel));
-    register_seamstress("screen_curve", ziglua.wrap(screen_curve));
-    register_seamstress("screen_rect", ziglua.wrap(screen_rect));
-    register_seamstress("screen_rect_fill", ziglua.wrap(screen_rect_fill));
-    register_seamstress("screen_text", ziglua.wrap(screen_text));
-    register_seamstress("screen_text_center", ziglua.wrap(screen_text_center));
-    register_seamstress("screen_text_right", ziglua.wrap(screen_text_right));
-    register_seamstress("screen_color", ziglua.wrap(screen_color));
-    register_seamstress("screen_clear", ziglua.wrap(screen_clear));
-    register_seamstress("screen_set", ziglua.wrap(screen_set));
-    register_seamstress("screen_show", ziglua.wrap(screen_show));
-    register_seamstress("screen_arc", ziglua.wrap(screen_arc));
-    register_seamstress("screen_circle", ziglua.wrap(screen_circle));
-    register_seamstress("screen_circle_fill", ziglua.wrap(screen_circle_fill));
-    register_seamstress("screen_triangle", ziglua.wrap(screen_triangle));
-    register_seamstress("screen_quad", ziglua.wrap(screen_quad));
-    register_seamstress("screen_geometry", ziglua.wrap(screen_geometry));
-    register_seamstress("screen_new_texture", ziglua.wrap(screen_new_texture));
-    register_seamstress("screen_new_texture_from_file", ziglua.wrap(screen_new_texture_from_file));
-    register_seamstress("screen_texture_dimensions", ziglua.wrap(screen_texture_dimensions));
-    register_seamstress("screen_render_texture", ziglua.wrap(screen_render_texture));
-    register_seamstress("screen_render_texture_extended", ziglua.wrap(screen_render_texture_extended));
-    register_seamstress("screen_move", ziglua.wrap(screen_move));
-    register_seamstress("screen_move_rel", ziglua.wrap(screen_move_rel));
-    register_seamstress("screen_get_text_size", ziglua.wrap(screen_get_text_size));
-    register_seamstress("screen_set_size", ziglua.wrap(screen_set_size));
-    register_seamstress("screen_set_fullscreen", ziglua.wrap(screen_set_fullscreen));
-    register_seamstress("screen_set_position", ziglua.wrap(screen_set_position));
+    register_seamstress("screen_refresh", lua_wrapper.wrap(screen_refresh));
+    register_seamstress("screen_pixel", lua_wrapper.wrap(screen_pixel));
+    register_seamstress("screen_pixel_rel", lua_wrapper.wrap(screen_pixel_rel));
+    register_seamstress("screen_line", lua_wrapper.wrap(screen_line));
+    register_seamstress("screen_line_rel", lua_wrapper.wrap(screen_line_rel));
+    register_seamstress("screen_curve", lua_wrapper.wrap(screen_curve));
+    register_seamstress("screen_rect", lua_wrapper.wrap(screen_rect));
+    register_seamstress("screen_rect_fill", lua_wrapper.wrap(screen_rect_fill));
+    register_seamstress("screen_text", lua_wrapper.wrap(screen_text));
+    register_seamstress("screen_text_center", lua_wrapper.wrap(screen_text_center));
+    register_seamstress("screen_text_right", lua_wrapper.wrap(screen_text_right));
+    register_seamstress("screen_color", lua_wrapper.wrap(screen_color));
+    register_seamstress("screen_clear", lua_wrapper.wrap(screen_clear));
+    register_seamstress("screen_set", lua_wrapper.wrap(screen_set));
+    register_seamstress("screen_show", lua_wrapper.wrap(screen_show));
+    register_seamstress("screen_arc", lua_wrapper.wrap(screen_arc));
+    register_seamstress("screen_circle", lua_wrapper.wrap(screen_circle));
+    register_seamstress("screen_circle_fill", lua_wrapper.wrap(screen_circle_fill));
+    register_seamstress("screen_triangle", lua_wrapper.wrap(screen_triangle));
+    register_seamstress("screen_quad", lua_wrapper.wrap(screen_quad));
+    register_seamstress("screen_geometry", lua_wrapper.wrap(screen_geometry));
+    register_seamstress("screen_new_texture", lua_wrapper.wrap(screen_new_texture));
+    register_seamstress("screen_new_texture_from_file", lua_wrapper.wrap(screen_new_texture_from_file));
+    register_seamstress("screen_texture_dimensions", lua_wrapper.wrap(screen_texture_dimensions));
+    register_seamstress("screen_render_texture", lua_wrapper.wrap(screen_render_texture));
+    register_seamstress("screen_render_texture_extended", lua_wrapper.wrap(screen_render_texture_extended));
+    register_seamstress("screen_move", lua_wrapper.wrap(screen_move));
+    register_seamstress("screen_move_rel", lua_wrapper.wrap(screen_move_rel));
+    register_seamstress("screen_get_text_size", lua_wrapper.wrap(screen_get_text_size));
+    register_seamstress("screen_set_size", lua_wrapper.wrap(screen_set_size));
+    register_seamstress("screen_set_fullscreen", lua_wrapper.wrap(screen_set_fullscreen));
+    register_seamstress("screen_set_position", lua_wrapper.wrap(screen_set_position));
 
-    register_seamstress("metro_start", ziglua.wrap(metro_start));
-    register_seamstress("metro_stop", ziglua.wrap(metro_stop));
-    register_seamstress("metro_set_time", ziglua.wrap(metro_set_time));
+    register_seamstress("metro_start", lua_wrapper.wrap(metro_start));
+    register_seamstress("metro_stop", lua_wrapper.wrap(metro_stop));
+    register_seamstress("metro_set_time", lua_wrapper.wrap(metro_set_time));
 
-    register_seamstress("midi_write", ziglua.wrap(midi_write));
+    register_seamstress("midi_write", lua_wrapper.wrap(midi_write));
 
-    register_seamstress("clock_get_tempo", ziglua.wrap(clock_get_tempo));
-    register_seamstress("clock_get_beats", ziglua.wrap(clock_get_beats));
-    register_seamstress("clock_set_source", ziglua.wrap(clock_set_source));
-    register_seamstress("clock_link_set_tempo", ziglua.wrap(clock_link_set_tempo));
-    register_seamstress("clock_link_start", ziglua.wrap(clock_link_start));
-    register_seamstress("clock_link_stop", ziglua.wrap(clock_link_stop));
-    register_seamstress("clock_link_set_quantum", ziglua.wrap(clock_link_set_quantum));
-    register_seamstress("clock_internal_set_tempo", ziglua.wrap(clock_internal_set_tempo));
-    register_seamstress("clock_internal_start", ziglua.wrap(clock_internal_start));
-    register_seamstress("clock_internal_stop", ziglua.wrap(clock_internal_stop));
-    register_seamstress("clock_schedule_sleep", ziglua.wrap(clock_schedule_sleep));
-    register_seamstress("clock_schedule_sync", ziglua.wrap(clock_schedule_sync));
-    register_seamstress("clock_cancel", ziglua.wrap(clock_cancel));
-    register_seamstress("get_time", ziglua.wrap(get_time));
+    register_seamstress("clock_get_tempo", lua_wrapper.wrap(clock_get_tempo));
+    register_seamstress("clock_get_beats", lua_wrapper.wrap(clock_get_beats));
+    register_seamstress("clock_set_source", lua_wrapper.wrap(clock_set_source));
+    register_seamstress("clock_link_set_tempo", lua_wrapper.wrap(clock_link_set_tempo));
+    register_seamstress("clock_link_start", lua_wrapper.wrap(clock_link_start));
+    register_seamstress("clock_link_stop", lua_wrapper.wrap(clock_link_stop));
+    register_seamstress("clock_link_set_quantum", lua_wrapper.wrap(clock_link_set_quantum));
+    register_seamstress("clock_internal_set_tempo", lua_wrapper.wrap(clock_internal_set_tempo));
+    register_seamstress("clock_internal_start", lua_wrapper.wrap(clock_internal_start));
+    register_seamstress("clock_internal_stop", lua_wrapper.wrap(clock_internal_stop));
+    register_seamstress("clock_schedule_sleep", lua_wrapper.wrap(clock_schedule_sleep));
+    register_seamstress("clock_schedule_sync", lua_wrapper.wrap(clock_schedule_sync));
+    register_seamstress("clock_cancel", lua_wrapper.wrap(clock_cancel));
+    register_seamstress("get_time", lua_wrapper.wrap(get_time));
 
-    register_seamstress("quit_lvm", ziglua.wrap(quit_lvm));
+    register_seamstress("quit_lvm", lua_wrapper.wrap(quit_lvm));
 
-    register_seamstress("print", ziglua.wrap(lua_print));
+    register_seamstress("print", lua_wrapper.wrap(lua_print));
 
     _ = lvm.pushString(args.local_port);
     lvm.setField(-2, "local_port");
@@ -151,7 +151,7 @@ pub fn init(prefix: []const u8, config: []const u8, time: std.time.Timer, versio
     try run_code("require('core/seamstress')");
 }
 
-fn register_seamstress(name: [:0]const u8, f: ziglua.CFn) void {
+fn register_seamstress(name: [:0]const u8, f: lua_wrapper.CFn) void {
     lvm.pushFunction(f);
     lvm.setField(-2, name);
 }
@@ -182,7 +182,7 @@ pub fn startup(script: []const u8, buffer: []u8) !?[:0]const u8 {
     _ = try lvm.getGlobal("_startup");
     lvm.insert(1);
     const base = lvm.getTop() - 1;
-    lvm.pushFunction(ziglua.wrap(message_handler));
+    lvm.pushFunction(lua_wrapper.wrap(message_handler));
     lvm.insert(base);
     lvm.protectedCall(.{ .args = 1, .results = 1, .msg_handler = base }) catch |err| {
         lvm.remove(base);
@@ -283,7 +283,7 @@ fn osc_send(l: *Lua) i32 {
     var path: ?[:0]const u8 = null;
     const num_args = l.getTop();
     if (num_args < 2) return 0;
-    l.checkType(1, ziglua.LuaType.table);
+    l.checkType(1, lua_wrapper.LuaType.table);
     if (l.rawLen(1) != 2) {
         l.argError(1, "address should be a table in the form {host, port}");
     }
@@ -306,12 +306,12 @@ fn osc_send(l: *Lua) i32 {
     }
     l.pop(1);
 
-    l.checkType(2, ziglua.LuaType.string);
+    l.checkType(2, lua_wrapper.LuaType.string);
     path = l.toString(2) catch unreachable;
 
     var sfb = std.heap.stackFallback(8 * 1024, std.heap.raw_c_allocator);
     const allocator = sfb.get();
-    l.checkType(3, ziglua.LuaType.table);
+    l.checkType(3, lua_wrapper.LuaType.table);
     const len = l.rawLen(3);
     var msg = allocator.alloc(osc.Lo_Arg, len) catch @panic("OOM!");
     defer allocator.free(msg);
@@ -366,7 +366,7 @@ fn osc_send(l: *Lua) i32 {
 // @function grid_set_led
 fn grid_set_led(l: *Lua) i32 {
     check_num_args(l, 4);
-    l.checkType(1, ziglua.LuaType.light_userdata);
+    l.checkType(1, lua_wrapper.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
     const x: u8 = @intFromFloat(l.checkNumber(2) - 1);
     const y: u8 = @intFromFloat(l.checkNumber(3) - 1);
@@ -384,7 +384,7 @@ fn grid_set_led(l: *Lua) i32 {
 // @function grid_all_led
 fn grid_all_led(l: *Lua) i32 {
     check_num_args(l, 2);
-    l.checkType(1, ziglua.LuaType.light_userdata);
+    l.checkType(1, lua_wrapper.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
     const val: u8 = @intFromFloat(l.checkNumber(2));
     md.grid_all_led(val);
@@ -398,7 +398,7 @@ fn grid_all_led(l: *Lua) i32 {
 // @function grid_rows
 fn grid_rows(l: *Lua) i32 {
     check_num_args(l, 1);
-    l.checkType(1, ziglua.LuaType.light_userdata);
+    l.checkType(1, lua_wrapper.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
     l.setTop(0);
     l.pushInteger(md.rows);
@@ -411,7 +411,7 @@ fn grid_rows(l: *Lua) i32 {
 // @function grid_cols
 fn grid_cols(l: *Lua) i32 {
     check_num_args(l, 1);
-    l.checkType(1, ziglua.LuaType.light_userdata);
+    l.checkType(1, lua_wrapper.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
     l.setTop(0);
     l.pushInteger(md.cols);
@@ -426,7 +426,7 @@ fn grid_cols(l: *Lua) i32 {
 // @function grid_set_rotation
 fn grid_set_rotation(l: *Lua) i32 {
     check_num_args(l, 2);
-    l.checkType(1, ziglua.LuaType.light_userdata);
+    l.checkType(1, lua_wrapper.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
     const rotation: u16 = @intFromFloat(l.checkNumber(2));
     md.set_rotation(rotation);
@@ -442,7 +442,7 @@ fn grid_set_rotation(l: *Lua) i32 {
 // @function grid_tilt_enable
 fn grid_tilt_enable(l: *Lua) i32 {
     check_num_args(l, 2);
-    l.checkType(1, ziglua.LuaType.light_userdata);
+    l.checkType(1, lua_wrapper.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
     const sensor: u8 = @intFromFloat(l.checkNumber(2) - 1);
     md.tilt_set(sensor, 1);
@@ -457,7 +457,7 @@ fn grid_tilt_enable(l: *Lua) i32 {
 // @function grid_tilt_disable
 fn grid_tilt_disable(l: *Lua) i32 {
     check_num_args(l, 2);
-    l.checkType(1, ziglua.LuaType.light_userdata);
+    l.checkType(1, lua_wrapper.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
     const sensor: u8 = @intFromFloat(l.checkNumber(2) - 1);
     md.tilt_set(sensor, 0);
@@ -474,7 +474,7 @@ fn grid_tilt_disable(l: *Lua) i32 {
 // @function arc_set_led
 fn arc_set_led(l: *Lua) i32 {
     check_num_args(l, 4);
-    l.checkType(1, ziglua.LuaType.light_userdata);
+    l.checkType(1, lua_wrapper.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
     const ring: u8 = @intFromFloat(l.checkNumber(2) - 1);
     const led: i32 = @intFromFloat(l.checkNumber(3) - 1);
@@ -493,7 +493,7 @@ fn arc_set_led(l: *Lua) i32 {
 // @function arc_all_led
 fn arc_all_led(l: *Lua) i32 {
     check_num_args(l, 2);
-    l.checkType(1, ziglua.LuaType.light_userdata);
+    l.checkType(1, lua_wrapper.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
     const val: u8 = @intFromFloat(l.checkNumber(2));
     md.grid_all_led(val);
@@ -509,7 +509,7 @@ fn arc_all_led(l: *Lua) i32 {
 // @function monome_refresh
 fn monome_refresh(l: *Lua) i32 {
     check_num_args(l, 1);
-    l.checkType(1, ziglua.LuaType.light_userdata);
+    l.checkType(1, lua_wrapper.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
     md.refresh();
     l.setTop(0);
@@ -525,7 +525,7 @@ fn monome_refresh(l: *Lua) i32 {
 // @function monome_intensity
 fn monome_intensity(l: *Lua) i32 {
     check_num_args(l, 2);
-    l.checkType(1, ziglua.LuaType.light_userdata);
+    l.checkType(1, lua_wrapper.LuaType.light_userdata);
     const md = l.toUserdata(monome.Monome, 1) catch unreachable;
     const level: u8 = @intFromFloat(l.checkNumber(2));
     md.intensity(level);
@@ -1085,7 +1085,7 @@ fn screen_geometry(l: *Lua) i32 {
     const texture = if (num_args >= 3) blk: {
         break :blk l.checkInteger(3);
     } else null;
-    l.checkType(1, ziglua.LuaType.table);
+    l.checkType(1, lua_wrapper.LuaType.table);
     const len = l.rawLen(1);
     const verts = allocator.alloc(screen.Vertex, len) catch @panic("OOM!");
     for (verts, 0..) |*v, i| {
@@ -1101,7 +1101,7 @@ fn screen_geometry(l: *Lua) i32 {
         };
     }
     const indices = if (num_args >= 2) blk: {
-        l.checkType(2, ziglua.LuaType.table);
+        l.checkType(2, lua_wrapper.LuaType.table);
         const indlen = l.rawLen(2);
         const ind = allocator.alloc(usize, indlen) catch @panic("OOM!");
         for (ind, 0..) |*idx, i| {
@@ -1401,9 +1401,9 @@ fn midi_write(l: *Lua) i32 {
     var sfba = std.heap.stackFallback(1024, std.heap.raw_c_allocator);
     const allocator = sfba.get();
     check_num_args(l, 2);
-    l.checkType(1, ziglua.LuaType.light_userdata);
+    l.checkType(1, lua_wrapper.LuaType.light_userdata);
     const dev = l.toUserdata(midi.Device, 1) catch unreachable;
-    l.checkType(2, ziglua.LuaType.table);
+    l.checkType(2, lua_wrapper.LuaType.table);
     const len = l.rawLen(2);
     var i: c_longlong = 1;
     var msg = allocator.allocSentinel(u8, @intCast(len), 0) catch @panic("OOM!");
@@ -1898,7 +1898,7 @@ fn run_code(code: []const u8) !void {
 }
 
 fn dostring(l: *Lua, str: []const u8, name: [:0]const u8) !void {
-    try l.loadBuffer(str, name, ziglua.Mode.text);
+    try l.loadBuffer(str, name, lua_wrapper.Mode.text);
     try docall(l, 0, 0);
 }
 
@@ -1932,7 +1932,7 @@ fn message_handler(l: *Lua) i32 {
 
 fn docall(l: *Lua, nargs: i32, nres: i32) !void {
     const base = l.getTop() - nargs;
-    l.pushFunction(ziglua.wrap(message_handler));
+    l.pushFunction(lua_wrapper.wrap(message_handler));
     l.insert(base);
     l.protectedCall(.{ .args = nargs, .results = nres, .msg_handler = base }) catch {
         l.remove(base);
@@ -1990,7 +1990,7 @@ fn handle_line(l: *Lua, line: [:0]const u8) !void {
     if (input.readline) {
         _ = c.rl_clear_visible_line();
     }
-    try docall(l, 0, ziglua.mult_return);
+    try docall(l, 0, lua_wrapper.mult_return);
     if (l.getTop() == 0) {
         try prompt(.New);
     } else {
@@ -2005,7 +2005,7 @@ fn statement(l: *Lua) !bool {
         try save_buf.append('\n');
     }
     try save_buf.appendSlice(line);
-    l.loadBuffer(save_buf.items, "=stdin", ziglua.Mode.text) catch |err| {
+    l.loadBuffer(save_buf.items, "=stdin", lua_wrapper.Mode.text) catch |err| {
         if (err != error.Syntax) return err;
         const msg = try l.toString(-1);
         const eofmark = "<eof>";
@@ -2029,7 +2029,7 @@ fn add_return(l: *Lua) !void {
     const line = try l.toString(-1);
     const retline = try std.fmt.allocPrint(interpreter_alloc, "return {s}", .{line});
     defer interpreter_alloc.free(retline);
-    l.loadBuffer(retline, "=stdin", ziglua.Mode.text) catch |err| {
+    l.loadBuffer(retline, "=stdin", lua_wrapper.Mode.text) catch |err| {
         l.pop(1);
         return err;
     };

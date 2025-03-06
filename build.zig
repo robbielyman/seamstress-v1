@@ -34,12 +34,12 @@ pub fn build(b: *std.Build) void {
     exe.linkSystemLibrary("SDL2");
     exe.linkSystemLibrary("SDL2_image");
     exe.linkSystemLibrary("SDL2_ttf");
-    const zig_lua = b.dependency("ziglua", .{
+    const lua_wrapper = b.dependency("lua_wrapper", .{
         .target = target,
         .optimize = optimize,
     });
-    exe.root_module.addImport("ziglua", zig_lua.module("ziglua"));
-    exe.linkSystemLibrary("lua");
+    exe.root_module.addImport("lua_wrapper", lua_wrapper.module("lua_wrapper"));
+    // exe.linkSystemLibrary("lua");
 
     const zig_link = b.dependency("abl_link", .{
         .target = target,
