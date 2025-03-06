@@ -340,21 +340,11 @@ fn reschedule_sync_events() void {
 }
 
 pub fn stop() void {
-    const event = .{
-        .Clock_Transport = .{
-            .transport = .Stop,
-        },
-    };
-    events.post(event);
+    events.post(.{ .Clock_Transport = .{ .transport = .Stop } });
 }
 
 pub fn start() void {
-    const event = .{
-        .Clock_Transport = .{
-            .transport = .Start,
-        },
-    };
-    events.post(event);
+    events.post(.{ .Clock_Transport = .{ .transport = .Start } });
 }
 
 pub fn reset(beat: f64) void {

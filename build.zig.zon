@@ -6,16 +6,17 @@
         "build.zig",
         "build.zig.zon",
     },
-    .name = "seamstress",
-    .version = "1.4.5",
+    .name = .seamstress,
+    .fingerprint = 0xddf04d098cc31c65,
+    .version = "1.4.7",
     .dependencies = .{
-        .Lua = .{
-            .url = "git+https://github.com/natecraddock/ziglua#d853aa9450ae568a39ea02d7082e85bafc33f735",
-            .hash = "1220affeb3fe37ef09411b5a213b5fdf9bb6568e9913bade204694648983a8b2776d",
+        .abl_link = .{
+            .url = "git+https://github.com/robbielyman/zig-abl_link#c4fb74acb59662910833fd5cdca40f1c4bd8be0c",
+            .hash = "abl_link-3.1.1-kE5CL1FYAAAEILPom95ZVqlks0UezAKHuS2PuorYsCUF",
         },
-        .link = .{
-            .url = "git+https://github.com/ryleelyman/zig-abl_link#bca725468f88ef073cabc6da03696ceaa0af19c7",
-            .hash = "12205b92ab3c432ed67f84896ad0c4f89e1a3c3934bc9a34c16e98952eee717761ac",
+        .lua_wrapper = .{
+            .url = "git+https://github.com/natecraddock/ziglua#7bfb3c2b87220cdc89ef01cc99a200dad7a28e50",
+            .hash = "lua_wrapper-0.1.0-OyMC27fOBAAU3E2ueB-EWGSgsuCFQZL83pT0nQJ1ufOI",
         },
     },
 }

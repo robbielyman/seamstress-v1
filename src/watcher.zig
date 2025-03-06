@@ -26,10 +26,7 @@ fn loop(path: [*:0]const u8) !void {
         const time = m.modified();
         if (last_changed) |*l| {
             if (time != l.*) {
-                const event = .{
-                    .Reset = {},
-                };
-                events.post(event);
+                events.post(.Reset);
             }
         }
         last_changed = time;

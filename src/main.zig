@@ -13,7 +13,7 @@ const socket = @import("socket.zig");
 const watcher = @import("watcher.zig");
 const create = @import("create.zig");
 
-const VERSION = .{ .major = 1, .minor = 4, .patch = 6 };
+const VERSION: std.SemanticVersion = .{ .major = 1, .minor = 4, .patch = 7 };
 
 pub const std_options: std.Options = .{
     .log_level = .info,
@@ -29,7 +29,7 @@ pub fn main() !void {
     var go_again = true;
     timer = try std.time.Timer.start();
 
-    var loc_buf = [_]u8{0} ** std.fs.MAX_PATH_BYTES;
+    var loc_buf = [_]u8{0} ** std.fs.max_path_bytes;
     const location = try std.fs.selfExeDirPath(&loc_buf);
 
     const option = try args.parse(location);
@@ -94,7 +94,7 @@ pub fn main() !void {
         const height = try std.fmt.parseUnsigned(u16, args.height, 10);
         const assets_path = try std.fs.path.join(allocator, &.{ location, "..", "share", "seamstress", "resources" });
         defer allocator.free(assets_path);
-        var assets_buf = [_]u8{0} ** std.fs.MAX_PATH_BYTES;
+        var assets_buf = [_]u8{0} ** std.fs.max_path_bytes;
         const assets = try std.fs.realpath(assets_path, &assets_buf);
         try screen.init(width, height, assets);
         defer screen.deinit();
@@ -122,7 +122,7 @@ fn print_version() !void {
     var bw = std.io.bufferedWriter(stdout_file);
     const stdout = bw.writer();
     try stdout.print("SEAMSTRESS\n", .{});
-    try stdout.print("seamstress version: {d}.{d}.{d}\n", VERSION);
+    try stdout.print("seamstress version: {d}.{d}.{d}\n", .{ VERSION.major, VERSION.minor, VERSION.patch });
     try bw.flush();
 }
 

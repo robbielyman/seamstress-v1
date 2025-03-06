@@ -138,12 +138,7 @@ pub fn add(name: []const u8, dev_type: []const u8, port: i32) void {
         if (std.mem.eql(u8, n, name)) {
             if (device.connected == true) return;
             device.connected = true;
-            const event = .{
-                .Monome_Add = .{
-                    .dev = device,
-                },
-            };
-            events.post(event);
+            events.post(.{ .Monome_Add = .{ .dev = device } });
             device.set_port();
             return;
         }
@@ -159,10 +154,7 @@ pub fn add(name: []const u8, dev_type: []const u8, port: i32) void {
             device.m_type = .Arc;
             device.quads = 4;
             device.connected = true;
-            const event = .{
-                .Monome_Add = .{ .dev = device },
-            };
-            events.post(event);
+            events.post(.{ .Monome_Add = .{ .dev = device } });
             device.set_port();
         } else {
             device.m_type = .Grid;
@@ -179,12 +171,7 @@ pub fn remove(name: []const u8) void {
         const n = device.name orelse continue;
         if (std.mem.eql(u8, n, name)) {
             device.connected = false;
-            const event = .{
-                .Monome_Remove = .{
-                    .id = device.id,
-                },
-            };
-            events.post(event);
+            events.post(.{ .Monome_Remove = .{ .id = device.id } });
             return;
         }
     }
@@ -270,10 +257,7 @@ fn handle_size(
     device.quads = @intCast(@divExact(argv[0].*.i * argv[1].*.i, 64));
     if (!device.connected) {
         device.connected = true;
-        const event = .{
-            .Monome_Add = .{ .dev = device },
-        };
-        events.post(event);
+        events.post(.{ .Monome_Add = .{ .dev = device } });
     }
     return 0;
 }
@@ -291,15 +275,7 @@ fn handle_grid_key(
     _ = types;
     _ = path;
     const device: *Monome = @ptrCast(@alignCast(user_data orelse return 1));
-    const event = .{
-        .Grid_Key = .{
-            .id = device.id,
-            .x = argv[0].*.i,
-            .y = argv[1].*.i,
-            .state = argv[2].*.i,
-        },
-    };
-    events.post(event);
+    events.post(.{ .Grid_Key = .{ .id = device.id, .x = argv[0].*.i, .y = argv[1].*.i, .state = argv[2].*.i } });
     return 0;
 }
 
@@ -316,14 +292,7 @@ fn handle_arc_key(
     _ = types;
     _ = path;
     const device: *Monome = @ptrCast(@alignCast(user_data orelse return 1));
-    const event = .{
-        .Arc_Key = .{
-            .id = device.id,
-            .ring = argv[0].*.i,
-            .state = argv[1].*.i,
-        },
-    };
-    events.post(event);
+    events.post(.{ .Arc_Key = .{ .id = device.id, .ring = argv[0].*.i, .state = argv[1].*.i } });
     return 0;
 }
 
@@ -340,14 +309,7 @@ fn handle_delta(
     _ = types;
     _ = path;
     const device: *Monome = @ptrCast(@alignCast(user_data orelse return 1));
-    const event = .{
-        .Arc_Encoder = .{
-            .id = device.id,
-            .ring = argv[0].*.i,
-            .delta = argv[1].*.i,
-        },
-    };
-    events.post(event);
+    events.post(.{ .Arc_Encoder = .{ .id = device.id, .ring = argv[0].*.i, .delta = argv[1].*.i } });
     return 0;
 }
 
@@ -364,15 +326,12 @@ fn handle_tilt(
     _ = types;
     _ = path;
     const device: *Monome = @ptrCast(@alignCast(user_data orelse return 1));
-    const event = .{
-        .Grid_Tilt = .{
-            .id = device.id,
-            .sensor = argv[0].*.i,
-            .x = argv[1].*.i,
-            .y = argv[2].*.i,
-            .z = argv[3].*.i,
-        },
-    };
-    events.post(event);
+    events.post(.{ .Grid_Tilt = .{
+        .id = device.id,
+        .sensor = argv[0].*.i,
+        .x = argv[1].*.i,
+        .y = argv[2].*.i,
+        .z = argv[3].*.i,
+    } });
     return 0;
 }

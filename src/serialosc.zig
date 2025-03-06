@@ -109,12 +109,7 @@ fn handler(
     _ = msg;
     const idx = @intFromPtr(user_data orelse return 1);
     const message = getArgs(types.?, argv.?, @intCast(argc)) catch @panic("OOM!");
-    const event = .{ .OSC_Method = .{
-        .index = idx,
-        .msg = message,
-        .allocator = allocator,
-    } };
-    events.post(event);
+    events.post(.{ .OSC_Method = .{ .index = idx, .msg = message, .allocator = allocator } });
     return 0;
 }
 
@@ -178,14 +173,13 @@ fn osc_receive(
     const port = std.mem.span(c.lo_address_get_port(source));
     const port_copy = allocator.dupeZ(u8, port) catch @panic("OOM!");
 
-    const event = .{ .OSC = .{
+    events.post(.{ .OSC = .{
         .msg = message,
         .from_host = host_copy,
         .from_port = port_copy,
         .path = path_copy,
         .allocator = allocator,
-    } };
-    events.post(event);
+    } });
     return 1;
 }
 
